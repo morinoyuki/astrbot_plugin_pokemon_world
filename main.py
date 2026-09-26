@@ -34,8 +34,10 @@ from .pw import battle as B
 from .pw import daily as D
 from .pw import events as EV
 from .pw import growth, legendary, npc, story
+from .pw import quests as QT
 from .pw import ui_info as UII
 from .pw import ui_menu as UIM
+from .pw import ui_quest as UIQ
 from .pw import ui_render as UI
 from .pw.dex import get_dex
 from .pw.items import BAG_ITEMS
@@ -196,6 +198,22 @@ class PokemonWorldPlugin(Star):
             day=day,
             narrator=self._narrator() if self._cfg("event_enable", True) else Narrator(None),
         )
+        if self._cfg("quest_enable", True):
+            try:
+                new_q = await QT.roll_daily_async(
+                    trainer, day,
+                    self._narrator() if self._cfg("quest_llm", True) else None,
+                )
+                if new_q:
+                    self._save(trainer)
+                    lines.append(
+                        "📋 新的委托:" + "、".join(
+                            f"{q.get('giver')}「{q.get('title')}」" for q in new_q
+                        )
+                        + "(用 `/任务` 查看)"
+                    )
+            except Exception:  # 委托生成失败不影响其它每日流程
+                logger.exception("委托生成失败")
         if res["rolled"]:
             wl = [
                 f"🌍 世界事件:{EV.event_text(e)}"
@@ -405,19 +423,25 @@ class PokemonWorldPlugin(Star):
                 return
             if world.region_of(key) != t.region:
                 t.data["region"] = world.region_of(key)
+            is_new = key not in (t.data.get("visited") or [])
             t.data["location"] = key
             visited = t.data.setdefault("visited", [])
-            if key not in visited:
+            if is_new:
                 visited.append(key)
             t.data["steps"] = int(t.data.get("steps", 0)) + 120
+            qlines = QT.note(t, "travel", location=key, new=is_new)
+            qlines += QT.note(t, "steps", steps=120)
             self._save(t)
             ev = state.event_at(key)
             tail = f"\n📍 这里正发生:{EV.event_text(ev)}" if ev else ""
-            yield event.plain_result(
+            msg = (
                 f"🚶 你来到了 {world.region_zh(t.region)}·{world.node_zh(key)}。"
                 f"\n危险度:{world.tier_label(key)} · 可用服务:"
                 f"{'、'.join(_service_zh(world.services(key))) or '无'}{tail}"
             )
+            if qlines:
+                msg += "\n" + "\n".join(qlines)
+            yield event.plain_result(msg)
 
     @filter.command("探索", alias={"explore", "遭遇", "搜索"})
     async def cmd_explore(self, event: AstrMessageEvent):
@@ -443,6 +467,8 @@ class PokemonWorldPlugin(Star):
             mods = state.modifiers
             ev = state.event_at(loc)
             notice = [*today]
+            t.data["steps"] = int(t.data.get("steps", 0)) + 40
+            notice += QT.note(t, "steps", steps=40)
             # 0) 神兽定点:条件满足且就在此地时,优先遭遇
             site = (legendary.ready(t, world=world, day=state.day) or [None])[0]
             if site:
@@ -483,18 +509,28 @@ class PokemonWorldPlugin(Star):
                 env = _environment_of(world, loc)
                 hit = B.roll_wild(t, rng=rng, environment=env)
                 if not hit:
-                    yield event.plain_result("这里似乎什么也没有发生……")
+                    yield event.plain_result(
+                        "\n".join([*notice, "这里似乎什么也没有发生……"])
+                    )
                     return
                 if ev and ev.get("kind") == "rare" and rng.random() < 0.35:
                     legend = npc.legendary_at(t, ev)
                     if legend:
                         hit = legend
                 level = hit["level"]
+                _entry = get_dex().species.get(str(hit.get("species")) or "") or {}
                 meta = {
                     "kind": "wild",
                     "title": f"野生的{hit['zh']}",
                     "location": loc,
                     "region": t.region,
+                    # 任务系统/结算卡需要的结构化信息。
+                    # 注意:遭遇结果是 methods(复数,列表)而不是 method —— 早期按
+                    # method 取值永远是空串,导致"钓鱼捕获"类委托无法推进。
+                    "species": str(hit.get("species") or ""),
+                    "types": list(hit.get("types") or _entry.get("types") or []),
+                    "method": _primary_method(hit.get("methods")),
+                    "new_species": not t.seen(str(hit.get("species")) or ""),
                 }
                 log = B.start(
                     t,
@@ -526,7 +562,6 @@ class PokemonWorldPlugin(Star):
             item = rng.choice(EXPLORE_ITEM_POOL)
             n = rng.randint(1, 2)
             t.add_item(item, n)
-            t.data["steps"] = int(t.data.get("steps", 0)) + 40
             self._save(t)
             zh = (BAG_ITEMS.get(item) or {}).get("zh", item)
             yield event.plain_result(
@@ -550,6 +585,7 @@ class PokemonWorldPlugin(Star):
         async with self._lock(t.scope):
             state = self._state(t.scope)
             meta = dict(B.session(t).get("meta") or {})
+            _sess = B.session(t)
             res = B.take_turn(
                 t,
                 arg,
@@ -558,6 +594,9 @@ class PokemonWorldPlugin(Star):
                 weather=state.weather_for(t.region),
                 day=state.day,
             )
+            if not res.error and arg.strip().lower().startswith(("item", "道具")):
+                # 只有真的用出去了才算(换人失败/道具无效时 take_turn 会给 error)
+                _sess["used_item"] = True
             self._save(t)
             if res.error:
                 yield event.plain_result(res.error + "\n\n" + B.status_text(t))
@@ -836,11 +875,15 @@ class PokemonWorldPlugin(Star):
                 return
             t.spend_money(price)
             t.add_item(key, n)
+            qlines = QT.note(t, "shop", amount=price)
             self._save(t)
-            yield event.plain_result(
+            msg = (
                 f"🛒 买下 {(BAG_ITEMS.get(key) or {}).get('zh', key)} ×{n}"
                 f",花费 {fmt_money(price)}。余额 {fmt_money(t.money)}。"
             )
+            if qlines:
+                msg += "\n" + "\n".join(qlines)
+            yield event.plain_result(msg)
             return
         key = _resolve_stock(name, set(t.bag))
         if not key or t.count(key) < n:
@@ -988,11 +1031,15 @@ class PokemonWorldPlugin(Star):
             old = mon.species
             growth.apply_evolution(mon, target)
             t.commit(idx - 1, mon)
+            qlines = QT.note(t, "evolve", species=old)
             self._save(t)
-            yield event.plain_result(
+            msg = (
                 f"✨ {growth.species_zh(old)} 使用了 {entry['zh']},"
                 f"进化成了 {growth.species_zh(target)}!"
             )
+            if qlines:
+                msg += "\n" + "\n".join(qlines)
+            yield event.plain_result(msg)
             return
         opts = dex.evolution_options(
             mon.species,
@@ -1131,6 +1178,47 @@ class PokemonWorldPlugin(Star):
                 region_zh=WorldMap().region_zh(t.region),
                 location_zh=WorldMap().node_zh(t.location),
                 locks=locks, scale=self._img_scale(),
+            ),
+            text=text,
+        ):
+            yield r
+
+    @filter.command("任务", alias={"委托", "quest", "quests"})
+    async def cmd_quest(self, event: AstrMessageEvent):
+        """/任务 —— 查看/放弃支线委托"""
+        t, err = self._require(event)
+        if err:
+            yield event.plain_result(err)
+            return
+        arg = self._args(event, ("任务", "委托", "quest", "quests")).strip()
+        async with self._lock(t.scope):
+            await self._ensure_day(event, t)
+            parts = arg.split()
+            if parts and parts[0] in ("放弃", "drop", "取消"):
+                idx = coerce_int(parts[1], 0) if len(parts) > 1 else 0
+                q = QT.abandon(t, idx)
+                self._save(t)
+                if not q:
+                    yield event.plain_result("❌ 没有这个序号的委托。用 `/任务` 看看列表。")
+                    return
+                yield event.plain_result(f"🗑️ 你撇下了「{q.get('title')}」这条委托。")
+                return
+        text = QT.panel_text(t)
+        acts = QT.active(t)
+        async for r in self._emit_ui(
+            event, "quest",
+            lambda: UIQ.render_quests(
+                acts,
+                progress=[
+                    (int(q.get("progress") or 0),
+                     max(1, int((q.get("objective") or {}).get("count") or 1)))
+                    for q in acts
+                ],
+                day=self._state(t.scope).day,
+                region_zh=WorldMap().region_zh(t.region),
+                done_count=len(QT.completed_ids(t)),
+                max_active=QT.MAX_ACTIVE,
+                scale=self._img_scale(),
             ),
             text=text,
         ):
@@ -1846,8 +1934,45 @@ class PokemonWorldPlugin(Star):
             else:
                 t.set_flag("tournament_round", 0)
                 lines.append("🏆 你被淘汰了,大赛之旅结束。可以再次 `/大赛 挑战`。")
+        lines += self._quests_after_battle(t, meta, res)
         self._save(t)
         return ("\n".join(lines) + "\n\n") if lines else ""
+
+    def _quests_after_battle(self, t: Trainer, meta: dict, res: B.TurnResult) -> list[str]:
+        """把战斗结果折算成任务进度。"""
+        try:
+            kind = str(meta.get("kind") or "")
+            species = str(meta.get("species") or "")
+            types = [str(x) for x in (meta.get("types") or [])]
+            if not species:
+                # 训练家战:用对手首发的物种(道馆/联盟/主线都适用)
+                team = meta.get("team") or []
+                if team and isinstance(team[0], dict):
+                    species = str(team[0].get("species") or "")
+                entry = get_dex().species.get(species) or {}
+                types = [str(x) for x in (entry.get("types") or [])]
+            sess = B.session(t) or {}
+            used_item = bool(sess.get("used_item"))
+            out: list[str] = []
+            if res.outcome == "caught":
+                out += QT.note(
+                    t, "catch", species=species, types=types,
+                    method=str(meta.get("method") or ""),
+                )
+                if species and meta.get("new_species", True) and t.seen(species):
+                    out += QT.note(t, "dex", species=species)
+            elif res.outcome == "win":
+                out += QT.note(
+                    t, "win", kind=kind, species=species, types=types,
+                    is_trainer=kind in QT.TRAINER_KINDS, used_item=used_item,
+                )
+                levels = sum(1 for ln in res.growth if "升到了" in ln)
+                if levels:
+                    out += QT.note(t, "level_up", levels=levels)
+            return out
+        except Exception:  # 任务推进失败绝不能影响战斗结算
+            logger.exception("任务进度推进失败")
+            return []
 
     async def _emit_battle(
         self,
@@ -1918,6 +2043,20 @@ def _service_zh(services: list[str]) -> list[str]:
         {"center": "宝可梦中心", "mart": "商店", "gym": "道馆", "league": "联盟"}.get(s, s)
         for s in services
     ]
+
+
+def _primary_method(methods) -> str:
+    """把遭遇方式列表归一成一个代表值(任务系统用)。
+
+    钓鱼类委托必须能识别出"是钓上来的":rod/fish 归一到 "fish",
+    冲浪归一到 "surf";其余取第一个方式。
+    """
+    ms = [str(m).lower() for m in (methods or [])]
+    if any("rod" in m or "fish" in m for m in ms):
+        return "fish"
+    if any("surf" in m for m in ms):
+        return "surf"
+    return ms[0] if ms else ""
 
 
 def _environment_of(world: WorldMap, loc: str) -> str:

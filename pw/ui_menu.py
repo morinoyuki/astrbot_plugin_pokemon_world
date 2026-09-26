@@ -355,8 +355,9 @@ def render_shop(
             y0 = list_top + 1 + i * row_h
             if i == sel:
                 sc.highlight((7, y0, 233, y0 + row_h - 1))
-            kind = str(it.get("kind") or "")
-            sc.item_icon(kind, 11, y0 + row_h / 2 - 4.5, 9)
+            # 传 key 而不是大类:否则 15 种球、9 种药在货架上长得一模一样
+            icon = str(it.get("key") or it.get("kind") or "")
+            sc.item_icon(icon, 11, y0 + row_h / 2 - 4.5, 9)
             sc.text(24, y0 + row_h / 2 - 5, _fit(sc, str(it.get("zh") or it.get("key") or "?"),
                                                  96, 8.4), size=8.4, fill=TEXT)
             try:

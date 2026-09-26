@@ -18,6 +18,16 @@
     "hint": "每天 04:00 生成世界事件与个人事件;由 LLM 选题+写文案,失败自动回退本地事件",
     "default": true
   },
+  "quest_enable": {
+    "type": "bool",
+    "default": true,
+    "description": "启用支线委托(每日刷新)"
+  },
+  "quest_llm": {
+    "type": "bool",
+    "default": true,
+    "description": "用 LLM 生成委托主题(失败自动回退本地生成器)"
+  },
   "event_hour": {
     "description": "每日刷新时刻(0-23 时)",
     "type": "int",
