@@ -42,6 +42,16 @@ WEATHER_ZH = {
     "sand": "沙暴",
     "snow": "下雪",
 }
+# 招式数据里的天气键名来自 PokeAPI(sunnyday / RainDance / Sandstorm / snowscape),
+# 而引擎内部统一用 sun/rain/sand/snow(道具(炽热岩石等)与界面也按这套)。
+# 不归一的话 `晴朗` 会写成 weather="sunnyday",所有天气判定(伤害加成、特性、
+# 回合末伤害、气象球、岩石延长)全部落空 —— 招式等于白放。
+WEATHER_ALIAS = {
+    "sunnyday": "sun", "sun": "sun", "sunshine": "sun", "desolateland": "sun",
+    "raindance": "rain", "rain": "rain", "primordialsea": "rain",
+    "sandstorm": "sand", "sand": "sand",
+    "snowscape": "snow", "snow": "snow", "hail": "snow", "chillyreception": "snow",
+}
 TERRAIN_ZH = {
     "electricterrain": "电气场地",
     "grassyterrain": "青草场地",
@@ -597,7 +607,10 @@ class Battle:
                 mon.volatiles.pop("endure", None)
 
         if self.awaiting_switch:
-            self._do_switch(self.player, int(player_action.get("index", 0)))
+            # 只有真的换成功才解除"必须换人"状态;否则场上会留着已倒下的宝可梦
+            # (双方都不再出手、回合数一直涨 = 死锁)。换失败时保持等待并返回。
+            if not self._do_switch(self.player, int(player_action.get("index", 0))):
+                return list(self.log)
             self.awaiting_switch = False
             enemy_action = "auto"
             self._tick_end_of_turn()
@@ -683,10 +696,18 @@ class Battle:
             return ["player", "enemy"] if pp > ep else ["enemy", "player"]
         ps = pm.battle_stat("spe", self)
         es = em.battle_stat("spe", self)
-        if ps != es:
-            return ["player", "enemy"] if ps > es else ["enemy", "player"]
-        rng = self._rng(1)
-        return ["player", "enemy"] if rng.random() < 0.5 else ["enemy", "player"]
+        # 戏法空间:速度慢的先出手(旧实现只记录 field_effects、从不读取 → 招式毫无效果)
+        if "trickroom" in self.field_effects:
+            ps, es = -ps, -es
+        order = (
+            (["player", "enemy"] if ps > es else ["enemy", "player"]) if ps != es else None
+        )
+        if order is None:
+            rng = self._rng(1)
+            order = ["player", "enemy"] if rng.random() < 0.5 else ["enemy", "player"]
+        # 记录"后手方",供分析等特性使用
+        self._second_mover_side = order[-1]
+        return order
 
     # ── 出场 / 换人 ──
     def _send_out(self, side: Side, index: int, initial: bool = False) -> None:
@@ -699,14 +720,17 @@ class Battle:
         self._apply_hazards(side, mon)
         self._on_switch_in(side, mon, initial)
 
-    def _do_switch(self, side: Side, index: int) -> None:
+    def _do_switch(self, side: Side, index: int) -> bool:
+        """换人;返回是否真的换成功(失败时调用方不能清 awaiting_switch)。"""
         if index < 0 or index >= len(side.party):
-            return
+            self.log.append("没有这个序号的宝可梦。")
+            return False
         if index == side.active:
-            return
+            self.log.append("它已经在场上了。")
+            return False
         if side.party[index].fainted:
             self.log.append(f"{side.party[index].display} 已倒下,无法上场。")
-            return
+            return False
         old = side.mon
         if old and not old.fainted:
             self._on_switch_out(side, old)
@@ -714,6 +738,7 @@ class Battle:
         if old and not old.fainted:
             self.log.append(f"{tag}收回了 {old.display}。")
         self._send_out(side, index)
+        return True
 
     def _after_switch(self, action: dict) -> None:
         pass
@@ -1262,6 +1287,20 @@ class Battle:
         return m.get("zh") or m.get("name") or move_key
 
     # ── 伤害 / 效果 ──
+    def _multihit_count(self, mon: Pokemon, entry: dict) -> int:
+        """连续技的段数(作弊骰子把下限抬到 4)。"""
+        mh = entry.get("multihit")
+        if not mh:
+            return 1
+        if isinstance(mh, (list, tuple)):
+            lo, hi = int(mh[0]), int(mh[-1])
+        else:
+            lo = hi = int(mh)
+        dice = (ITEMS.get(mon.item) or {}).get("effect", {}).get("multi_hit_min")
+        if dice:
+            lo = max(lo, int(dice))
+        return max(1, self._rng(11).randint(lo, max(lo, hi)))
+
     def _resolve_effect(self, side, foe_side, mon, foe, move_key, entry) -> None:
         dex = get_dex()
         category = entry.get("category", "Physical")
@@ -1288,30 +1327,40 @@ class Battle:
             self.log.append(f"对 {foe.display} 没有效果……")
             return
 
-        crit = self._is_crit(mon, entry)
-        damage = self._calc_damage(mon, foe, move_key, entry, power, mtype, eff, crit)
-        # 气息腰带 / 结实 / 太晶壳
-        if (
-            damage >= foe.cur_hp
-            and foe.cur_hp == foe.max_hp
-            and (
-                foe.has_ability("sturdy")
-                or (
-                    (ITEMS.get(foe.item) or {}).get("effect", {}).get("focus_sash")
-                    and not foe.used_focus_sash
+        hits = self._multihit_count(mon, entry)
+        dealt = 0
+        landed = 0
+        for _hit in range(hits):
+            crit = self._is_crit(mon, entry)
+            damage = self._calc_damage(mon, foe, move_key, entry, power, mtype, eff, crit)
+            # 气息腰带 / 结实 / 太晶壳(只有满血被秒时才触发)
+            if (
+                damage >= foe.cur_hp
+                and foe.cur_hp == foe.max_hp
+                and (
+                    foe.has_ability("sturdy")
+                    or (
+                        (ITEMS.get(foe.item) or {}).get("effect", {}).get("focus_sash")
+                        and not foe.used_focus_sash
+                    )
                 )
+            ):
+                damage = foe.cur_hp - 1
+                if not foe.has_ability("sturdy"):
+                    foe.used_focus_sash = True
+                self.log.append(f"{foe.display} 撑住了!留下 1 HP!")
+            got = foe.take_damage(damage)
+            dealt += got
+            landed += 1
+            self.log.append(
+                f"击中 {foe.display}!"
+                + (" 会心一击!" if crit else "")
+                + f" 造成 {got} 点伤害。"
             )
-        ):
-            damage = foe.cur_hp - 1
-            if not foe.has_ability("sturdy"):
-                foe.used_focus_sash = True
-            self.log.append(f"{foe.display} 撑住了!留下 1 HP!")
-        dealt = foe.take_damage(damage)
-        self.log.append(
-            f"击中 {foe.display}!"
-            + (" 会心一击!" if crit else "")
-            + f" 造成 {dealt} 点伤害。"
-        )
+            if foe.fainted:
+                break
+        if hits > 1:
+            self.log.append(f"连续命中了 {landed} 次!")
         self._log_effectiveness(eff)
 
         # 吸血 / 反作用力
@@ -1344,6 +1393,14 @@ class Battle:
                 self.log.append(msg)
         if (entry.get("self") or {}).get("status"):
             self._inflict(mon, entry["self"]["status"])
+        # 攻击类自爆招式(大爆炸/自爆/薄雾炸裂)与攻击类换人招式(急速折返/伏特替换)
+        # 走的是这条路径,旧实现只在 Status 分支处理 → 使用者不死、也不会换人
+        if entry.get("selfdestruct"):
+            mon.cur_hp = 0
+            mon.fainted = True
+            self.log.append(f"{mon.display} 倒下了!")
+        if entry.get("selfSwitch"):
+            self._request_switch(side, mon)
 
     def _after_damage(self, side, foe_side, mon, foe, move_key, entry, dealt) -> None:
         # 对手被击中记录(用于报复类招式)
@@ -1524,7 +1581,22 @@ class Battle:
         elif move_key in ("boltbeak", "fishiousrend"):
             if mon.battle_stat("spe", self) >= foe.battle_stat("spe", self):
                 power *= 2
-        elif (move_key in ("avalanche", "revenge") and (self.player_damaged if self.player.mon is mon else self.enemy_damaged)) or (move_key in ("payback", "assurance") and (self.player_damaged if self.player.mon is mon else self.enemy_damaged)) or (move_key == "weatherball" and self.weather) or (move_key == "terrainpulse" and self.terrain) or (move_key == "risingvoltage" and self.terrain == "electricterrain"):
+        elif move_key in ("avalanche", "revenge"):
+            # 这两招的语义确实是"本回合内自己被打过"
+            hurt = self.player_damaged if self.player.mon is mon else self.enemy_damaged
+            if hurt:
+                power *= 2
+        elif move_key == "payback":
+            # 报复:本回合**后手**使出时威力翻倍(不是"自己被打过")
+            mine = "player" if self.player.mon is mon else "enemy"
+            if mine == getattr(self, "_second_mover_side", ""):
+                power *= 2
+        elif move_key == "assurance":
+            # 保证:目标在本回合已经受过伤害才翻倍
+            hurt = self.enemy_damaged if self.player.mon is mon else self.player_damaged
+            if hurt:
+                power *= 2
+        elif (move_key == "weatherball" and self.weather) or (move_key == "terrainpulse" and self.terrain) or (move_key == "risingvoltage" and self.terrain == "electricterrain"):
             power *= 2
         elif move_key == "terablast" and mon.terastallized:
             power = 100
@@ -1591,13 +1663,9 @@ class Battle:
         if entry.get("status"):
             tgt = mon if to_self else foe
             self._inflict(tgt, entry["status"])
-        if move_key == "willowisp":
-            self._inflict(foe, "brn")
-        if move_key == "thunderwave":
-            if "Ground" in foe.types:
-                self.log.append(f"{foe.display} 是地面属性,电磁波无效。")
-            else:
-                self._inflict(foe, "par")
+        # 说明:灼伤/麻痹等已由上面的 entry["status"] 统一处理
+        # (`_inflict` 内部已含地面免疫电磁波等判定),这里不能再重复调用,
+        # 否则木子果的解状态日志会出现两次。
         if move_key in ("toxic", "poisonpowder", "poisongas"):
             self._inflict(foe, "tox" if move_key == "toxic" else "psn")
         if move_key in ("sleeppowder", "spore", "hypnosis", "sing", "grasswhistle", "lovelykiss", "darkvoid"):
@@ -1655,14 +1723,46 @@ class Battle:
             side.hazards = {}
             self.log.append("清除了我方场地陷阱!")
         if entry.get("selfSwitch"):
-            self.log.append(f"{mon.display} 使出了换人招式(请下回合用 switch <序号>)。")
+            self._request_switch(side, mon)
         if entry.get("selfdestruct"):
             mon.cur_hp = 0
             mon.fainted = True
             self.log.append(f"{mon.display} 倒下了!")
 
+    def _request_switch(self, side, mon: Pokemon) -> None:
+        """换人招式结算:我方要求下回合换人,对方自动换上下一只。"""
+        if mon.fainted:
+            return
+        if side is self.player:
+            alive = [m for m in side.party if m is not mon and not m.fainted]
+            if alive:
+                self.awaiting_switch = True
+            self.log.append(f"{mon.display} 使出了换人招式(下回合用 switch <序号>)。")
+        else:
+            nxt = [m for m in side.party if m is not mon and not m.fainted]
+            if nxt:
+                idx = next(i for i, m in enumerate(side.party) if m is nxt[0])
+                self.log.append(f"对方收回了 {mon.display}。")
+                self._send_out(side, idx)
+
+    def _grounded(self, mon: Pokemon) -> bool:
+        """是否接地(飞行/飘浮/气球不接地)—— 场地与陷阱判定共用。"""
+        if mon.has_ability("levitate") or "Flying" in mon.types:
+            return False
+        return (mon.item or "") != "air-balloon"
+
     def _inflict(self, target: Pokemon, status: str) -> None:
         if target.fainted or target.status:
+            return
+        # 电气/薄雾场地:接地的宝可梦不会睡着
+        if (
+            status == "slp"
+            and self.terrain in ("electricterrain", "mistyterrain")
+            and self._grounded(target)
+        ):
+            self.log.append(
+                f"{TERRAIN_ZH.get(self.terrain, self.terrain)}让{target.display}不会睡着!"
+            )
             return
         # 属性 / 特性免疫
         if status == "brn" and "Fire" in target.types:
@@ -1694,7 +1794,11 @@ class Battle:
             # 魔法防守只免异常状态造成的伤害,不免异常状态本身(在伤害结算处处理)
             pass
         if (ITEMS.get(target.item) or {}).get("effect", {}).get("cure_status"):
-            self.log.append(f"{target.display} 的木子果治愈了异常状态!")
+            # 必须**消耗道具**:旧实现直接 return,道具永不消耗 →
+            # 等于永久免疫所有异常状态(而且 thunderwave 走了两条分支、日志重复)
+            cured = (ITEMS.get(target.item) or {}).get("zh") or "树果"
+            target.item = ""
+            self.log.append(f"{target.display} 的{cured}治愈了异常状态!")
             return
         target.status = status
         if status == "slp":
@@ -1758,6 +1862,7 @@ class Battle:
     def _set_field(self, kind: str, value: str, mon: Pokemon) -> None:
         eff = (ITEMS.get(mon.item) or {}).get("effect") or {}
         if kind == "weather":
+            value = WEATHER_ALIAS.get(str(value).lower().replace(" ", ""), str(value))
             turns = eff.get("weather_turns", 5) if eff.get("weather") == value else 5
             self.weather = value
             self.weather_turns = turns
@@ -1807,17 +1912,14 @@ class Battle:
         # 天气伤害
         eff = (ITEMS.get(mon.item) or {}).get("effect") or {}
         immune_wea = eff.get("no_weather_damage") or mon.has_ability("magic-guard", "overcoat")
-        if self.weather in ("sand", "snow") and not immune_wea:
-            if self.weather == "sand" and not (
-                {"Rock", "Ground", "Steel"} & set(mon.types)
-            ):
-                dmg = max(1, mon.max_hp // 16)
-                mon.take_damage(dmg)
-                self.log.append(f"{mon.display} 受到沙暴伤害 {dmg}。")
-            if self.weather == "snow" and "Ice" not in mon.types:
-                dmg = max(1, mon.max_hp // 16)
-                mon.take_damage(dmg)
-                self.log.append(f"{mon.display} 受到下雪伤害 {dmg}。")
+        # 只有沙暴造成回合末伤害。第 9 世代的"下雪"不伤血(旧写法把它当冰雹,
+        # 每回合白扣 1/16),极光幕等特性/招式已按 weather == "snow" 判定。
+        if self.weather == "sand" and not immune_wea and not (
+            {"Rock", "Ground", "Steel"} & set(mon.types)
+        ):
+            dmg = max(1, mon.max_hp // 16)
+            mon.take_damage(dmg)
+            self.log.append(f"{mon.display} 受到沙暴伤害 {dmg}。")
         if mon.fainted:
             return
         # 异常状态伤害
@@ -1997,7 +2099,8 @@ def _stab_mult(mon: Pokemon, mtype: str, move_key: str) -> float:
             # 星晶:保留原属性 STAB(1.5),并使原属性招式再获得 1.2 倍加成(近似实现)
             return 1.8 if mtype in orig else 1.0
         if mtype == mon.tera_type:
-            return 2.0
+            # 太晶属性属于原属性才是 2.0;太晶成别的属性只有 1.5
+            return 2.0 if mon.tera_type in orig else 1.5
         if mtype in orig:
             return 1.5
         return 1.0
@@ -2065,6 +2168,17 @@ def _crit_defense(mon: Pokemon, stat: str, battle: Battle) -> int:
     return val
 
 
+def _terrain_boost(battle: Battle, mtype: str, grounded: bool) -> float:
+    """电气/青草场地的属性加成(只有接地的宝可梦吃到)。"""
+    if not grounded:
+        return 1.0
+    if battle.terrain == "electricterrain" and mtype == "Electric":
+        return 1.3
+    if battle.terrain == "grassyterrain" and mtype == "Grass":
+        return 1.3
+    return 1.0
+
+
 def _attacker_mods(
     battle: Battle, mon: Pokemon, foe: Pokemon, move_key: str, entry: dict,
     mtype: str, category: str, eff: float, power: float,
@@ -2111,8 +2225,15 @@ def _attacker_mods(
         mods *= 1.3
     if mon.has_ability("sand-force") and battle.weather == "sand" and mtype in ("Rock", "Ground", "Steel"):
         mods *= 1.3
-    if mon.has_ability("analytic") and battle.turn > 1:
-        mods *= 1.3
+    # 场地加成(电气/青草 ×1.3,需接地)
+    mods *= _terrain_boost(battle, mtype, battle._grounded(mon))
+    # 分析:只有**本回合后手**时才 +30%(旧写法是 turn>1 就加成,与自己是否后手无关)
+    if mon.has_ability("analytic") and getattr(battle, "_second_mover_side", ""):
+        mine = "player" if battle.player.mon is mon else (
+            "enemy" if battle.enemy.mon is mon else ""
+        )
+        if mine and mine == battle._second_mover_side:
+            mods *= 1.3
     if mon.has_ability("supreme-overlord"):
         fainted = sum(1 for p in (battle.player if battle.player.mon is mon else battle.enemy).party if p.fainted)
         mods *= 1 + 0.1 * fainted
@@ -2153,6 +2274,9 @@ def _defender_mods(
 
 
 def _calc_confusion_damage(battle: Battle, mon: Pokemon) -> int:
+    if mon.has_ability("magic-guard"):
+        # 魔法防守免疫一切间接伤害,混乱自伤也算
+        return 0
     # 40 威力、无属性的物理自伤(灼伤同样减半)
     atk = mon.battle_stat("atk", battle)
     dfn = mon.battle_stat("def", battle)
