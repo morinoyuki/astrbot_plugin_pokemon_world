@@ -164,7 +164,8 @@ def today_brief(state: WorldState, *, region: str = "", location: str = "") -> s
         if region
         else ""
     )
-    lines = [f"📅 第 {day} 游戏日(04:00 刷新)"]
+    # 必须用相对天数:state.day 是 ordinal,直接显示就是"第 739885 游戏日"
+    lines = [f"📅 世界第 {state.day_no(day)} 天(04:00 刷新)"]
     if region:
         lines.append(f"🌦️ 当前地区天气:{weather}")
     if location:

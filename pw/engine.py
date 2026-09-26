@@ -438,6 +438,11 @@ class Battle:
     awaiting_switch: bool = False
     player_damaged: bool = False
     enemy_damaged: bool = False
+    # 僵局计数:双方连续多少回合谁都没掉血(含变化招互刷)。
+    # 数据里少数物种的低级招式全是变化招(如 4 级小拉达只有蛮干/迷人),
+    # 双方都打不动 → 战斗**永远结束不了**。到上限就按"不了了之"收场。
+    stall_turns: int = 0
+    stalled: bool = False
     wild: bool = False
     bag: dict = field(default_factory=dict)
     captured: dict | None = None
@@ -467,6 +472,8 @@ class Battle:
             "captured": self.captured,
             "run_attempts": self.run_attempts,
             "escaped": self.escaped,
+            "stall_turns": self.stall_turns,
+            "stalled": self.stalled,
         }
 
     @classmethod
@@ -491,6 +498,8 @@ class Battle:
         b.captured = d.get("captured")
         b.run_attempts = int(d.get("run_attempts", 0) or 0)
         b.escaped = bool(d.get("escaped", False))
+        b.stall_turns = int(d.get("stall_turns", 0) or 0)
+        b.stalled = bool(d.get("stalled", False))
         return b
 
     # ── 展示 ──
@@ -675,7 +684,33 @@ class Battle:
 
         self._tick_end_of_turn()
         self._check_faints()
+        self._check_stall()
         return list(self.log)
+
+    # 连续多少回合双方都没掉血就收场(25 回合足够打完任何正常对局:
+    # 正常对局 3~10 回合就结束,25 回合还是零伤害基本可以确定是打不动)
+    STALL_LIMIT: ClassVar[int] = 25
+
+    def _check_stall(self) -> None:
+        """双方连续 N 回合零伤害 → 判定僵局,结束战斗(避免无限对局)。
+
+        只在**双方都没掉血**时累加:一方掉血说明还能打下去。
+        换人/用药这类回合不计入(它们没有伤害但也不是僵持)。
+        """
+        if self.finished:
+            return
+        if self.player_damaged or self.enemy_damaged:
+            self.stall_turns = 0
+            return
+        self.stall_turns = int(self.stall_turns) + 1
+        if self.stall_turns < self.STALL_LIMIT:
+            return
+        self.stalled = True
+        self.finished = True
+        self.winner = ""
+        self.log.append(
+            f"⌛ 双方僵持了 {self.STALL_LIMIT} 回合,谁也没能打出伤害 —— 战斗不了了之。"
+        )
 
     # ── 行动顺序 ──
     _NON_MOVE_PRIORITY: ClassVar[dict[str, int]] = {

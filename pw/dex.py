@@ -424,19 +424,69 @@ class Dex:
     def default_moveset(
         self, species_key: str, level: int, n: int = 4, tm_fill: bool = True
     ) -> list[str]:
-        """生成一套默认招式:优先最近的等级招,不足用可学招式补齐。"""
+        """生成一套默认招式:**优先当前等级已学会的等级招**。
+
+        修正两个会出荒唐配置的问题:
+        1. 以前不管三七二十一用 TM/蛋招补满 4 个 —— 野生宝可梦本来就可能只有
+           1~3 个招式,硬补会补出"4 级小拉达会 34 级的蛮干、学的是迷人/诱惑
+           这类 0 威力招式",双方都打不动 → 战斗永远结束不了(实测出现过);
+        2. 数据里少数物种(小拉达/波波/独角虫…)的低级等级招只标了 VC(V),
+           `level_moves` 取不到 → 于是整只宝可梦一个等级招都没有。这时才兜底:
+          先用该形态**最低等级**的等级招,再用**有威力**的可学招式,最后才用
+           任意可学招式,保证至少能打伤害。
+        """
         picks: list[str] = []
         for m in reversed(self.level_moves(species_key, level)):
             if m not in picks:
                 picks.append(m)
             if len(picks) >= n:
                 break
-        if tm_fill and len(picks) < n:
-            for item in self.learnable(species_key, level):
-                if item["move"] not in picks:
-                    picks.append(item["move"])
-                if len(picks) >= n:
+        if picks:
+            return picks[:n]          # 有几招算几招
+        if not tm_fill:
+            return picks
+        # 后面都是"数据缺低级招"时的猜测,招式数上限压到 2 ——
+        # 免得 4 级小拉达顶着居合斩/充电光束一整套 TM
+        n = min(n, 2)
+        row = self._own_learnset(species_key)
+        by_level: list[tuple[int, str]] = []
+        for move, codes in row.items():
+            for c in str(codes).split(","):
+                if c.startswith("L"):
+                    by_level.append((int(c[1:] or 0), move))
                     break
+        # 数据里这些物种的早期招式只标了 VC(V),L 招从十几级才开始 ——
+        # 不能把 53 级的暴风塞给 5 级波波,所以按"等级够得着 + 优先有威力"挑,
+        # 够得着的都没有时只兜一个最低等级的能打伤害的招(好过 4 个变化招)
+        cap = n
+        reach = [m for lv, m in sorted(by_level) if lv <= max(15, level * 3)]
+        for want_power in (True, False):
+            for move in reach:
+                power = int((self.moves.get(move) or {}).get("basePower") or 0)
+                if want_power and power <= 0:
+                    continue
+                if move not in picks:
+                    picks.append(move)
+                if len(picks) >= cap:
+                    return picks[:cap]
+        if not picks:
+            for _lv, move in sorted(by_level):
+                if int((self.moves.get(move) or {}).get("basePower") or 0) > 0:
+                    picks.append(move)
+                    break
+            if not picks and by_level:
+                picks.append(sorted(by_level)[0][1])
+        cands = [it["move"] for it in self.learnable(species_key, level)]
+        for want_power in (True, False):   # 先补能打伤害的
+            for move in cands:
+                if move in picks:
+                    continue
+                power = int((self.moves.get(move) or {}).get("basePower") or 0)
+                if want_power and power <= 0:
+                    continue
+                picks.append(move)
+                if len(picks) >= n:
+                    return picks[:n]
         return picks[:n]
 
     def evolution(self, species_key: str, level: int) -> str | None:

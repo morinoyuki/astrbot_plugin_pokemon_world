@@ -366,3 +366,89 @@ def test_unimplemented_moves_say_so():
             if any("引擎" in line for line in lines):
                 break
         assert any("引擎" in line for line in lines), lines
+
+
+def test_stalemate_ends_battle():
+    """双方都打不出伤害时战斗必须能结束 —— 否则永远卡在对战里。
+
+    起因:数据里少数物种(小拉达/波波)的低级招式只标了 VC 版本,
+    `default_moveset` 补出来全是 0 威力变化招,实测双方互相摇尾巴/迷人,
+    30 回合后还是"对战中",玩家出不去(其他行动又被对战锁定)。
+    """
+    from pw.engine import Battle, Side, create_pokemon
+
+    def status_only(species, level):
+        mon = create_pokemon(species, level)
+        mon.moves = ["tailwhip", "growl", "sandattack", "leer"]
+        mon.pp = dict.fromkeys(mon.moves, 40)
+        return mon
+
+    p1 = Side.from_dict({})
+    p1.party = [status_only("sprigatito", 10)]
+    p1.active = 0
+    e1 = Side.from_dict({})
+    e1.party = [status_only("rattata", 10)]
+    e1.active = 0
+    b = Battle(player=p1, enemy=e1)
+    b.wild = True
+    lines = []
+    for _ in range(Battle.STALL_LIMIT + 3):
+        if b.finished:
+            break
+        lines = b.step({"type": "move", "move": "tailwhip"})
+    assert b.finished, f"僵局没有收场:{lines[-3:]}"
+    assert b.stalled, "应标记为僵局(不是判胜/判负)"
+    assert b.winner == ""
+    assert any("不了了之" in x for x in lines), lines
+
+
+def test_stalemate_counter_resets_on_damage():
+    """一方掉血就说明还能打,僵局计数必须清零。"""
+    from pw.engine import Battle, Side, create_pokemon
+
+    p1 = Side.from_dict({})
+    p1.party = [create_pokemon("charizard", 40)]
+    p1.active = 0
+    e1 = Side.from_dict({})
+    e1.party = [create_pokemon("rattata", 5)]
+    e1.active = 0
+    b = Battle(player=p1, enemy=e1)
+    b.wild = True
+    for _ in range(6):
+        if b.finished:
+            break
+        b.step({"type": "move", "move": "scratch"})
+    assert not b.stalled
+    assert b.stall_turns == 0, b.stall_turns
+
+
+def test_low_level_wild_movesets_can_deal_damage():
+    """低级野生宝可梦的招式里必须有能打伤害的 —— 不能全是变化招。
+
+    数据里小拉达/波波/独角虫等的早期招式只标了 VC(V),原来的兜底会补成
+    "4 级小拉达会 34 级蛮干 + 迷人/诱惑",双方都打不动。
+    """
+    from pw.dex import get_dex
+
+    dex = get_dex()
+    for species, level in (("rattata", 4), ("pidgey", 5), ("weedle", 3),
+                           ("kakuna", 4), ("caterpie", 3)):
+        moves = dex.default_moveset(species, level)
+        powers = [int((dex.moves.get(m) or {}).get("basePower") or 0) for m in moves]
+        assert moves, f"{species} 一个招式都没有"
+        assert any(p > 0 for p in powers), f"{species} Lv{level} 全是变化招:{moves}"
+        # 兜底路径不该再堆一整套 TM
+        assert len(moves) <= 4
+
+
+def test_normal_species_get_level_appropriate_moves():
+    """正常物种只用当前等级已学会的等级招(不再硬补 TM)。"""
+    from pw.dex import get_dex
+
+    dex = get_dex()
+    moves = dex.default_moveset("sprigatito", 5)
+    assert "scratch" in moves and "leafage" in moves
+    assert "magicalleaf" not in moves, "10 级的魔法叶不该出现在 5 级身上"
+    assert all(
+        int((dex.moves.get(m) or {}).get("basePower") or 0) >= 0 for m in moves
+    )

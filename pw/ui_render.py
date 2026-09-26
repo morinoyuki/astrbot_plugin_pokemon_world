@@ -16,6 +16,7 @@ from io import BytesIO
 from astrbot.api import logger
 
 from . import fonts
+from .dex import get_dex
 from .sprites import back_sprite_path, sprite_path
 
 LOGICAL_W = 240
@@ -1757,4 +1758,167 @@ def render_dex(
         return sc.finish()
     except Exception as e:  # 渲染失败回退文本
         logger.debug("宝可梦世界: 图鉴渲染失败: %s", e)
+        return b""
+
+
+# ═════════════════════════════════════════════════════════════════
+# 单只宝可梦资料(仿 GBA 的"摘要"画面)
+# ═════════════════════════════════════════════════════════════════
+def _chip(sc: Screen, x: float, y: float, label: str, *, size: float = 6.6) -> float:
+    """属性/标签色块,返回宽度(传入英文属性 key 或中文都行)。"""
+    label = get_dex().type_label(label) if label else "?"
+    w = sc.tw(label, size) + 6
+    sc.d.rounded_rectangle([x, y, x + w, y + 9], radius=2,
+                           fill=type_color(label), outline=BOX_EDGE)
+    sc.text(x + 3, y + 1, label, size=size, fill=(255, 255, 252))
+    return w
+
+
+def render_mon_summary(mon: dict, *, index: int = 1, party_size: int = 1,
+                       scale: int = SCALE_DEFAULT) -> bytes:
+    """单只宝可梦资料页:`/宝可梦 <序号>`(仿 GBA 的"摘要"画面)。
+
+    mon 字段(都可缺省,缺省显示 "?"):species/name/level/gender/types/cur_hp/max_hp/
+    status/exp_pct/exp_now/exp_next/stats/base/nature_zh/ability_zh/ability_desc/
+    item_zh/friendship/moves/evo_hint/dex_no/genus
+
+    注意 `hp_bar`/`exp_bar` 的参数是 **(x, y, 宽, 高)** 而不是 (x0,y0,x1,y1),
+    `exp_bar` 的百分比是 **0~100**(踩过一次:传了 0~1,条子直接画满整个面板)。
+    """
+    try:
+        sc = Screen(scale=scale)
+        name = str(mon.get("name") or "?")
+        lv = int(mon.get("level") or 1)
+        sc.title_bar("宝可梦资料", right=f"{int(index)}/{max(1, int(party_size))}")
+
+        # ── 左上:名字 / 属性 / 立绘 ──
+        sc.window((5, 19, 96, 92), radius=2)
+        sc.text_center(50.5, 21.5, _fit(sc, name, 86, 8.2), size=8.2, fill=TEXT)
+        types = [str(t) for t in (mon.get("types") or [])][:2]
+        if types:
+            widths = [sc.tw(get_dex().type_label(t), 6.6) + 6 for t in types]
+            cx = 50.5 - (sum(widths) + 2 * (len(types) - 1)) / 2
+            for t, w in zip(types, widths, strict=False):
+                _chip(sc, cx, 30.5, t, size=6.6)
+                cx += w + 2
+        # 立绘贴底,上边缘在属性标签之下(bounds 会按比例钳制,不会溢出)
+        sc.sprite(str(mon.get("species") or ""), ground=(50, 89), factor=1.0,
+                  bounds=(62, 46))
+
+        # ── 右上:等级 / HP / 经验 / 能力值 ──
+        sc.window((100, 19, 235, 92), radius=2)
+        head = f"Lv{lv}"
+        g = str(mon.get("gender") or "")
+        if g in ("M", "F"):
+            head += " " + ("♂" if g == "M" else "♀")
+        sc.text(105, 21, head, size=7.8, fill=TEXT)
+        cur, mx = int(mon.get("cur_hp") or 0), max(1, int(mon.get("max_hp") or 1))
+        sc.text_right(230, 21, f"HP {cur}/{mx}", size=7.4, fill=TEXT)
+        sc.hp_bar((105, 30, 125, 6), cur / mx)
+        sc.text(105, 39, "EXP", size=6.6, fill=TEXT_DIM)
+        sc.text_right(230, 39, f"{int(mon.get('exp_now') or 0)}/{int(mon.get('exp_next') or 0)}",
+                      size=6.6, fill=TEXT_DIM)
+        # exp_bar 的百分比是 0~100
+        sc.exp_bar((105, 47, 125, 4), float(mon.get("exp_pct") or 0.0))
+        stats = mon.get("stats") or {}
+        base = mon.get("base") or {}
+        rows = (("HP", "hp"), ("攻击", "atk"), ("防御", "def"),
+                ("特攻", "spa"), ("特防", "spd"), ("速度", "spe"))
+        for i, (label, key) in enumerate(rows):
+            col, row = divmod(i, 3)
+            x = 106 + col * 66
+            xr = 160 + col * 70
+            y = 56 + row * 11
+            sc.text(x, y, label, size=7.0, fill=TEXT_DIM)
+            b = base.get(key)
+            if isinstance(b, (int, float)):
+                sc.text(x + 26, y + 0.4, f"({int(b)})", size=6.2, fill=TEXT_DIM)
+            sc.text_right(xr, y, str(int(stats.get(key) or 0)), size=7.8, fill=TEXT)
+
+        # ── 左下:特性 / 性格 / 亲密 / 持有物 ──
+        sc.window((5, 96, 118, 152), radius=2)
+        y = 100.0
+        for label, value in (
+            ("特性", str(mon.get("ability_zh") or "?")),
+            ("性格", str(mon.get("nature_zh") or "?")),
+            ("亲密", str(int(mon.get("friendship") or 0))),
+            ("持有", str(mon.get("item_zh") or "无")),
+        ):
+            sc.text(10, y, label, size=6.8, fill=TEXT_DIM)
+            sc.text(34, y, _fit(sc, value, 84, 7.2), size=7.2, fill=TEXT)
+            y += 9
+        desc = str(mon.get("ability_desc") or "")
+        if desc:
+            sc.text(10, 137, _fit(sc, desc, 106, 6.2), size=6.2, fill=TEXT_DIM)
+
+        # ── 右下:招式 + PP ──
+        sc.window((122, 96, 235, 152), radius=2)
+        sc.text(127, 99, "招式", size=7.0, fill=TEXT_DIM)
+        moves = list(mon.get("moves") or [])
+        if not moves:
+            sc.text(127, 112, "还没有招式", size=7.6, fill=TEXT_DIM)
+        for i, mv in enumerate(moves[:4]):
+            y = 107 + i * 10
+            # 属性用左侧小色块表示(省下横向空间给招式名与 PP)
+            if mv.get("type"):
+                sc.d.rectangle([127, y + 1.5, 130.5, y + 7],
+                               fill=type_color(get_dex().type_label(str(mv["type"]))),
+                               outline=BOX_EDGE)
+            sc.text(134, y, _fit(sc, str(mv.get("zh") or "?"), 62, 7.6), size=7.6, fill=TEXT)
+            pp, ppx = int(mv.get("pp") or 0), int(mv.get("pp_max") or 0)
+            sc.text_right(231, y + 0.6, f"PP {pp}/{ppx}", size=6.4,
+                          fill=TEXT_DIM if pp else (198, 96, 96))
+
+        tail = f"编号 #{int(mon.get('dex_no') or 0):04d}"
+        if mon.get("genus"):
+            tail += f" · {mon['genus']}"
+        if mon.get("evo_hint"):
+            tail += f" · {mon['evo_hint']}"
+        sc.footer(_fit(sc, tail, 228, 7.2), size=7.2)
+        return sc.finish()
+    except Exception as e:  # 渲染失败回退文本
+        logger.debug("宝可梦世界: 宝可梦资料渲染失败: %s", e)
+        return b""
+
+
+def render_box(mons: list[dict], *, capacity: int = 0, money: int = 0,
+               scale: int = SCALE_DEFAULT) -> bytes:
+    """电脑箱子:`/电脑`。显示仓库里的宝可梦(每页 16 只)。"""
+    try:
+        sc = Screen(scale=scale)
+        sc.title_bar("电脑 · 宝可梦仓库",
+                     right=f"{len(mons)}/{capacity}只" if capacity else f"{len(mons)}只")
+        if not mons:
+            sc.window((5, 19, 235, 150), radius=2)
+            sc.text_center(120, 70, "仓库是空的。", size=9, fill=TEXT_DIM)
+            sc.text_center(120, 84, "队伍满 6 只后收服的宝可梦会存到这里。",
+                           size=7.2, fill=TEXT_DIM)
+            sc.footer("取出:`/队伍 取出 <序号>`", size=7.4)
+            return sc.finish()
+        cols, rows, cw, ch = 2, 7, 116, 18
+        for i, mon in enumerate(mons[:cols * rows]):
+            cx = 4 + (i % cols) * (cw + 1)
+            cy = 19 + (i // cols) * ch
+            sc.window((cx, cy, cx + cw - 1, cy + ch - 1), radius=2)
+            sc.sprite(str(mon.get("species") or ""), ground=(cx + 14, cy + ch - 4),
+                      factor=0.5, bounds=(24, ch - 8),
+                      dim=_ratio(mon.get("cur_hp"), mon.get("max_hp")) <= 0)
+            sc.text(cx + 27, cy + 2, _fit(sc, str(mon.get("name") or "?"), 58, 7.6),
+                    size=7.6, fill=TEXT)
+            lv = f"Lv{int(mon.get('level') or 1)}"
+            g = str(mon.get("gender") or "")
+            if g in ("M", "F"):
+                lv += "♂" if g == "M" else "♀"
+            sc.text_right(cx + cw - 4, cy + 2, lv, size=6.8, fill=TEXT_DIM)
+            # hp_bar 参数是 (x, y, 宽, 高)
+            sc.hp_bar((cx + 27, cy + 11, cw - 34, 4),
+                      _ratio(mon.get("cur_hp"), mon.get("max_hp")))
+        more = len(mons) - cols * rows
+        tail = f"共 {len(mons)} 只"
+        if more > 0:
+            tail += f"(另有 {more} 只未显示)"
+        sc.footer(f"{tail} · 取出:`/队伍 取出 <序号>`", size=7.2)
+        return sc.finish()
+    except Exception as e:  # 渲染失败回退文本
+        logger.debug("宝可梦世界: 仓库渲染失败: %s", e)
         return b""

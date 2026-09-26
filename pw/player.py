@@ -223,6 +223,62 @@ class Trainer:
         self.box.append(d)
         return True
 
+    def box_find(self, ident) -> tuple[int, dict] | None:
+        """在**电脑**里找:序号(1 起)/id/昵称/物种(中英文)。"""
+        q = str(ident or "").strip()
+        if not q:
+            return None
+        if q.isdigit():
+            i = int(q) - 1
+            return (i, self.box[i]) if 0 <= i < len(self.box) else None
+        nq = q.lower()
+        for i, p in enumerate(self.box):
+            if nq and nq in (str(p.get("id") or "").lower(), str(p.get("nickname") or "").lower()):
+                return i, p
+        resolved = get_dex().resolve_species(q)
+        if resolved:
+            for i, p in enumerate(self.box):
+                if p.get("species") == resolved[0]:
+                    return i, p
+        for i, p in enumerate(self.box):
+            if nq and nq in str(p.get("nickname") or "").lower():
+                return i, p
+        return None
+
+    def swap_party(self, a: int, b: int) -> bool:
+        """交换队伍里的两只(1 起的序号)。"""
+        if a == b:
+            return False
+        n = len(self.party)
+        if not (1 <= a <= n) or not (1 <= b <= n):
+            return False
+        self.party[a - 1], self.party[b - 1] = self.party[b - 1], self.party[a - 1]
+        return True
+
+    def release_pokemon(self, ident, *, where: str = "party") -> Pokemon | None:
+        """放生。返回被放生的宝可梦;不合法返回 None。
+
+        - 队伍里最后一只有战斗力的宝可梦不能放生(否则玩家没有可用宝可梦);
+        - 队伍成员放生后队伍为空时会自动从电脑补一只(沿用 remove_pokemon 的行为)。
+        """
+        if where == "box":
+            hit = self.box_find(ident)
+            if hit is None:
+                return None
+            return dict_to_mon(self.box.pop(hit[0]))
+        if where == "party":
+            if isinstance(ident, str) and ident.isdigit():
+                index = int(ident) - 1
+            else:
+                found = self.find(ident)
+                if found is None:
+                    return None
+                index = found[0]
+            if len(self.party) <= 1:
+                return None      # 不能把最后一只放掉
+            return self.remove_pokemon(index)
+        return None
+
     def withdraw(self, ident: str) -> bool:
         if len(self.party) >= MAX_PARTY:
             return False

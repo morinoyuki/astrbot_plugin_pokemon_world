@@ -340,6 +340,11 @@ def take_turn(
     elif battle.escaped:
         res.outcome = "escaped"
         res.lines.append("🏃 成功脱离了战斗。")
+    elif battle.stalled:
+        # 双方都打不动(数据里少数低级宝可梦只有变化招)时的兜底收场,
+        # 既不算赢也不算输,不扣钱也不发奖励
+        res.outcome = "stalled"
+        res.lines.append("⌛ 战斗拖得太久,双方各自收起了宝可梦。")
     elif battle.winner == "player":
         res.outcome = "win"
         _finish_win(trainer, battle, meta, res, daytime=daytime, money_mult=money_mult, day=day)

@@ -151,10 +151,19 @@ class PokemonWorldPlugin(Star):
             return None
         return Trainer(data, uid=uid, scope=scope)
 
-    def _require(self, event: AstrMessageEvent) -> tuple[Trainer | None, str]:
+    def _require(self, event: AstrMessageEvent, *,
+                 in_battle_ok: bool = False) -> tuple[Trainer | None, str]:
+        """取玩家存档,并做"对战锁定"检查。
+
+        `in_battle_ok=True` 用于对战/捕捉/纯查看类指令。其余指令默认在
+        对战中拒绝 —— 否则玩家可以在战斗中途 `/探索`、`/前往`、`/治疗`,
+        战斗状态与世界状态会互相踩(用户要求:战斗时其他行动禁用)。
+        """
         t = self._load(event)
         if t is None:
             return None, "❌ 你还没有开始旅程。发送 `/开始 名字 御三家` 成为训练家吧!"
+        if not in_battle_ok and B.in_battle(t):
+            return None, _BATTLE_LOCKED_MSG
         return t, ""
 
     def _save(self, t: Trainer) -> None:
@@ -347,7 +356,7 @@ class PokemonWorldPlugin(Star):
     @filter.command("状态", alias={"status", "训练家", "档案"})
     async def cmd_status(self, event: AstrMessageEvent):
         """/状态 —— 训练家档案"""
-        t, err = self._require(event)
+        t, err = self._require(event, in_battle_ok=True)
         if err:
             yield event.plain_result(err)
             return
@@ -364,10 +373,101 @@ class PokemonWorldPlugin(Star):
 
     @filter.command("队伍", alias={"team", "宝可梦队伍"})
     async def cmd_team(self, event: AstrMessageEvent):
-        """/队伍 —— 查看队伍"""
-        t, err = self._require(event)
+        """/队伍 [存入|取出|换位|放生|电脑] <序号> —— 队伍与仓库管理"""
+        t, err = self._require(event, in_battle_ok=True)
         if err:
             yield event.plain_result(err)
+            return
+        parts = self._args(event, ("队伍", "team", "宝可梦队伍")).split()
+        sub = parts[0] if parts else ""
+        args = parts[1:]
+        # 管理类操作(存/取/换位/放生)在对战中一律禁止:否则可以把队伍
+        # 换成满血队在战斗途中"续命",也能把出战的那只存进电脑。
+        managing = sub in ("存入", "取下", "取出", "换位", "交换", "放生",
+                           "deposit", "withdraw", "swap", "release")
+        if managing and B.in_battle(t):
+            yield event.plain_result(
+                "⚠️ 对战中不能整理队伍 —— 先打完这场(出招/捕捉/逃跑)。"
+            )
+            return
+        if sub in ("存入", "deposit"):
+            idx = coerce_int(args[0] if args else "0", 0)
+            mon = t.mon(idx - 1) if idx >= 1 else None
+            if mon is None:
+                yield event.plain_result(
+                    f"❌ 用法:`/队伍 存入 <队伍序号>`(现在是 1~{max(1, len(t.party))})"
+                )
+                return
+            if len(t.party) <= 1:
+                yield event.plain_result("❌ 队伍里至少要留一只宝可梦。")
+                return
+            if not t.deposit(idx - 1):
+                yield event.plain_result("❌ 存入失败(序号越界或队伍只剩一只)。")
+                return
+            self._save(t)
+            yield event.plain_result(
+                f"📦 {mon.display} 已存入电脑(队伍 {len(t.party)} 只 / 电脑 {len(t.box)} 只)。"
+            )
+            return
+        if sub in ("取出", "withdraw"):
+            ident = args[0] if args else ""
+            from .pw.player import MAX_PARTY
+
+            if not ident:
+                yield event.plain_result("❌ 用法:`/队伍 取出 <电脑序号>`(用 `/电脑` 看列表)")
+                return
+            hit = t.box_find(ident)
+            if hit is None:
+                yield event.plain_result(f"❌ 电脑里没有「{ident}」。")
+                return
+            if len(t.party) >= MAX_PARTY:
+                yield event.plain_result(
+                    f"❌ 队伍已经满 {MAX_PARTY} 只了,先用 `/队伍 存入 <序号>` 腾个位置。"
+                )
+                return
+            mon_zh = _sp_zh(str(hit[1].get("species")))
+            if not t.withdraw(str(hit[1].get("id") or "")):
+                yield event.plain_result("❌ 取出失败。")
+                return
+            self._save(t)
+            yield event.plain_result(
+                f"🎒 {mon_zh} 加入了队伍(队伍 {len(t.party)} 只 / 电脑 {len(t.box)} 只)。"
+            )
+            return
+        if sub in ("换位", "交换", "swap"):
+            if len(args) < 2:
+                yield event.plain_result("❌ 用法:`/队伍 换位 <序号A> <序号B>`")
+                return
+            a, b = coerce_int(args[0], 0), coerce_int(args[1], 0)
+            if not t.swap_party(a, b):
+                yield event.plain_result("❌ 换位失败(序号要在 1~6 之间且不相同)。")
+                return
+            self._save(t)
+            yield event.plain_result(
+                f"🔀 已交换第 {a} 只与第 {b} 只 —— 第 1 只是首发。"
+            )
+            return
+        if sub in ("放生", "release"):
+            if len(args) < 2 or args[1] not in ("确认", "confirm", "yes"):
+                yield event.plain_result(
+                    "⚠️ 放生不可撤销。确认请输入:`/队伍 放生 <序号> 确认`"
+                )
+                return
+            mon = t.release_pokemon(args[0], where="party")
+            if mon is None:
+                yield event.plain_result(
+                    "❌ 放生失败(序号越界,或者队伍只剩这一只)。"
+                )
+                return
+            self._save(t)
+            yield event.plain_result(
+                f"👋 你放生了 {mon.display}(Lv{mon.level})。它回到了野外。"
+                + ("(队伍已空,已自动从电脑补一只)" if not t.party else "")
+            )
+            return
+        if sub in ("电脑", "box", "仓库"):
+            async for r in self.cmd_box(event):
+                yield r
             return
         if not t.party:
             yield event.plain_result("队伍是空的,去野外收服一只吧:`/探索`")
@@ -376,6 +476,10 @@ class PokemonWorldPlugin(Star):
             await self._ensure_day(event, t)
         text = B.team_status(t)
         text += f"\n\n库存:电脑 {len(t.box)} 只 · 徽章 {t.badge_count()} 枚 · {fmt_money(t.money)}"
+        text += (
+            "\n\n管理:`/队伍 存入 <序号>`、`/队伍 取出 <序号>`、"
+            "`/队伍 换位 <A> <B>`、`/队伍 放生 <序号> 确认`"
+        )
         async for r in self._emit_ui(
             event, "party",
             lambda: UI.render_party(
@@ -388,13 +492,113 @@ class PokemonWorldPlugin(Star):
                 scale=self._img_scale(),
             ),
             text=text,
+            hint=(
+                f"管理:`/宝可梦 <1-{max(1, len(t.party))}>` 看资料、"
+                f"`/队伍 存入 <序号>` 存电脑、`/队伍 取出 <序号>` 取出、"
+                "`/队伍 换位 <A> <B>` 调首发"
+            ),
+        ):
+            yield r
+
+    @filter.command("宝可梦", alias={"精灵", "查看", "资料", "mon", "pokemon"})
+    async def cmd_mon(self, event: AstrMessageEvent):
+        """/宝可梦 [序号|名字] —— 查看单只宝可梦的详细资料(电脑里的要加前缀)"""
+        t, err = self._require(event, in_battle_ok=True)
+        if err:
+            yield event.plain_result(err)
+            return
+        parts = self._args(event, ("宝可梦", "精灵", "查看", "资料", "mon", "pokemon")).split()
+        where, ident = "party", ""
+        if parts and parts[0] in ("电脑", "box", "仓库"):
+            where = "box"
+            ident = parts[1] if len(parts) > 1 else ""
+        elif parts:
+            ident = parts[0]
+        # 不带参数:对战中看当前出战的那只,平时看队伍第一只
+        if not ident and where == "party":
+            if B.in_battle(t):
+                side = ((B.session(t) or {}).get("battle") or {}).get("player") or {}
+                ident = str(int(side.get("active") or 0) + 1)
+            else:
+                ident = "1"
+        if where == "box":
+            hit = t.box_find(ident)
+            if hit is None:
+                yield event.plain_result(
+                    f"❌ 电脑里没有「{ident}」。用 `/电脑` 看仓库列表。"
+                )
+                return
+            idx, md, total = hit[0], hit[1], len(t.box)
+        else:
+            found = t.find(ident)
+            if found is None:
+                yield event.plain_result(
+                    f"❌ 队伍里没有「{ident}」。用 `/队伍` 看队伍、`/电脑` 看仓库。"
+                )
+                return
+            idx, mon_obj, total = found[0], found[1], len(t.party)
+            md = t.party[idx]
+        if not isinstance(md, dict):
+            md = (mon_obj.to_dict() if hasattr(mon_obj, "to_dict") else {})
+        payload = self._mon_payload(t, md, index=idx + 1, party_size=total)
+        if where == "box":
+            payload["name"] = f"(仓库){payload['name']}"
+        text = self._mon_text(t, payload, where=where)
+        async for r in self._emit_ui(
+            event, "mon",
+            lambda: UI.render_mon_summary(
+                payload, index=idx + 1, party_size=total, scale=self._img_scale(),
+            ),
+            text=text,
+            hint="管理:`/队伍` 查看 · 电脑里的用 `/队伍 取出 <序号>`",
+        ):
+            yield r
+
+    @filter.command("电脑", alias={"仓库", "箱子", "box", "storage"})
+    async def cmd_box(self, event: AstrMessageEvent):
+        """/电脑 —— 查看电脑仓库里的宝可梦"""
+        t, err = self._require(event, in_battle_ok=True)
+        if err:
+            yield event.plain_result(err)
+            return
+        from .pw.player import MAX_PARTY
+
+        parts = self._args(event, ("电脑", "仓库", "箱子", "box", "storage")).split()
+        if parts and parts[0] in ("放生", "release"):
+            if B.in_battle(t):
+                yield event.plain_result(
+                    "⚠️ 对战中不能放生 —— 先打完这场(出招/捕捉/逃跑)。"
+                )
+                return
+            if len(parts) < 3 or parts[2] not in ("确认", "confirm", "yes"):
+                yield event.plain_result(
+                    "⚠️ 放生不可撤销。确认请输入:`/电脑 放生 <序号> 确认`"
+                )
+                return
+            mon = t.release_pokemon(parts[1], where="box")
+            if mon is None:
+                yield event.plain_result(f"❌ 电脑里没有「{parts[1]}」。")
+                return
+            self._save(t)
+            yield event.plain_result(
+                f"👋 你放生了 {mon.display}(Lv{mon.level})。它回到了野外。"
+            )
+            return
+        mons = self._box_payload(t)
+        text = self._box_text(t, mons)
+        async for r in self._emit_ui(
+            event, "box",
+            lambda: UI.render_box(mons, capacity=len(mons) + 0 or 30,
+                                  money=t.money, scale=self._img_scale()),
+            text=text,
+            hint=f"取出:`/队伍 取出 <序号>`(队伍满 {MAX_PARTY} 只时先存一只)",
         ):
             yield r
 
     @filter.command("背包", alias={"bag", "道具"})
     async def cmd_bag(self, event: AstrMessageEvent):
         """/背包 —— 查看背包"""
-        t, err = self._require(event)
+        t, err = self._require(event, in_battle_ok=True)
         if err:
             yield event.plain_result(err)
             return
@@ -420,7 +624,7 @@ class PokemonWorldPlugin(Star):
     @filter.command("地图", alias={"map", "地区", "地点"})
     async def cmd_map(self, event: AstrMessageEvent):
         """/地图 [地区] —— 查看地图与相邻地点"""
-        t, err = self._require(event)
+        t, err = self._require(event, in_battle_ok=True)
         if err:
             yield event.plain_result(err)
             return
@@ -651,7 +855,7 @@ class PokemonWorldPlugin(Star):
     @filter.command("对战", alias={"battle", "出招", "move"})
     async def cmd_battle(self, event: AstrMessageEvent):
         """/对战 <行动> —— 出招 / 换人 / 道具 / 逃跑"""
-        t, err = self._require(event)
+        t, err = self._require(event, in_battle_ok=True)
         if err:
             yield event.plain_result(err)
             return
@@ -727,7 +931,7 @@ class PokemonWorldPlugin(Star):
     @filter.command("捕捉", alias={"catch", "投球"})
     async def cmd_catch(self, event: AstrMessageEvent):
         """/捕捉 <精灵球> —— 投球捕获"""
-        t, err = self._require(event)
+        t, err = self._require(event, in_battle_ok=True)
         if err:
             yield event.plain_result(err)
             return
@@ -1357,7 +1561,7 @@ class PokemonWorldPlugin(Star):
     @filter.command("图鉴", alias={"dex", "宝可梦图鉴"})
     async def cmd_dex(self, event: AstrMessageEvent):
         """/图鉴 <名字> —— 图鉴资料"""
-        t, err = self._require(event)
+        t, err = self._require(event, in_battle_ok=True)
         if err:
             yield event.plain_result(err)
             return
@@ -1423,7 +1627,7 @@ class PokemonWorldPlugin(Star):
     @filter.command("今日", alias={"today", "事件", "世界动态"})
     async def cmd_today(self, event: AstrMessageEvent):
         """/今日 —— 今日世界与个人事件"""
-        t, err = self._require(event)
+        t, err = self._require(event, in_battle_ok=True)
         if err:
             yield event.plain_result(err)
             return
@@ -1473,7 +1677,7 @@ class PokemonWorldPlugin(Star):
     @filter.command("任务", alias={"委托", "quest", "quests"})
     async def cmd_quest(self, event: AstrMessageEvent):
         """/任务 —— 查看/放弃支线委托"""
-        t, err = self._require(event)
+        t, err = self._require(event, in_battle_ok=True)
         if err:
             yield event.plain_result(err)
             return
@@ -1482,6 +1686,11 @@ class PokemonWorldPlugin(Star):
             await self._ensure_day(event, t)
             parts = arg.split()
             if parts and parts[0] in ("放弃", "drop", "取消"):
+                if B.in_battle(t):
+                    yield event.plain_result(
+                        "⚠️ 对战中不能放弃委托 —— 先打完这场(出招/捕捉/逃跑)。"
+                    )
+                    return
                 idx = coerce_int(parts[1], 0) if len(parts) > 1 else 0
                 q = QT.abandon(t, idx)
                 self._save(t)
@@ -1604,6 +1813,10 @@ class PokemonWorldPlugin(Star):
             f"👟 步数 {t.data.get('steps', 0)}"
             f" · 旅程第 {t.day_no()} 天({game_day_str()})",
         ]
+        if B.in_battle(t):
+            lines.append("⚔️ **正在对战中** —— " + self._battle_state_brief(t))
+        else:
+            lines.append("🕊️ 当前没有在战斗。")
         cur = story.current_stage(t)
         if cur:
             lines.append(f"📜 主线:{cur['title']} —— {cur['desc']}")
@@ -1730,6 +1943,7 @@ class PokemonWorldPlugin(Star):
             "win": "🎉 战斗胜利!",
             "caught": "🎉 捕获成功!",
             "escaped": "🏃 脱离了战斗",
+            "stalled": "⌛ 战斗不了了之",
             "loss": "😵 战斗失败……",
             "forfeit": "🏳️ 你认输了",
         }.get(res.outcome, "战斗结束")
@@ -2109,7 +2323,7 @@ class PokemonWorldPlugin(Star):
             ):
                 yield r
             return
-        if res.outcome in ("win", "loss", "forfeit", "escaped"):
+        if res.outcome in ("win", "loss", "forfeit", "escaped", "stalled"):
             async for r in self._emit_ui(
                 event, "result",
                 lambda: UII.render_battle_result(
@@ -2165,6 +2379,163 @@ class PokemonWorldPlugin(Star):
         body = "\n".join(x for x in (text, hint) if x)
         if body:
             yield event.plain_result(body)
+
+    def _held_zh(self, key: str) -> str:
+        """持有物中文名(持有道具不在 BAG_ITEMS 里,要走 resolve_item)。"""
+        if not key:
+            return ""
+        from .pw.items import resolve_item
+
+        r = resolve_item(key)
+        if not r:
+            return str(key)
+        return str((r[1] or {}).get("zh") or key)
+
+    def _mon_payload(self, t: Trainer, d: dict, *, index: int = 1,
+                     party_size: int = 1) -> dict:
+        """单只宝可梦资料页的数据(渲染层与文本层共用)。"""
+        dex = get_dex()
+        mon = B.dict_to_mon(d)
+        entry = dex.species.get(mon.species) or {}
+        ab = dex.resolve_ability(mon.ability)
+        ab_entry = (ab[1] or {}) if ab else {}
+        nat = dex.resolve_nature(mon.nature) or "hardy"
+        nat_entry = dex.natures.get(nat) or {}
+        # exp_for_level(growth_rate, level):第一个参数是成长曲线,不是等级
+        rate = dex.growth_of(mon.species)
+        lo = dex.exp_for_level(rate, mon.level)
+        hi = max(lo + 1, dex.exp_for_level(rate, min(100, mon.level + 1)))
+        exp_pct = B.exp_progress(mon)
+        moves = []
+        for key in mon.moves[:4]:
+            mv = dex.moves.get(key) or {}
+            mx = int((mv.get("pp") or 0) or 0)
+            moves.append(
+                {
+                    "zh": growth.move_zh(key),
+                    "type": str(mv.get("type") or ""),
+                    "pp": int(mon.pp.get(key, 0) or 0),
+                    "pp_max": mx or int(mon.pp.get(key, 0) or 0),
+                }
+            )
+        evo = dex.evolution_options(
+            mon.species, level=mon.level, moves=mon.moves, item=mon.item or None,
+            friendship=mon.friendship, gender=mon.gender,
+            stats=mon.stats, party=t.party_mon(),
+        ) or []
+        evo_hint = ""
+        if evo:
+            nxt = evo[0]
+            to_zh = _sp_zh(str(nxt.get("target") or ""))
+            how = _kind_zh(nxt.get("kind"))
+            need = nxt.get("level")
+            evo_hint = f"可进化 → {to_zh}" + (
+                f"(Lv{int(need)})" if isinstance(need, (int, float)) else f"({how})"
+            )
+        return {
+            "species": mon.species,
+            "name": mon.nickname or entry.get("zh") or mon.species,
+            "level": int(mon.level),
+            "gender": str(mon.gender or ""),
+            "types": [dex.type_label(x) for x in (mon.types or [])],
+            "cur_hp": int(mon.cur_hp),
+            "max_hp": int(mon.max_hp),
+            "status": str(mon.status or ""),
+            "exp_pct": exp_pct,
+            "exp_now": max(0, int(mon.exp) - lo),
+            "exp_next": max(1, hi - lo),
+            "stats": dict(mon.stats or {}),
+            "base": dict(entry.get("baseStats") or {}),
+            "nature_zh": str(nat_entry.get("zh") or mon.nature or ""),
+            "ability_zh": str(ab_entry.get("zh") or mon.ability or ""),
+            "ability_desc": str(ab_entry.get("desc") or ""),
+            "item_zh": self._held_zh(str(mon.item or "")),
+            "friendship": int(mon.friendship or 0),
+            "moves": moves,
+            "evo_hint": evo_hint,
+            "dex_no": int(entry.get("num") or 0),
+            "genus": str(entry.get("genus") or ""),
+        }
+
+    def _mon_text(self, t: Trainer, p: dict, *, where: str = "party") -> str:
+        """资料页的文本回退(图片渲染失败时用)。"""
+        dex = get_dex()
+        head = f"{p.get('name')} Lv{p.get('level')}"
+        if p.get("gender") in ("M", "F"):
+            head += " " + ("♂" if p["gender"] == "M" else "♀")
+        stats = p.get("stats") or {}
+        base = p.get("base") or {}
+        lines = [
+            f"◆ {head}",
+            f"属性:{'/'.join(p.get('types') or ['?'])}"
+            + (f" · 编号 #{int(p.get('dex_no') or 0):04d}" if p.get("dex_no") else ""),
+            f"HP {p.get('cur_hp')}/{p.get('max_hp')} [{bar(p.get('cur_hp'), p.get('max_hp'), 10)}]"
+            + (f" · {p.get('status')}" if p.get("status") else ""),
+            f"经验 {p.get('exp_now')}/{p.get('exp_next')}({float(p.get('exp_pct') or 0):.0f}%)",
+            "── 能力值(括号内为种族值)──",
+        ]
+        for label, key in (("HP", "hp"), ("攻击", "atk"), ("防御", "def"),
+                           ("特攻", "spa"), ("特防", "spd"), ("速度", "spe")):
+            b = base.get(key)
+            lines.append(
+                f"· {label} {int(stats.get(key) or 0)}"
+                + (f"({int(b)})" if isinstance(b, (int, float)) else "")
+            )
+        lines += [
+            "── 详情 ──",
+            f"特性:{p.get('ability_zh') or '?'}",
+            f"性格:{p.get('nature_zh') or '?'}",
+            f"亲密:{int(p.get('friendship') or 0)}",
+            f"持有:{p.get('item_zh') or '无'}",
+        ]
+        if p.get("ability_desc"):
+            lines.append(f"({p['ability_desc']})")
+        lines.append("── 招式 ──")
+        for i, mv in enumerate(p.get("moves") or [], 1):
+            lines.append(
+                f"{i}. {mv.get('zh')}({dex.type_label(str(mv.get('type') or ''))}) "
+                f"PP {mv.get('pp')}/{mv.get('pp_max')}"
+            )
+        if not p.get("moves"):
+            lines.append("(没有招式)")
+        if p.get("evo_hint"):
+            lines.append(p["evo_hint"])
+        return "\n".join(lines)
+
+    def _box_payload(self, t: Trainer) -> list[dict]:
+        """仓库列表数据。"""
+        dex = get_dex()
+        out = []
+        for p in t.box:
+            mon = B.dict_to_mon(p)
+            out.append(
+                {
+                    "species": mon.species,
+                    "name": mon.nickname or (dex.species.get(mon.species) or {}).get("zh")
+                    or mon.species,
+                    "level": int(mon.level),
+                    "gender": str(mon.gender or ""),
+                    "cur_hp": int(mon.cur_hp),
+                    "max_hp": int(mon.max_hp),
+                    "status": str(mon.status or ""),
+                }
+            )
+        return out
+
+    def _box_text(self, t: Trainer, mons: list[dict]) -> str:
+        if not mons:
+            return "📦 电脑仓库是空的。队伍满 6 只后收服的宝可梦会存到这里。"
+        lines = [f"📦 电脑仓库({len(mons)} 只)"]
+        for i, m in enumerate(mons, 1):
+            g = m.get("gender")
+            lines.append(
+                f"{i}. {m.get('name')} Lv{m.get('level')}"
+                + ("♂" if g == "M" else "♀" if g == "F" else "")
+                + f" HP {m.get('cur_hp')}/{m.get('max_hp')}"
+                + (f" [{m.get('status')}]" if m.get("status") else "")
+            )
+        lines.append("资料:`/宝可梦 电脑 <序号>` · 放生:`/电脑 放生 <序号> 确认`")
+        return "\n".join(lines)
 
     def _party_payload(self, t: Trainer) -> list[dict]:
         """队伍界面数据。"""
@@ -2255,8 +2626,40 @@ class PokemonWorldPlugin(Star):
             "caught": len(t.data.get("dex_caught") or []),
             "badges": badges,
             "story_progress": prog,
-            "best": "◆ /帮助 查看全部指令",
+            # 末行在平时是"看帮助",对战中改成对战状态 —— /状态 也能回答
+            # "我是不是在战斗里"(用户要求)
+            "best": self._card_battle_line(t) or "◆ /帮助 查看全部指令",
         }
+
+    def _battle_state_brief(self, t: Trainer) -> str:
+        """对战中一句话状态:"对手 波波 Lv5 · 第 2 回合"。
+
+        对手与回合数都在 `session["battle"]` 里(session 顶层只有 kind/meta 等),
+        读 `sess["foe"]` 会恒为空 —— 之前就显示出"对手 ?"(踩过)。
+        """
+        sess = B.session(t) or {}
+        b = sess.get("battle") or {}
+        if not b:
+            return ""
+        enemy = b.get("enemy") or {}
+        party = enemy.get("party") or []
+        active = int(enemy.get("active") or 0)
+        foe = party[active] if 0 <= active < len(party) else {}
+        dex = get_dex()
+        name = str(foe.get("nickname") or (dex.species.get(str(foe.get("species") or ""))
+                                          or {}).get("zh") or foe.get("species") or "?")
+        lv = foe.get("level")
+        turn = max(1, int(b.get("turn") or 0))
+        head = f"对手 {name}" + (f" Lv{int(lv)}" if isinstance(lv, (int, float)) else "")
+        me = t.mon(int(((b.get("player") or {}).get("active")) or 0))
+        if me is not None:
+            head += f" · 我方 {me.display} HP {me.cur_hp}/{me.max_hp}"
+        return f"{head} · 第 {turn} 回合"
+
+    def _card_battle_line(self, t: Trainer) -> str:
+        """训练家卡末行:对战中显示对手与回合数。"""
+        brief = self._battle_state_brief(t)
+        return f"⚔️ 对战中:{brief}" if brief else ""
 
     def _after_battle(self, t: Trainer, meta: dict, res: B.TurnResult, day: int) -> str:
         """结算主线/神兽/大赛的额外结果,返回要显示的前置文本。"""
@@ -2288,7 +2691,7 @@ class PokemonWorldPlugin(Star):
                 lines.append(
                     f"🐉 {site['zh']} 被击退了,它逃走了 —— 明天再来或许还能遇到。"
                 )
-            elif res.outcome in ("escaped", "loss", "forfeit"):
+            elif res.outcome in ("escaped", "loss", "forfeit", "stalled"):
                 # 逃跑/战败也算"今天惊动过它":否则玩家可以当天无限重挑刷捕获
                 legendary.mark_fled(t, site["species"], day)
                 lines.append(f"🐉 {site['zh']} 失去了踪影 —— 明天再来找它吧。")
@@ -2422,6 +2825,20 @@ class PokemonWorldPlugin(Star):
             yield event.plain_result(body)
 
 # ── 模块级小工具 ──────────────────────────────────────────────────
+# 对战中其他行动的一律锁定文案。写成**模块级常量**而不是类属性:
+# 类上非 callable 的属性在测试宿主对象 `_Cmd` 上不会被拷贝(它只拷 callable),
+# 一旦引用 self.XXX 测试里就会 AttributeError。
+_BATTLE_LOCKED_MSG = (
+    "⚔️ 你正在对战中,其他行动已锁定!\n"
+    "· `/对战 <招式序号>` 出招(序号见提示)\n"
+    "· `/捕捉 <精灵球>` 投球收服\n"
+    "· `/对战 switch <队伍序号>` 换人、`/对战 item <道具>` 用药\n"
+    "· `/对战 run` 逃跑\n"
+    "打完(击败/被打败/逃跑/收服)或 `/对战 forfeit` 认输后才能继续探索。\n"
+    "(期间仍可查看:`/状态`、`/队伍`、`/宝可梦 <序号>`、`/背包`)"
+)
+
+
 def _sp_zh(species: str | None) -> str:
     if not species:
         return "?"

@@ -1367,7 +1367,8 @@ def test_no_command_leaks_ordinal_day_number():
         p._save_state(st)
         p._save(t)
 
-        pat = re.compile(r"第\s*(\d{4,})\s*天")
+        # 注意 "第 N 游戏日/世界日" 这种写法也要覆盖,别只盯 "天"
+        pat = re.compile(r"第\s*(\d{4,})\s*(?:天|日)")
         for cmd, name in (
             ("/状态", "cmd_status"),
             ("/今日", "cmd_today"),

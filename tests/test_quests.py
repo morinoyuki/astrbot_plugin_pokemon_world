@@ -249,7 +249,17 @@ def test_travel_and_shop_advance_quests():
             "done": [], "counter": 1, "day": 1,
         }
         p._save(t)
-        money0 = p._load(ev).money
+        # 把"今天已经滚动过"打上,避免世界事件(如"捡到钱包"送钱)混进来 ——
+        # 事件送钱是正常玩法,但会让这条断言变成随机失败
+        from pw.util import game_day
+
+        st = p._state("g10086")
+        st.data["day"] = game_day()
+        st.data["last_roll_day"] = game_day()
+        st.data["player_events"] = {}
+        p._save_state(st)
+        t = p._load(ev)
+        money0 = t.money
         assert t.location == "pallet-town"
         ev2 = _Event("/前往 1号道路")   # 真新镇只与 1 号道路相邻
         run_cmd(p, ev2, p.cmd_go)
