@@ -113,3 +113,35 @@ def test_render_all_weathers_and_status():
 
 def test_battle_render_available():
     assert BR.available() is True
+
+
+def test_player_uses_back_sprite():
+    """我方必须使用背面图(正作里看不到自己的宝可梦正脸)。"""
+    from pw import sprites
+
+    assert sprites.back_available_count() > 1200, (
+        f"背面图数量过少:{sprites.back_available_count()}"
+    )
+    path = sprites.back_sprite_path("charizard")
+    assert path.endswith("sprites_back/charizard.png"), path
+    # 背面图与正面图必须是不同的两张
+    assert sprites.back_sprite_path("charizard") != sprites.sprite_path("charizard")
+    # 没有背面图时回退到正面图(而不是空)
+    assert sprites.back_sprite_path("venusaur") or sprites.sprite_path("venusaur")
+    assert sprites.back_sprite_path("no-such-mon") == ""
+
+
+def test_back_sprite_actually_drawn_for_player(monkeypatch):
+    """把"我方背面图"换成正面图后,渲染结果必须变化(证明背面图确实画进去了)。"""
+    from pw import battle_render as br
+    from pw import sprites
+
+    my = {"species": "charizard", "name": "喷火龙", "level": 60,
+          "cur_hp": 180, "max_hp": 200}
+    foe = {"species": "blastoise", "name": "水箭龟", "level": 60,
+           "cur_hp": 150, "max_hp": 150}
+    with_back = br.render_battle(my, foe, ["测试"], scale=SCALE)
+    monkeypatch.setattr(br, "back_sprite_path", lambda key, base="": sprites.sprite_path(key))
+    with_front = br.render_battle(my, foe, ["测试"], scale=SCALE)
+    assert with_back.startswith(b"\x89PNG") and with_front.startswith(b"\x89PNG")
+    assert with_back != with_front, "我方精灵图没有随背面/正面切换而变化"

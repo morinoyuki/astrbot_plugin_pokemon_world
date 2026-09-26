@@ -1,636 +1,276 @@
-"""对战画面渲染:把一场宝可梦对战画成 GBA/DS 风格的 PNG。
+"""宝可梦对战界面渲染(仿 GBA《火红/叶绿》)。
 
-只依赖 Pillow(以及标准库);字体/精灵图都用仓库里已有的本地文件,
-运行时不联网。任何一步出错都吞掉并返回 ``b""``,调用方回退到纯文本。
+设计
+====
+1. **图形走像素**:所有方块/血条/场地都在 240×160 的逻辑画布上用整数坐标绘制,
+   最后 `Image.NEAREST` 放大(默认 3 倍 → 720×480),得到真正的像素质感。
+2. **文字走清晰**:中文小字号在 10px 下会糊,所以文字在放大后的画布上绘制,
+   保证聊天里可读。
+3. **我方用背面图**(`sprites_back/`,和正作一致),敌方用正面图。
+4. 布局、配色、控件都对着 FRLG 实战截图还原:
+   象牙色信息框 + 深绿描边、血条带精灵球图标与「HP」标签及刻度、
+   我方额外显示 HP 数值与「EXP」经验条、底部暗红框青绿底的对话框、
+   背景是带地平线的场地 + 两个椭圆站台。
 
-逻辑画布 240x160,按 ``scale``(默认 3)放大成 720x480 的实际图片。
+任何异常都返回 `b""`,调用方会回退成纯文本 —— 渲染永远不该中断游戏。
 """
 
 from __future__ import annotations
 
-import contextlib
-import io
 import os
-import random
 from functools import lru_cache
+from io import BytesIO
 
 from astrbot.api import logger
 
-try:  # Pillow 缺失时模块仍可导入,只是 available() 为 False
-    from PIL import Image, ImageDraw, ImageFont, ImageOps
+from .sprites import back_sprite_path, sprite_path
 
-    _PIL_OK = True
-except Exception:  # pragma: no cover - 运行环境没有 Pillow
-    _PIL_OK = False
+try:
+    from PIL import ImageFont
+except ImportError:  # 没装 Pillow 时 available() 返回 False
+    ImageFont = None  # type: ignore[assignment]
 
-# ── 资源路径 ─────────────────────────────────────────────────────
-_FONT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static", "fonts")
-_MAIN_FONT = os.path.join(_FONT_DIR, "OPPOSans-Regular.ttf")
-_SYMBOL_FONT = os.path.join(_FONT_DIR, "Symbola_hint.ttf")
-
-# ── 逻辑画布与布局(全部用"逻辑像素",绘制时再乘 scale)────────────
 LOGICAL_W = 240
 LOGICAL_H = 160
-BASE_SCALE = 3
-HORIZON = 0.58
+SCALE_DEFAULT = 3
 
-FOE_BOX = (6.0, 20.0, 112.0, 32.0)
-PLAYER_BOX = (112.0, 74.0, 124.0, 36.0)
-MSG_BOX = (4.0, 112.0, 232.0, 44.0)
+FONT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static", "fonts")
+FONT_MAIN = os.path.join(FONT_DIR, "OPPOSans-Regular.ttf")
+FONT_SYMBOL = os.path.join(FONT_DIR, "Symbola_hint.ttf")
 
-FOE_HP_BAR = (14.0, 40.0, 96.0, 6.0)
-PLAYER_HP_BAR = (120.0, 90.0, 78.0, 6.0)
-PLAYER_EXP_BAR = (120.0, 100.0, 106.0, 4.0)
+# ── 调色板(对着 FRLG 截图取样)──────────────────────────────────
+BG_TOP = (242, 232, 180)
+BG_GROUND = (250, 243, 205)
+ARENA_FILL = (250, 246, 218)
+ARENA_LINE = (222, 206, 156)
+PLATFORM_FILL = (250, 248, 228)
+PLATFORM_LINE = (212, 194, 144)
 
-PLAYER_SPRITE_CENTER = (62.0, 68.0)
-FOE_SPRITE_CENTER = (176.0, 58.0)
-PLAYER_PLATFORM = (62.0, 100.0, 90.0, 20.0)
-FOE_PLATFORM = (176.0, 82.0, 74.0, 18.0)
+BOX_FILL = (250, 249, 227)
+BOX_EDGE = (58, 74, 58)
+BOX_EDGE_2 = (150, 168, 138)
+BOX_SHADOW = (196, 190, 150)
+TEXT = (52, 52, 44)
+TEXT_DIM = (110, 108, 92)
 
-# ── 调色板 ───────────────────────────────────────────────────────
-_WEATHER_SKY = {
-    "": ((150, 205, 245), (206, 236, 246)),
-    "sun": ((255, 210, 138), (255, 176, 104)),
-    "rain": ((112, 132, 158), (162, 178, 194)),
-    "sand": ((238, 210, 152), (222, 188, 130)),
-    "snow": ((198, 218, 238), (228, 238, 248)),
+MSG_FRAME = (162, 44, 34)
+MSG_FRAME_HI = (214, 100, 82)
+MSG_FILL = (108, 178, 162)
+MSG_TEXT = (250, 250, 248)
+MSG_SHADOW = (46, 92, 82)
+
+HP_TRACK = (150, 46, 38)
+HP_TRACK_HI = (196, 96, 84)
+HP_TAG_BG = (168, 48, 40)
+HP_TAG_FG = (250, 224, 96)
+EXP_TAG_BG = (246, 208, 56)
+EXP_TAG_FG = (72, 56, 16)
+EXP_TRACK = (86, 92, 110)
+EXP_FILL = (86, 202, 236)
+MALE = (64, 120, 244)
+FEMALE = (248, 96, 160)
+SHADOW = (176, 172, 132)
+
+STATUS_STYLE = {
+    "brn": ("灼", (224, 96, 48)),
+    "par": ("麻", (232, 192, 48)),
+    "psn": ("毒", (168, 88, 200)),
+    "tox": ("剧", (140, 60, 180)),
+    "slp": ("眠", (120, 124, 148)),
+    "frz": ("冰", (96, 196, 232)),
 }
-_WEATHER_GROUND = {
-    "": ((124, 198, 122), (86, 158, 96)),
-    "sun": ((226, 198, 126), (196, 158, 92)),
-    "rain": ((108, 138, 118), (82, 112, 98)),
-    "sand": ((206, 178, 118), (174, 144, 92)),
-    "snow": ((232, 240, 248), (200, 214, 230)),
+# 天气会改变场地配色(和正作一样:下雨变阴、晴天偏暖、沙暴发黄、下雪发蓝)
+WEATHER_PALETTE = {
+    "rain": ((176, 188, 206), (194, 202, 212), (204, 210, 220), (176, 190, 208)),
+    "sun": ((252, 226, 148), (252, 240, 192), (252, 240, 196), (222, 202, 150)),
+    "sand": ((228, 196, 124), (238, 212, 150), (240, 218, 162), (214, 184, 118)),
+    "snow": ((214, 226, 240), (232, 240, 248), (238, 244, 250), (208, 218, 232)),
 }
-_PLATFORM_FILL = {
-    "": (196, 236, 178),
-    "sun": (240, 214, 158),
-    "rain": (150, 176, 160),
-    "sand": (216, 190, 138),
-    "snow": (236, 244, 252),
+WEATHER_STYLE = {
+    "sun": "大晴天",
+    "rain": "下雨",
+    "sand": "沙暴",
+    "snow": "下雪",
 }
-_WEATHER_ZH = {"sun": "大晴天", "rain": "下雨", "sand": "沙暴", "snow": "下雪"}
-_WEATHER_BG = {
-    "sun": (255, 196, 96),
-    "rain": (150, 178, 214),
-    "sand": (214, 178, 108),
-    "snow": (206, 230, 248),
-}
-_TERRAIN_ZH = {
+TERRAIN_STYLE = {
     "electricterrain": "电气场地",
     "grassyterrain": "青草场地",
     "mistyterrain": "薄雾场地",
     "psychicterrain": "精神场地",
 }
-_TERRAIN_BG = {
-    "electricterrain": (250, 216, 84),
-    "grassyterrain": (144, 214, 124),
-    "mistyterrain": (226, 186, 232),
-    "psychicterrain": (204, 148, 224),
-}
-# (缩写, 底色, 字色)
-_STATUS = {
-    "brn": ("灼", (232, 120, 60), (255, 255, 255)),
-    "par": ("麻", (240, 208, 64), (58, 48, 16)),
-    "psn": ("毒", (168, 96, 200), (255, 255, 255)),
-    "psl": ("毒", (168, 96, 200), (255, 255, 255)),
-    "tox": ("毒", (140, 72, 190), (255, 255, 255)),
-    "slp": ("眠", (132, 132, 142), (255, 255, 255)),
-    "frz": ("冻", (120, 200, 230), (26, 58, 78)),
-}
+
+# ── 逻辑布局 ─────────────────────────────────────────────────────
+FOE_BOX = (10, 8, 108, 40)
+MY_BOX = (132, 68, 236, 110)
+# 血条一行 = [精灵球][HP 标签][条];三者依次排开,互不重叠
+ENEMY_BALL = (14, 26, 3)          # (x, y, r)
+ENEMY_HP_TAG = (20, 25, 33, 34)   # (x0, y0, x1, y1)
+ENEMY_HP_BAR = (35, 26, 67, 6)    # (x, y, w, h)
+PLAYER_BALL = (136, 86, 3)
+PLAYER_HP_TAG = (142, 85, 155, 94)
+PLAYER_HP_BAR = (157, 86, 68, 6)  # ← 测试取样点,须为"填充从左侧开始"的条
+EXP_TAG = (136, 99, 151, 105)
+EXP_BAR = (153, 100, 77, 3)
+
+FOE_PLATFORM = (114, 48, 240, 76)
+MY_PLATFORM = (0, 86, 112, 124)
+FOE_SPRITE = (148, 10, 212, 68)
+MY_SPRITE = (26, 38, 112, 128)
+
+MSG_BOX = (2, 112, 238, 158)
 
 
-# ── 字体 ─────────────────────────────────────────────────────────
-def _fs(logical: float, scale: int) -> int:
-    return max(8, round(logical * scale))
-
-
-@lru_cache(maxsize=64)
-def _load_font(size: int):
-    """按像素取字体(模块级缓存;主字体优先,符号字体兜底)。"""
-    size = max(6, int(size))
-    if not _PIL_OK:
+@lru_cache(maxsize=16)
+def _font(size: int):
+    if ImageFont is None:
         return None
-    for path in (_MAIN_FONT, _SYMBOL_FONT):
-        if not path or not os.path.exists(path):
+    for path in (FONT_MAIN, FONT_SYMBOL):
+        if not os.path.exists(path):
             continue
         try:
             return ImageFont.truetype(path, size)
         except OSError:
             continue
-    with contextlib.suppress(Exception):
-        return ImageFont.load_default(size)
     return None
 
 
-@lru_cache(maxsize=64)
-def _load_symbol_font(size: int):
-    size = max(6, int(size))
-    if not _PIL_OK:
-        return None
-    for path in (_SYMBOL_FONT, _MAIN_FONT):
-        if not path or not os.path.exists(path):
-            continue
-        try:
-            return ImageFont.truetype(path, size)
-        except OSError:
-            continue
-    return _load_font(size)
-
-
-@lru_cache(maxsize=1)
-def _probe() -> bool:
-    if not _PIL_OK:
-        return False
-    if not os.path.exists(_MAIN_FONT):
-        return False
-    f = _load_font(16)
-    return f is not None
-
-
 def available() -> bool:
-    """Pillow + 字体可用时返回 True(否则调用方回退纯文本)。"""
+    """Pillow 与内置字体是否可用。"""
     try:
-        return bool(_probe())
-    except Exception as e:
-        logger.debug(f"battle_render.available 探测失败: {e}")
+        import PIL  # noqa: F401
+        from PIL import Image, ImageDraw  # noqa: F401
+    except ImportError:
         return False
+    return _font(20) is not None
 
 
-# ── 小工具 ───────────────────────────────────────────────────────
-def _s(v: float, scale: int) -> int:
-    return round(v * scale)
+def sprite_for(species: str, *, back: bool = False, base: str = "") -> str:
+    """取本地精灵图;back=True 优先背面图。"""
+    return back_sprite_path(species, base) if back else sprite_path(species)
 
 
-def _box_d(box, scale: int) -> tuple[int, int, int, int]:
-    x, y, w, h = box
-    return (_s(x, scale), _s(y, scale), _s(x + w, scale), _s(y + h, scale))
+# ── 绘制辅助 ─────────────────────────────────────────────────────
+def _load_sprite(path: str, size: tuple[int, int]):
+    from PIL import Image
 
-
-def _as_int(v, default: int = 0) -> int:
+    if not path or not os.path.exists(path):
+        return None
     try:
-        return int(float(v))
-    except Exception:
-        return default
+        with Image.open(path) as im:
+            img = im.convert("RGBA")
+    except (OSError, ValueError):
+        return None
+    w, h = size
+    scale = min(w / img.width, h / img.height)
+    new = (max(1, int(img.width * scale)), max(1, int(img.height * scale)))
+    return img.resize(new, Image.NEAREST)
 
 
-def _as_float(v, default: float = 0.0) -> float:
-    try:
-        return float(v)
-    except Exception:
-        return default
+def _silhouette(size: tuple[int, int]):
+    """缺图占位:灰色剪影 + 问号。"""
+    from PIL import Image, ImageDraw
 
-
-def _clamp01(v: float) -> float:
-    return 0.0 if v < 0.0 else (1.0 if v > 1.0 else v)
-
-
-def _blend(c1, c2, t: float):
-    t = _clamp01(t)
-    return tuple(round(c1[i] + (c2[i] - c1[i]) * t) for i in range(3))
-
-
-def _lighten(c, t: float = 0.35):
-    return tuple(round(v + (255 - v) * t) for v in c)
-
-
-def _text_w(font, text: str) -> float:
-    if font is None:
-        return float(len(text or "") * 8)
-    try:
-        return float(font.getlength(text or ""))
-    except Exception:
-        pass
-    try:
-        return float(font.getbbox(text or "")[2])
-    except Exception:
-        return float(len(text or "") * 8)
-
-
-def _ellipsize(font, text: str, max_w: float) -> str:
-    text = str(text or "")
-    if max_w <= 0:
-        return ""
-    if _text_w(font, text) <= max_w:
-        return text
-    ell = "…"
-    ew = _text_w(font, ell)
-    out = ""
-    for ch in text:
-        if _text_w(font, out + ch) + ew > max_w:
-            break
-        out += ch
-    return (out + ell) if out else ell
-
-
-def _wrap(font, text: str, max_w: float) -> list[str]:
-    """按字符折行(CJK 没有词边界),供消息框使用。"""
-    text = str(text or "")
-    if max_w <= 0:
-        return [text] if text else []
-    lines: list[str] = []
-    cur = ""
-    for ch in text:
-        if ch == "\n":
-            lines.append(cur)
-            cur = ""
-            continue
-        if cur and _text_w(font, cur + ch) > max_w:
-            lines.append(cur)
-            cur = ch
-        else:
-            cur += ch
-    if cur:
-        lines.append(cur)
-    return lines
-
-
-def _hp_color(ratio: float):
-    if ratio > 0.5:
-        return (72, 208, 80)
-    if ratio > 0.2:
-        return (248, 208, 48)
-    return (240, 80, 72)
-
-
-# ── 背景 ─────────────────────────────────────────────────────────
-def _paint_background(img, d, scale: int, weather: str) -> None:
-    w, h = img.size
-    sky = _WEATHER_SKY.get(weather, _WEATHER_SKY[""])
-    ground = _WEATHER_GROUND.get(weather, _WEATHER_GROUND[""])
-    hz = max(1, int(h * HORIZON))
-    for y in range(h):
-        if y < hz:
-            c = _blend(sky[0], sky[1], y / max(1, hz - 1))
-        else:
-            c = _blend(ground[0], ground[1], (y - hz) / max(1, h - hz - 1))
-        d.line([(0, y), (w, y)], fill=(*c, 255))
-
-    rng = random.Random(20240501)
-    if weather == "rain":
-        lw = max(1, scale // 3)
-        for _ in range(90):
-            x = rng.randrange(0, w)
-            y = rng.randrange(0, h)
-            ln = rng.randrange(max(3, 6 * scale), max(4, 16 * scale))
-            d.line(
-                [(x, y), (x - int(2.5 * scale), y + ln)],
-                fill=(205, 220, 238, 160),
-                width=lw,
-            )
-    elif weather == "sand":
-        for _ in range(600 * scale):
-            x = rng.randrange(0, w)
-            y = rng.randrange(0, h)
-            d.point((x, y), fill=(158, 126, 72, 210))
-    elif weather == "snow":
-        rr = max(1, scale // 2)
-        for _ in range(120 * scale):
-            x = rng.randrange(0, w)
-            y = rng.randrange(0, h)
-            d.ellipse([x - rr, y - rr, x + rr, y + rr], fill=(255, 255, 255, 215))
-
-
-def _draw_platform(d, logical_box, scale: int, weather: str) -> None:
-    cx, cy, pw, ph = logical_box
-    fill = _PLATFORM_FILL.get(weather, _PLATFORM_FILL[""])
-    box = [
-        _s(cx - pw / 2, scale),
-        _s(cy - ph / 2, scale),
-        _s(cx + pw / 2, scale),
-        _s(cy + ph / 2, scale),
-    ]
-    d.ellipse(box, fill=fill, outline=(70, 92, 62), width=max(1, _s(1.5, scale)))
-
-
-# ── 精灵 ─────────────────────────────────────────────────────────
-def _placeholder_sprite(img, center, size_px, scale: int) -> None:
-    cx, cy = center
-    r = size_px // 2
-    box = [cx - r, cy - r, cx + r, cy + r]
+    img = Image.new("RGBA", size, (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
-    d.ellipse(box, fill=(120, 126, 140, 255), outline=(44, 48, 58, 255),
-              width=max(1, _s(1.5, scale)))
-    hr = max(2, int(r * 0.45))
-    d.ellipse(
-        [cx - hr, cy - r + int(r * 0.18), cx + hr, cy - r + int(r * 0.18) + 2 * hr],
-        fill=(150, 156, 170, 255),
-        outline=(44, 48, 58, 255),
-        width=max(1, _s(1.2, scale)),
-    )
-
-
-def _draw_sprite(base, species: str, center, factor: float, mirror: bool,
-                 scale: int) -> None:
-    cx = _s(center[0], scale)
-    cy = _s(center[1], scale)
-    size_px = max(8, round(96 * factor * scale / BASE_SCALE))
-    path = ""
-    with contextlib.suppress(Exception):
-        from .sprites import sprite_path
-
-        path = sprite_path(species) or ""
-    if path:
-        im = None
-        with contextlib.suppress(OSError, ValueError):
-            im = Image.open(path).convert("RGBA").resize(
-                (size_px, size_px), Image.NEAREST
-            )
-        if im is not None:
-            if mirror:
-                im = ImageOps.mirror(im)
-            base.alpha_composite(im, (cx - size_px // 2, cy - size_px // 2))
-            return
-    _placeholder_sprite(base, (cx, cy), size_px, scale)
-
-
-# ── 面板 / 胶囊 / 血条 ───────────────────────────────────────────
-def _panel(d, box_d, scale: int, fill, outline=(36, 40, 48),
-           width_l: float = 2.0, radius_l: float = 7.0) -> None:
-    d.rounded_rectangle(
-        box_d,
-        radius=_s(radius_l, scale),
-        fill=fill,
-        outline=outline,
-        width=max(1, _s(width_l, scale)),
-    )
-
-
-def _draw_chip(d, x: int, y: int, w: int, h: int, text: str, bg, font,
-               scale: int, fg=(28, 30, 36)) -> None:
-    d.rounded_rectangle(
-        [x, y, x + w, y + h],
-        radius=_s(3, scale),
-        fill=bg,
-        outline=(30, 32, 40),
-        width=max(1, _s(1, scale)),
-    )
-    d.text((x + w // 2, y + h // 2), text, font=font, fill=fg, anchor="mm")
-
-
-def _status_chip(d, box, scale: int, status: str, font):
-    x, y, w, _h = box
-    label, bg, fg = _STATUS.get(status, ("", None, None))
-    if not label:
-        return 0
-    tw = round(_text_w(font, label))
-    ch = _s(11, scale)
-    cw = tw + _s(8, scale)
-    px = _s(x + w, scale) - _s(4, scale) - cw
-    py = _s(y, scale) + _s(3, scale)
-    _draw_chip(d, px, py, cw, ch, label, bg, font, scale, fg)
-    return cw + _s(3, scale)
-
-
-def _mon_fields(mon) -> dict:
-    if not isinstance(mon, dict):
-        mon = {}
-    species = str(mon.get("species") or "").strip()
-    name = str(mon.get("name") or mon.get("nickname") or "").strip() or species or "???"
-    max_hp = _as_int(mon.get("max_hp"), 0)
-    cur_hp = _as_int(mon.get("cur_hp"), 0)
-    ratio = _clamp01(cur_hp / max_hp) if max_hp > 0 else 0.0
-    return {
-        "species": species,
-        "name": name,
-        "level": _as_int(mon.get("level"), 0),
-        "cur_hp": cur_hp,
-        "max_hp": max_hp,
-        "ratio": ratio,
-        "status": str(mon.get("status") or "").strip().lower(),
-        "gender": str(mon.get("gender") or "").strip().upper(),
-        "exp_pct": _clamp01(_as_float(mon.get("exp_pct"), 0.0) / 100.0),
-    }
-
-
-def _gender_glyph(gender: str) -> str:
-    if gender in ("M", "MALE", "♂"):
-        return "♂"
-    if gender in ("F", "FEMALE", "♀"):
-        return "♀"
-    return ""
-
-
-def _draw_name_row(d, box, scale: int, mon: dict, *, font, show_level: bool,
-                   gender_font, chip_w: int, chip_font) -> None:
-    x, y, w, _h = box
-    px = _s(x, scale) + _s(6, scale)
-    py = _s(y, scale) + _s(4, scale)
-    avail = _s(w, scale) - _s(12, scale) - chip_w
-    glyph = _gender_glyph(mon["gender"])
-    g_w = (int(_text_w(gender_font, glyph)) + _s(2, scale)) if glyph else 0
-    lv_txt = f"Lv{mon['level']}" if (show_level and mon["level"]) else ""
-    lv_w = int(_text_w(font, " " + lv_txt)) if lv_txt else 0
-    name = _ellipsize(font, mon["name"], max(0, avail - g_w - lv_w))
-    d.text((px, py), name, font=font, fill=(36, 40, 48))
-    cur = px + round(_text_w(font, name))
-    if lv_txt:
-        d.text((cur, py), " " + lv_txt, font=font, fill=(60, 66, 84))
-        cur += lv_w
-    if glyph:
-        gcol = (58, 118, 214) if glyph == "♂" else (226, 90, 148)
-        d.text((cur + _s(1, scale), py), glyph, font=gender_font, fill=gcol)
-
-
-def _draw_bar(d, logical_box, ratio: float, scale: int, fill) -> None:
-    x0, y0, x1, y1 = _box_d(logical_box, scale)
-    ow = max(1, _s(1, scale))
-    d.rectangle([x0, y0, x1, y1], fill=(70, 72, 80), outline=(30, 32, 40), width=ow)
-    ix0, iy0, ix1, iy1 = x0 + ow, y0 + ow, x1 - ow, y1 - ow
-    fw = round(max(0, ix1 - ix0) * _clamp01(ratio))
-    if fw > 0:
-        d.rectangle([ix0, iy0, ix0 + fw, iy1], fill=fill)
-        d.line([(ix0, iy0), (ix0 + fw - 1, iy0)], fill=_lighten(fill), width=ow)
-
-
-def _draw_hp_bar(d, logical_box, ratio: float, scale: int) -> None:
-    _draw_bar(d, logical_box, ratio, scale, _hp_color(_clamp01(ratio)))
-
-
-def _draw_exp_bar(d, logical_box, ratio: float, scale: int) -> None:
-    _draw_bar(d, logical_box, ratio, scale, (72, 196, 236))
-
-
-# ── 信息框 ───────────────────────────────────────────────────────
-def _draw_foe_box(d, scale: int, foe: dict, fonts) -> None:
-    _panel(d, _box_d(FOE_BOX, scale), scale, fill=(250, 250, 244), radius_l=6)
-    chip_w = _status_chip(d, FOE_BOX, scale, foe["status"], fonts["chip"])
-    _draw_name_row(
-        d, FOE_BOX, scale, foe,
-        font=fonts["name"], show_level=True,
-        gender_font=fonts["symbol"], chip_w=chip_w, chip_font=fonts["chip"],
-    )
-    _draw_hp_bar(d, FOE_HP_BAR, foe["ratio"], scale)
-
-
-def _draw_player_box(d, scale: int, my: dict, fonts) -> None:
-    _panel(d, _box_d(PLAYER_BOX, scale), scale, fill=(250, 250, 244), radius_l=6)
-    chip_w = _status_chip(d, PLAYER_BOX, scale, my["status"], fonts["chip"])
-    _draw_name_row(
-        d, PLAYER_BOX, scale, my,
-        font=fonts["name"], show_level=True,
-        gender_font=fonts["symbol"], chip_w=chip_w, chip_font=fonts["chip"],
-    )
-    _draw_hp_bar(d, PLAYER_HP_BAR, my["ratio"], scale)
-    _draw_exp_bar(d, PLAYER_EXP_BAR, my["exp_pct"], scale)
-    # HP 数字:血条右侧
-    if my["max_hp"] > 0:
-        num = f"{my['cur_hp']}/{my['max_hp']}"
-        d.text(
-            (_s(PLAYER_BOX[0] + PLAYER_BOX[2] - 4, scale), _s(PLAYER_HP_BAR[1] + 3, scale)),
-            num, font=fonts["num"], fill=(40, 44, 54), anchor="rm",
-        )
-
-
-# ── 天气/场地胶囊 ────────────────────────────────────────────────
-def _draw_chips(d, scale: int, width: int, weather: str, terrain: str) -> None:
-    items = []
-    if weather in _WEATHER_ZH:
-        items.append((_WEATHER_ZH[weather], _WEATHER_BG[weather]))
-    if terrain in _TERRAIN_ZH:
-        items.append((_TERRAIN_ZH[terrain], _TERRAIN_BG[terrain]))
-    if not items:
-        return
-    font = _load_font(_fs(8.0, scale))
-    if font is None:
-        return
-    gap = _s(3, scale)
-    ch = _s(12, scale)
-    widths = [round(_text_w(font, t)) + _s(10, scale) for t, _ in items]
-    total = sum(widths) + gap * (len(items) - 1)
-    x = (width - total) // 2
-    y = _s(4, scale)
-    for i, (text, bg) in enumerate(items):
-        _draw_chip(d, x, y, widths[i], ch, text, bg, font, scale)
-        x += widths[i] + gap
-
-
-def _draw_location(d, scale: int, width: int, location: str, font) -> None:
-    loc = str(location or "").strip()
-    if not loc or font is None:
-        return
-    pad = _s(5, scale)
-    maxw = _s(92, scale)
-    text = _ellipsize(font, loc, maxw)
-    tw = round(_text_w(font, text))
-    x1 = width - _s(4, scale)
-    x0 = x1 - tw - pad * 2
-    y0 = _s(4, scale)
-    d.rounded_rectangle(
-        [x0, y0, x1, y0 + _s(12, scale)],
-        radius=_s(4, scale),
-        fill=(250, 250, 244),
-        outline=(60, 64, 74),
-        width=max(1, _s(1, scale)),
-    )
-    d.text((x0 + pad, y0 + _s(6, scale)), text, font=font, fill=(48, 52, 62), anchor="lm")
-
-
-# ── 精灵球队伍指示 ───────────────────────────────────────────────
-def _draw_pokeball(d, cx: float, cy: float, r: float, alive: bool, scale: int) -> None:
-    R = _s(r, scale)
-    X, Y = _s(cx, scale), _s(cy, scale)
-    ow = max(1, _s(1, scale))
-    box = [X - R, Y - R, X + R, Y + R]
-    if alive:
-        d.pieslice(box, 180, 360, fill=(226, 64, 60))
-        d.pieslice(box, 0, 180, fill=(246, 246, 246))
-    else:
-        d.ellipse(box, fill=(84, 86, 94))
-    d.ellipse(box, outline=(28, 30, 36), width=ow)
-    d.rectangle([X - R, Y - ow, X + R, Y + ow], fill=(28, 30, 36))
-    cr = max(ow, _s(2.2, scale))
-    d.ellipse(
-        [X - cr, Y - cr, X + cr, Y + cr],
-        fill=(246, 246, 246) if alive else (124, 126, 134),
-        outline=(28, 30, 36),
-        width=ow,
-    )
-    if not alive:
-        xr = int(R * 0.72)
-        d.line([(X - xr, Y - xr), (X + xr, Y + xr)], fill=(240, 80, 72), width=ow)
-        d.line([(X - xr, Y + xr), (X + xr, Y - xr)], fill=(240, 80, 72), width=ow)
-
-
-def _draw_party(d, scale: int, party, msg_box) -> int:
-    """在消息框左侧画队伍球,返回需要给文字预留的像素宽度。"""
-    if not party:
-        return 0
-    n = min(6, len(party))
-    step = 14.0
-    start_x = msg_box[0] + 9.0
-    cy = msg_box[1] + msg_box[3] / 2.0
-    for i in range(n):
-        mon = party[i] if isinstance(party[i], dict) else {}
-        alive = _as_int(mon.get("cur_hp"), 1) > 0
-        _draw_pokeball(d, start_x + i * step, cy, 6.0, alive, scale)
-    return _s(n * step + 2, scale)
-
-
-# ── 消息框 ───────────────────────────────────────────────────────
-def _draw_message(d, scale: int, title: str, log, party_w: int) -> None:
-    x0, y0, x1, y1 = _box_d(MSG_BOX, scale)
-    d.rounded_rectangle(
-        [x0, y0, x1, y1],
-        radius=_s(8, scale),
-        fill=(252, 252, 248),
-        outline=(28, 30, 36),
-        width=max(2, _s(2.5, scale)),
-    )
-    font = _load_font(_fs(8.6, scale))
-    lh = _s(9.5, scale)
-    tx = x0 + _s(6, scale) + party_w
-    ty = y0 + _s(5, scale)
-    maxw = max(0, x1 - tx - _s(6, scale))
-    raw: list[str] = []
-    if title:
-        raw.append("◆ " + str(title))
-    raw.extend(str(t) for t in (log or [])[-3:])
-    lines: list[str] = []
-    for t in raw:
-        lines.extend(_wrap(font, t, maxw))
-    for i, ln in enumerate(lines[-4:]):
-        d.text((tx, ty + i * lh), ln, font=font, fill=(36, 40, 48))
-
-
-# ── 组装 ─────────────────────────────────────────────────────────
-def _build(my: dict, foe: dict, log: list[str], *, title: str, weather: str,
-           terrain: str, location: str, my_party, turn: int, scale: int):
-    w = LOGICAL_W * scale
-    h = LOGICAL_H * scale
-    img = Image.new("RGBA", (w, h), (0, 0, 0, 255))
-    d = ImageDraw.Draw(img)
-
-    _paint_background(img, d, scale, weather)
-    _draw_platform(d, FOE_PLATFORM, scale, weather)
-    _draw_platform(d, PLAYER_PLATFORM, scale, weather)
-
-    my_f = _mon_fields(my)
-    foe_f = _mon_fields(foe)
-    _draw_sprite(img, foe_f["species"], FOE_SPRITE_CENTER, 1.8, False, scale)
-    _draw_sprite(img, my_f["species"], PLAYER_SPRITE_CENTER, 2.2, True, scale)
-
-    fonts = {
-        "name": _load_font(_fs(9.6, scale)),
-        "num": _load_font(_fs(7.8, scale)),
-        "chip": _load_font(_fs(7.8, scale)),
-        "symbol": _load_symbol_font(_fs(9.6, scale)),
-        "loc": _load_font(_fs(7.8, scale)),
-    }
-
-    _draw_foe_box(d, scale, foe_f, fonts)
-    _draw_player_box(d, scale, my_f, fonts)
-    _draw_chips(d, scale, w, weather, terrain)
-    _draw_location(d, scale, w, location, fonts["loc"])
-
-    party_w = _draw_party(d, scale, my_party, MSG_BOX)
-    _draw_message(d, scale, title, log, party_w)
-    # 队伍球再画一次保证盖在消息框上
-    _draw_party(d, scale, my_party, MSG_BOX)
+    w, h = size
+    d.ellipse([int(w * 0.16), int(h * 0.16), int(w * 0.84), int(h * 0.84)],
+              fill=(168, 164, 140, 255), outline=(96, 94, 80, 255))
+    d.rectangle([int(w * 0.36), int(h * 0.7), int(w * 0.64), int(h * 0.86)],
+                fill=(168, 164, 140, 255))
     return img
 
 
-# ── 对外 API ─────────────────────────────────────────────────────
+def _wrap(font, text: str, max_w: float, *, limit: int = 3) -> list[str]:
+    """按像素宽度折行(中文逐字折,英文按空格)。"""
+    out: list[str] = []
+    if font is None:
+        return [str(text)[:24]]
+    cur = ""
+    for ch in str(text):
+        probe = cur + ch
+        if font.getlength(probe) > max_w and cur:
+            out.append(cur)
+            cur = ch
+            if len(out) >= limit:
+                return out
+        else:
+            cur = probe
+    if cur:
+        out.append(cur)
+    return out[:limit]
+
+
+def _chip(big, d, x: int, y: int, text: str, bg, fg, font, scale: int,
+          align_right: bool = False) -> int:
+    """画一个小标签,返回它的宽度。"""
+    pad = 4 * scale
+    w = int(font.getlength(text)) + pad * 2
+    h = int(font.size * 1.5)
+    if align_right:
+        x = x - w
+    d.rectangle([x, y, x + w, y + h], fill=bg, outline=BOX_EDGE, width=scale)
+    d.text((x + pad, y + int(h * 0.16)), text, font=font, fill=fg,
+            stroke_width=1, stroke_fill=MSG_SHADOW)
+    return w
+
+
+def _draw_box(d_small, box, *, fill=BOX_FILL, edge=BOX_EDGE, radius=3, shadow=True):
+    x0, y0, x1, y1 = box
+    if shadow:
+        d_small.rounded_rectangle([x0 + 2, y0 + 2, x1 + 2, y1 + 2], radius=radius,
+                                  fill=BOX_SHADOW)
+    d_small.rounded_rectangle(box, radius=radius, fill=fill, outline=edge, width=2)
+    d_small.rounded_rectangle([x0 + 2, y0 + 2, x1 - 2, y1 - 2], radius=max(1, radius - 1),
+                              outline=BOX_EDGE_2, width=1)
+
+
+def _draw_ball(d, x: int, y: int, r: int) -> None:
+    """精灵球小图标。"""
+    d.ellipse([x, y, x + r * 2, y + r * 2], fill=(250, 250, 245), outline=(48, 48, 44))
+    d.pieslice([x, y, x + r * 2, y + r * 2], 180, 360, fill=(224, 64, 56))
+    d.rectangle([x, y + r - 1, x + r * 2, y + r + 1], fill=(48, 48, 44))
+    d.ellipse([x + r - 2, y + r - 2, x + r + 2, y + r + 2],
+              fill=(250, 250, 245), outline=(48, 48, 44))
+
+
+def _draw_hp_row(d, ball_xy, tag_box, bar_box, ratio: float) -> None:
+    """一行血条:精灵球图标 + 「HP」标签 + 带刻度的血条。"""
+    d.rectangle(tag_box, fill=HP_TAG_BG, outline=BOX_EDGE)
+    _draw_ball(d, ball_xy[0], ball_xy[1], ball_xy[2])
+    _draw_hp_bar(d, bar_box, ratio)
+
+
+def _draw_hp_bar(d, box, ratio: float, *, tag: bool = False) -> None:
+    """血条本体(带刻度)。"""
+    x, y, w, h = box
+    d.rounded_rectangle([x, y, x + w, y + h], radius=2, fill=HP_TRACK, outline=BOX_EDGE)
+    fill_w = int((w - 2) * max(0.0, min(1.0, ratio)))
+    if fill_w <= 0:
+        return
+    color = (86, 208, 88) if ratio > 0.5 else ((240, 200, 48) if ratio > 0.2 else (240, 88, 56))
+    d.rectangle([x + 1, y + 1, x + fill_w, y + h - 1], fill=color)
+    d.rectangle([x + 1, y + 1, x + fill_w, y + 1], fill=tuple(min(255, c + 40) for c in color))
+    # 刻度(每 6px 一道暗线,模拟原作的格状血条)
+    for tick in range(x + 6, x + w - 1, 6):
+        d.line([tick, y + 1, tick, y + h - 1], fill=HP_TRACK_HI)
+
+
+def _draw_exp_bar(d, box, pct: float) -> None:
+    x, y, w, h = box
+    d.rectangle([x, y, x + w, y + h], fill=EXP_TRACK)
+    fill_w = int(w * max(0.0, min(100.0, pct)) / 100.0)
+    if fill_w > 0:
+        d.rectangle([x, y, x + fill_w, y + h], fill=EXP_FILL)
+
+
+def _status_chip(d, x: int, y: int, status: str) -> None:
+    style = STATUS_STYLE.get(str(status or ""))
+    if not style:
+        return
+    d.rounded_rectangle([x, y, x + 13, y + 11], radius=2, fill=style[1], outline=BOX_EDGE)
+
+
+# ── 主入口 ───────────────────────────────────────────────────────
 def render_battle(
     my: dict,
     foe: dict,
@@ -643,56 +283,222 @@ def render_battle(
     my_party: list[dict] | None = None,
     turn: int = 0,
     out_path: str = "",
-    scale: int = 3,
+    scale: int = SCALE_DEFAULT,
 ) -> bytes:
-    """把一场对战渲染成 PNG。返回 PNG 字节;out_path 非空时同时写文件。
-
-    任何失败都返回 ``b""``(绝不抛异常),调用方会回退到纯文本。
-    """
+    """把一场对战渲染成 PNG 字节;失败返回 b""。"""
     try:
-        if not _PIL_OK or not available():
-            return b""
-        scale = max(1, int(scale or 1))
+        from PIL import Image, ImageDraw
+
+        scale = max(1, int(scale or SCALE_DEFAULT))
+        my = dict(my or {})
+        foe = dict(foe or {})
         log = [str(x) for x in (log or [])]
-        img = _build(
-            my if isinstance(my, dict) else {},
-            foe if isinstance(foe, dict) else {},
-            log,
-            title=str(title or ""),
-            weather=str(weather or "").strip().lower(),
-            terrain=str(terrain or "").strip().lower(),
-            location=str(location or ""),
-            my_party=my_party or [],
-            turn=_as_int(turn, 0),
-            scale=scale,
-        )
-        buf = io.BytesIO()
-        img.convert("RGB").save(buf, format="PNG")
+        party = list(my_party or [])
+        W, H = LOGICAL_W * scale, LOGICAL_H * scale
+        S = scale
+
+        small = Image.new("RGB", (LOGICAL_W, LOGICAL_H), BG_TOP)
+        d = ImageDraw.Draw(small)
+
+        # ── 背景:天气配色 + 地平线 + 竞技场椭圆 + 两个站台 ──
+        _draw_scene(d, weather)
+
+        # ── 精灵(我方背面图)──
+        _paste_small(small, my, MY_SPRITE, back=True, dim=not _alive(my))
+        _paste_small(small, foe, FOE_SPRITE, back=False, dim=not _alive(foe))
+
+        # ── 信息框与血条(逻辑层)──
+        _draw_box(d, FOE_BOX)
+        _draw_box(d, MY_BOX)
+        _draw_hp_row(d, ENEMY_BALL, ENEMY_HP_TAG, ENEMY_HP_BAR, _ratio(foe))
+        _draw_hp_row(d, PLAYER_BALL, PLAYER_HP_TAG, PLAYER_HP_BAR, _ratio(my))
+        d.rectangle(EXP_TAG, fill=EXP_TAG_BG, outline=BOX_EDGE)
+        _draw_exp_bar(d, EXP_BAR, float(my.get("exp_pct") or 0.0))
+        _status_chip(d, FOE_BOX[2] - 18, FOE_BOX[1] + 4, foe.get("status") or "")
+        _status_chip(d, MY_BOX[2] - 18, MY_BOX[1] + 4, my.get("status") or "")
+
+        # ── 队伍球(对话框左端)──
+        bx = 8
+        for mon in party[:6]:
+            alive = int(mon.get("cur_hp", 0) or 0) > 0
+            _draw_ball(d, bx, 134, 4)
+            if not alive:
+                d.ellipse([bx, 134, bx + 8, 142], fill=(120, 118, 108), outline=BOX_EDGE)
+                d.line([bx + 1, 135, bx + 7, 141], fill=(250, 250, 245), width=1)
+                d.line([bx + 7, 135, bx + 1, 141], fill=(250, 250, 245), width=1)
+            bx += 11
+
+        # ── 对话框(暗红框 + 青绿底)──
+        mx0, my0, mx1, my1 = MSG_BOX
+        d.rounded_rectangle([mx0, my0, mx1, my1], radius=4, fill=MSG_FRAME)
+        d.rounded_rectangle([mx0 + 2, my0 + 2, mx1 - 2, my1 - 2], radius=3,
+                            outline=MSG_FRAME_HI)
+        d.rounded_rectangle([mx0 + 4, my0 + 4, mx1 - 4, my1 - 4], radius=3, fill=MSG_FILL)
+
+        # ── 放大(像素风)──
+        big = small.resize((W, H), Image.NEAREST)
+        d2 = ImageDraw.Draw(big)
+
+        f_name = _font(int(9.5 * S))
+        f_small = _font(int(8.5 * S))
+        f_ball = _font(int(6.5 * S))
+        f_msg = _font(int(9 * S))
+
+        # 敌方信息
+        _box_text(d2, foe, FOE_BOX, ENEMY_HP_BAR, f_name, f_small, f_ball, S, mine=False)
+        # 我方信息
+        _box_text(d2, my, MY_BOX, PLAYER_HP_BAR, f_name, f_small, f_ball, S, mine=True)
+
+        # 地名 / 天气 / 场地标签:右上角纵向排布(左上角被敌方信息框占用)
+        chip_x = (LOGICAL_W - 5) * S
+        chip_y = 4
+        if location:
+            _chip(big, d2, chip_x, chip_y * S, str(location)[:6],
+                  (238, 238, 222), (60, 60, 50), f_small, S, align_right=True)
+            chip_y += 17
+        if weather and weather in WEATHER_STYLE:
+            _chip(big, d2, chip_x, chip_y * S, WEATHER_STYLE[weather],
+                  (250, 214, 96), (72, 48, 8), f_small, S, align_right=True)
+            chip_y += 17
+        if terrain and terrain in TERRAIN_STYLE:
+            _chip(big, d2, chip_x, chip_y * S, TERRAIN_STYLE[terrain],
+                  (186, 240, 178), (32, 72, 32), f_small, S, align_right=True)
+
+        # 对话框文本
+        tx = (mx0 + 28) * S
+        ty = (my0 + 6) * S
+        maxw = (mx1 - mx0 - 34) * S
+        lines: list[str] = []
+        if title:
+            lines.append("◆ " + str(title))
+        lines.extend(log[-3:])
+        wrapped: list[str] = []
+        for line in lines:
+            wrapped.extend(_wrap(f_msg, line, maxw))
+        for i, line in enumerate(wrapped[-4:]):
+            d2.text((tx, ty + i * int(10 * S)), line, font=f_msg, fill=MSG_TEXT,
+                    stroke_width=max(1, S // 2), stroke_fill=MSG_SHADOW)
+
+        # 「HP」「EXP」标签文字(放大后画才清晰),在标签框内居中
+        for tag, label, fg in (
+            (ENEMY_HP_TAG, "HP", HP_TAG_FG),
+            (PLAYER_HP_TAG, "HP", HP_TAG_FG),
+            (EXP_TAG, "EXP", EXP_TAG_FG),
+        ):
+            tw = f_ball.getlength(label)
+            th = f_ball.size
+            d2.text(
+                (
+                    (tag[0] + tag[2]) / 2 * S - tw / 2,
+                    (tag[1] + tag[3]) / 2 * S - th * 0.62,
+                ),
+                label,
+                font=f_ball,
+                fill=fg,
+            )
+
+        _ = turn
+        buf = BytesIO()
+        big.save(buf, format="PNG")
         data = buf.getvalue()
         if out_path:
-            try:
-                parent = os.path.dirname(os.path.abspath(out_path))
-                if parent:
-                    os.makedirs(parent, exist_ok=True)
-                with open(out_path, "wb") as f:
-                    f.write(data)
-            except OSError as e:
-                logger.debug(f"battle_render: 写出 {out_path} 失败: {e}")
+            with open(out_path, "wb") as f:
+                f.write(data)
         return data
-    except Exception as e:
-        logger.debug(f"battle_render 渲染失败: {e}")
+    except Exception as e:  # 渲染失败必须回退文本
+        logger.debug("宝可梦世界: 对战画面渲染失败: %s", e)
         return b""
 
 
-__all__ = [
-    "FOE_BOX",
-    "FOE_HP_BAR",
-    "LOGICAL_H",
-    "LOGICAL_W",
-    "MSG_BOX",
-    "PLAYER_BOX",
-    "PLAYER_EXP_BAR",
-    "PLAYER_HP_BAR",
-    "available",
-    "render_battle",
-]
+def _draw_scene(d, weather: str) -> None:
+    """场地背景:天气配色 + 地平线 + 竞技场椭圆 + 站台 + 天气粒子。"""
+    key = str(weather or "")
+    sky, ground, arena, plat = WEATHER_PALETTE.get(
+        key, (BG_TOP, BG_GROUND, ARENA_FILL, PLATFORM_FILL)
+    )
+    d.rectangle([0, 0, LOGICAL_W, 78], fill=sky)
+    d.rectangle([0, 78, LOGICAL_W, LOGICAL_H], fill=ground)
+    d.line([0, 78, LOGICAL_W, 78], fill=tuple(max(0, c - 26) for c in ground))
+    d.ellipse([-26, 30, LOGICAL_W + 26, 132], fill=arena,
+              outline=tuple(max(0, c - 34) for c in arena))
+    for box in (FOE_PLATFORM, MY_PLATFORM):
+        d.ellipse(box, fill=plat, outline=tuple(max(0, c - 40) for c in plat))
+    if key == "rain":
+        for i in range(52):
+            x = (i * 37) % LOGICAL_W
+            y = (i * 23) % 118
+            d.line([x, y, x - 3, y + 7], fill=(232, 240, 250))
+    elif key == "sand":
+        for i in range(70):
+            x = (i * 53) % LOGICAL_W
+            y = 24 + (i * 31) % 96
+            d.point((x, y), fill=(206, 176, 116))
+            d.point((x + 1, y + 1), fill=(216, 188, 130))
+    elif key == "snow":
+        for i in range(44):
+            x = (i * 41) % LOGICAL_W
+            y = (i * 29) % 112
+            d.ellipse([x, y, x + 1, y + 1], fill=(250, 252, 255))
+
+
+def _alive(mon: dict) -> bool:
+    try:
+        return int(mon.get("cur_hp", 1) or 0) > 0
+    except (TypeError, ValueError):
+        return True
+
+
+def _ratio(mon: dict) -> float:
+    try:
+        cur = float(mon.get("cur_hp", 1) or 0)
+        mx = float(mon.get("max_hp", 1) or 1)
+    except (TypeError, ValueError):
+        return 1.0
+    return 0.0 if mx <= 0 else max(0.0, min(1.0, cur / mx))
+
+
+def _paste_small(small, mon: dict, box, *, back: bool, dim: bool) -> None:
+    """把精灵图缩放后贴到逻辑画布(下方对齐、水平居中)。"""
+    from PIL import ImageEnhance, ImageOps
+
+    x0, y0, x1, y1 = box
+    species = str(mon.get("species") or "")
+    path = sprite_for(species, back=back)
+    img = _load_sprite(path, (x1 - x0, y1 - y0))
+    if img is None:
+        img = _silhouette((x1 - x0, y1 - y0))
+    elif back and path and os.path.basename(os.path.dirname(path)) != "sprites_back":
+        # 退回正面图时镜像,近似"从背后看"的观感
+        img = ImageOps.mirror(img)
+    if dim:
+        img = ImageEnhance.Brightness(img).enhance(0.45)
+    px = x0 + (x1 - x0 - img.width) // 2
+    py = y1 - img.height
+    small.paste(img, (px, py), img)
+
+
+def _box_text(d2, mon, box, hp_bar, f_name, f_small, f_ball, S, *, mine: bool) -> None:
+    """信息框里的文字(放大层绘制)。"""
+    x0, y0, x1, _y1 = box
+    name = str(mon.get("name") or mon.get("species") or "?")
+    lv = mon.get("level")
+    px = (x0 + 5) * S
+    py = (y0 + 4) * S
+    d2.text((px, py), name, font=f_name, fill=TEXT)
+    w = int(f_name.getlength(name))
+    gender = str(mon.get("gender") or "")
+    if gender in ("M", "F"):
+        d2.text((px + w + 2 * S, py), "♂" if gender == "M" else "♀", font=f_name,
+                fill=MALE if gender == "M" else FEMALE)
+        w += int(f_name.getlength("♂")) + 2 * S
+    if lv not in (None, ""):
+        lvtext = f"No.{int(lv)}"
+        d2.text(((x1 - 5) * S - f_name.getlength(lvtext), py), lvtext, font=f_name, fill=TEXT)
+    if mine:
+        cur = mon.get("cur_hp", 0)
+        mx = mon.get("max_hp", 0)
+        hptext = f"{int(cur or 0)}/{int(mx or 0)}"
+        d2.text(((x1 - 5) * S - f_small.getlength(hptext), (hp_bar[1] + 7) * S), hptext,
+                font=f_small, fill=TEXT)
+    else:
+        _ = f_ball

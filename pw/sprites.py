@@ -16,6 +16,10 @@ from functools import lru_cache
 from .dex import get_dex
 
 SPRITES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static", "sprites")
+# 背面图(战斗界面我方用):tools/build_back_sprites.py 生成
+BACK_SPRITES_DIR = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "static", "sprites_back"
+)
 
 # 说话人标签:<d name="角色名" ...>
 _SPEAKER_RE = re.compile(r'name\s*=\s*"([^"]*)"', re.IGNORECASE)
@@ -41,6 +45,31 @@ def sprite_path(species_key: str) -> str:
     if species_key not in _available():
         return ""
     return os.path.join(SPRITES_DIR, f"{species_key}.png")
+
+
+@lru_cache(maxsize=1)
+def _available_back() -> frozenset[str]:
+    try:
+        return frozenset(
+            f[:-4] for f in os.listdir(BACK_SPRITES_DIR) if f.endswith(".png")
+        )
+    except OSError:
+        return frozenset()
+
+
+def back_sprite_path(species_key: str, base_species: str = "") -> str:
+    """宝可梦 key → 本地**背面**图路径(战斗界面我方用)。
+
+    没有背面图时退回正面图(渲染层会再水平翻转),再没有就返回空串。
+    """
+    for key in (species_key, base_species):
+        if key and key in _available_back():
+            return os.path.join(BACK_SPRITES_DIR, f"{key}.png")
+    return sprite_path(species_key) or sprite_path(base_species)
+
+
+def back_available_count() -> int:
+    return len(_available_back())
 
 
 def clean_speaker_name(name: str) -> str:
@@ -101,8 +130,11 @@ def pokemon_avatars_for_text(text: str, existing: dict | None = None) -> dict:
 
 
 __all__ = [
+    "BACK_SPRITES_DIR",
     "SPRITES_DIR",
     "available_count",
+    "back_available_count",
+    "back_sprite_path",
     "clean_speaker_name",
     "pokemon_avatars_for_text",
     "speaker_names",
