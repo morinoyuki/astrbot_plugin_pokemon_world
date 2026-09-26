@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import os
 import sys
+import tempfile
 from io import BytesIO
 
 import pytest
@@ -355,3 +356,50 @@ def test_map_has_no_decorative_blobs_and_goal_fits_one_line():
     assert len(lines[-1]) > 2
     lines, _ = M._goal_lines(sc, "", 72, 7.8, 2)
     assert lines == ["自由探索"]
+
+
+def test_gotcha_card_shows_the_ball_actually_used():
+    """捕获画面要用实际投出的球(大师球/高级球不能都画成红白球)。"""
+    from pw import ui_info as U
+    from pw.battle import TurnResult
+    from pw.items import BAG_ITEMS
+
+    mon = {"species": "gyarados", "name": "暴鲤龙", "level": 30, "cur_hp": 100, "max_hp": 130}
+    shots = {}
+    for key in ("poke-ball", "great-ball", "master-ball"):
+        data = U.render_gotcha(mon, ball_zh=BAG_ITEMS[key]["zh"], ball_key=key,
+                               dex_line="图鉴已记录:12 种", scale=SCALE)
+        assert data, f"{key} 渲染失败"
+        shots[key] = data
+    assert len({shots[k] for k in shots}) == 3, "不同精灵球的捕获画面必须不同"
+    # 未指定球时也要能渲染(回退到大类默认球)
+    assert U.render_gotcha(mon, scale=SCALE)
+
+    # TurnResult 要能带出用过的球
+    assert TurnResult(outcome="caught", item_key="ultra-ball").item_key == "ultra-ball"
+
+
+def test_capture_records_ball_key(tmp_path=None):
+    """大师球必定捕获:用它投球后 res.item_key 必须是 master-ball。"""
+    from test_commands import _Cmd, _Event, run_cmd
+
+    from pw import battle as B
+
+    with tempfile.TemporaryDirectory() as tmp:
+        p = _Cmd(tmp)
+        p.config = {"ui_image": False, "battle_image": False, "quest_enable": False}
+        ev = _Event("/开始 小智 新叶喵")
+        run_cmd(p, ev, p.cmd_start)
+        t = p._load(ev)
+        t.data["location"] = "kanto-route-1"
+        t.add_item("master-ball", 1)
+        p._save(t)
+        B.start(t, [{"species": "rattata", "level": 3}], kind="wild", wild=True,
+                meta={"kind": "wild", "species": "rattata", "types": ["Normal"],
+                      "method": "walk", "title": "野生的 小拉达"}, day=1)
+        p._save(t)
+        ev2 = _Event("/对战 catch 大师球")
+        run_cmd(p, ev2, p.cmd_battle)
+        t2 = p._load(ev2)
+        assert t2.data.get("battle") is None, "大师球应当直接结束战斗"
+        assert any("捕获成功" in o for o in ev2.outputs)

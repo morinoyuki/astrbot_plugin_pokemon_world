@@ -212,6 +212,8 @@ _BAG: dict[str, dict] = {
     "soda-pop": {"zh": "汽水", "kind": "medicine", "desc": "回复 50 HP。", "effect": {"heal_hp": 50}},
     "lemonade": {"zh": "柠檬汁", "kind": "medicine", "desc": "回复 80 HP。", "effect": {"heal_hp": 80}},
     "moomoo-milk": {"zh": "哞哞鲜奶", "kind": "medicine", "desc": "回复 100 HP。", "effect": {"heal_hp": 100}},
+    "berry-juice": {"zh": "树果汁", "kind": "medicine", "desc": "回复 20 HP。", "effect": {"heal_hp": 20}},
+    "sweet-heart": {"zh": "甜甜蜜", "kind": "medicine", "desc": "回复 20 HP。", "effect": {"heal_hp": 20}},
     # ── 状态回复 ──
     "antidote": {"zh": "解毒药", "kind": "status", "desc": "治愈中毒。", "effect": {"cure_status": ["psn", "tox"]}},
     "burn-heal": {"zh": "灼伤药", "kind": "status", "desc": "治愈灼伤。", "effect": {"cure_status": ["brn"]}},
@@ -244,6 +246,7 @@ _BAG: dict[str, dict] = {
     "aspear-berry": {"zh": "亚开果", "kind": "berry", "desc": "治愈冰冻。", "effect": {"cure_status": ["frz"]}},
     "lum-berry": {"zh": "木子果", "kind": "berry", "desc": "治愈任何异常状态。", "effect": {"cure_status": True}},
     "sitrus-berry": {"zh": "文柚果", "kind": "berry", "desc": "回复最大 HP 的 1/4。", "effect": {"heal_hp_frac": 0.25}},
+    "leppa-berry": {"zh": "苹野果", "kind": "berry", "desc": "回复一个招式 10 点 PP。", "effect": {"pp_restore": 10}},
     # ── 稀有用具 ──
     "rare-candy": {"zh": "神奇糖果", "kind": "rare", "desc": "提升 1 级。", "effect": {"level_up": 1}},
     "pp-up": {"zh": "PP 提升剂", "kind": "rare", "desc": "提升一个招式的 PP 上限。", "effect": {"pp_up": 1}},
@@ -297,8 +300,20 @@ KIND_ZH = {
     "rare": "稀有用具",
     "stone": "进化石",
     "evo": "进化道具",
+    "held": "持有道具",
 }
-KIND_ORDER = ["ball", "medicine", "status", "revive", "pp", "battle", "berry", "stone", "evo", "rare"]
+KIND_ORDER = [
+    "ball", "medicine", "status", "revive", "pp", "battle", "berry", "stone", "evo",
+    "rare", "held",
+]
+
+# 持有道具(ITEMS)补齐 kind:这些条目不在 BAG_ITEMS 里,只补本表镜像项。
+# 注意:kind 只能取 "held" —— item_price 对未知 kind 都落到默认 500 档,而 BAG 里
+# 已有的进化石 / 进化道具 / 树果若在此改写成 stone/evo/berry 会连带改变售价
+# (resolve_item 优先查 ITEMS),所以这里只给 BAG 里没有的条目补 kind。
+for _ik, _ientry in ITEMS.items():
+    if _ik not in BAG_ITEMS:
+        _ientry.setdefault("kind", "held")
 
 
 def resolve_bag_item(query: str) -> tuple[str, dict] | None:

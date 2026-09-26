@@ -581,8 +581,8 @@ def _growth_evolution(sc: Screen, mon: dict, sp: str, name: str, from_zh: str,
 # ══════════════════════════════════════════════════════════════════
 # 6. 捕获成功
 # ══════════════════════════════════════════════════════════════════
-def render_gotcha(mon: dict, *, ball_zh: str = "精灵球", dex_line: str = "",
-                  scale: int = SCALE_DEFAULT) -> bytes:
+def render_gotcha(mon: dict, *, ball_zh: str = "精灵球", ball_key: str = "",
+                  dex_line: str = "", scale: int = SCALE_DEFAULT) -> bytes:
     """捕获成功:聚光灯里的精灵 + 名字 / 等级 / 性别 + 图鉴进度 + 收服印章。"""
     try:
         sc = Screen(scale=scale)
@@ -617,8 +617,8 @@ def render_gotcha(mon: dict, *, ball_zh: str = "精灵球", dex_line: str = "",
             sc.text(130 + gw + 2, 34, gender, size=13, fill=gcolor)
         sc.text(130, 52, f"Lv {_int(mon.get('level'))}", size=9, fill=TEXT)
 
-        # 精灵球
-        sc.item_icon("ball", 130, 64, 11)
+        # 精灵球:按实际使用的球画(高级球/大师球在捕获画面里要能看出来)
+        sc.item_icon(str(ball_key or "ball"), 130, 64, 11)
         sc.text(146, 66, _str(ball_zh, "精灵球"), size=8.4, fill=TEXT)
 
         dex = _str(dex_line, "图鉴已记录。")

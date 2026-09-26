@@ -1731,13 +1731,16 @@ class PokemonWorldPlugin(Star):
         view = B.view(t)
         mon = view.get("my") or {}
         if res.outcome == "caught" and res.rewards:
+            _ball_key = str(res.item_key or "poke-ball")
             caught = B.dict_to_mon(t.party[-1]) if t.party else None
             if caught is not None:
                 view_c = B._mon_view(caught)  # 复用内部视图构造
                 async for r in self._emit_ui(
                     event, "gotcha",
                     lambda: UII.render_gotcha(
-                        view_c, ball_zh="精灵球",
+                        view_c,
+                        ball_zh=(BAG_ITEMS.get(_ball_key) or {}).get("zh") or "精灵球",
+                        ball_key=_ball_key,
                         dex_line=f"图鉴已记录:{len(t.data.get('dex_caught') or [])} 种",
                         scale=self._img_scale(),
                     ),

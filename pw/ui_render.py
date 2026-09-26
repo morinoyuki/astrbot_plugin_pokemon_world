@@ -86,6 +86,7 @@ KIND_TO_POCKET = {
     "rare": "items",
     "stone": "items",
     "evo": "items",
+    "held": "items",
     "tm": "tm",
 }
 POCKET_ICON = {
@@ -197,6 +198,860 @@ def gender_symbol(gender: str) -> tuple[str, tuple[int, int, int]]:
     if gender == "F":
         return "♀", FEMALE
     return "", TEXT
+
+
+# ══════════════════════════════════════════════════════════════════
+# 道具图标:按道具 key 绘制,退化到大类
+#
+# 约定:所有绘制函数签名统一为 ``(d, x, y, s)``,并且**严格**把墨迹限制在
+# ``[x, x + s - 1] × [y, y + s - 1]`` 内(调用方靠这个方框排布,越界会串行)。
+# 全部使用整数友好的图元(rectangle / ellipse / polygon / pieslice / line),
+# 平涂色块 + ``BOX_EDGE`` 描边,不做渐变与抗锯齿。
+# ══════════════════════════════════════════════════════════════════
+_WHITE = (250, 250, 245)
+_METAL = (176, 180, 196)
+_CAP = (158, 160, 172)
+_GOLD = (248, 216, 96)
+
+
+def _rect(d, x, y, s, color, *, outline=BOX_EDGE):
+    d.rectangle([x, y, x + s - 1, y + s - 1], fill=color, outline=outline)
+
+
+def _panel(color=(198, 168, 112)):
+    def draw(d, x, y, s):
+        d.rounded_rectangle([x + 1, y + 1, x + s - 2, y + s - 2], radius=2, fill=color,
+                            outline=BOX_EDGE)
+    return draw
+
+
+def _plus(d, cx, cy, r, color):
+    if r <= 0:
+        d.rectangle([cx, cy, cx, cy], fill=color)
+        return
+    d.rectangle([cx - r, cy - r + 1, cx + r, cy + r - 1], fill=color)
+    d.rectangle([cx - r + 1, cy - r, cx + r - 1, cy + r], fill=color)
+
+
+# ── 精灵球:球体 + 顶部配色 + 花纹 ──
+def _ball(top, emblem=None):
+    """画精灵球:底部白色 + 顶部配色 + 下半部标志符号。
+
+    9px 下细节线条会糊,所以花纹只用一个 2~3 像素的**大色块符号**,
+    并且统一画在下半部(上半部留给顶色),保证各种球一眼能分开。
+    """
+    def draw(d, x, y, s):
+        m = s // 2
+        d.ellipse([x, y, x + s - 1, y + s - 1], fill=_WHITE, outline=BOX_EDGE)
+        d.pieslice([x, y, x + s - 1, y + s - 1], 180, 360, fill=top)
+        d.ellipse([x, y, x + s - 1, y + s - 1], outline=BOX_EDGE)
+        d.rectangle([x, y + m - 1, x + s - 1, y + m], fill=BOX_EDGE)
+        if emblem:
+            emblem(d, x, y, s)
+        else:
+            d.ellipse([x + m - 1, y + m - 1, x + m + 1, y + m + 1], fill=_WHITE,
+                      outline=BOX_EDGE)
+    return draw
+
+
+def _em_great():
+    """超级球:蓝色顶 + 两侧红色标记。"""
+    def draw(d, x, y, s):
+        red = (224, 64, 56)
+        d.polygon([(x + 1, y + 4), (x + 3, y + 6), (x + 1, y + 8)], fill=red,
+                  outline=BOX_EDGE)
+        d.polygon([(x + s - 2, y + 4), (x + s - 4, y + 6), (x + s - 2, y + 8)],
+                  fill=red, outline=BOX_EDGE)
+    return draw
+
+
+def _em_ultra():
+    """高级球:黄色顶 + 黑色横竖条纹。"""
+    def draw(d, x, y, s):
+        dark = (44, 44, 52)
+        d.rectangle([x + 1, y + 4, x + 2, y + 8], fill=dark, outline=BOX_EDGE)
+        d.rectangle([x + s - 3, y + 4, x + s - 2, y + 8], fill=dark, outline=BOX_EDGE)
+        d.rectangle([x + 2, y + 5, x + s - 3, y + 6], fill=dark)
+    return draw
+
+
+def _em_master():
+    """大师球:紫色顶 + 金色 M。"""
+    def draw(d, x, y, s):
+        d.line([(x + 2, y + 8), (x + 2, y + 4), (x + 4, y + 6), (x + 6, y + 4),
+                (x + 6, y + 8)], fill=_GOLD, width=2)
+    return draw
+
+
+def _em_premier():
+    """纪念球:全白 + 红色顶带。"""
+    def draw(d, x, y, s):
+        d.rectangle([x + 1, y + 1, x + s - 2, y + 2], fill=(224, 64, 56))
+    return draw
+
+
+def _em_plus(color):
+    """治愈球:中央十字。"""
+    def draw(d, x, y, s):
+        _plus(d, x + s // 2, y + s // 2 + 1, 2, color)
+    return draw
+
+
+def _em_net():
+    """捕网球:下半部渔网纹。"""
+    def draw(d, x, y, s):
+        dark = (20, 80, 112)
+        for i in (1, 2):
+            d.line([x + 1, y + 4 + i * 2, x + s - 2, y + 4 + i * 2], fill=dark)
+            d.line([x + 1 + i * 2, y + 4, x + 1 + i * 2, y + s - 1], fill=dark)
+    return draw
+
+
+def _em_moon():
+    """黑暗球:下半部紫色月牙。"""
+    def draw(d, x, y, s):
+        d.polygon([(x + 5, y + 4), (x + 3, y + 5), (x + 3, y + 7), (x + 5, y + 8),
+                   (x + 4, y + 6)], fill=(184, 136, 232), outline=BOX_EDGE)
+    return draw
+
+
+def _em_bolt():
+    """先机球:下半部蓝色闪电。"""
+    def draw(d, x, y, s):
+        d.polygon([(x + 5, y + 3), (x + 2, y + 6), (x + 4, y + 6), (x + 3, y + 8),
+                   (x + 6, y + 5), (x + 4, y + 5)], fill=(56, 88, 200),
+                  outline=BOX_EDGE)
+    return draw
+
+
+def _em_clock():
+    """计时球:下半部钟表。"""
+    def draw(d, x, y, s):
+        d.ellipse([x + 2, y + 3, x + 6, y + 7], fill=_WHITE, outline=BOX_EDGE)
+        d.line([x + 4, y + 5, x + 4, y + 3], fill=BOX_EDGE)
+        d.line([x + 4, y + 5, x + 5, y + 6], fill=BOX_EDGE)
+    return draw
+
+
+def _em_ring():
+    """重复球:中央红圈。"""
+    def draw(d, x, y, s):
+        d.ellipse([x + 2, y + 3, x + 6, y + 8], fill=_WHITE, outline=(224, 48, 48))
+        d.rectangle([x + 4, y + 5, x + 4, y + 5], fill=(224, 48, 48))
+    return draw
+
+
+def _em_spots():
+    """巢穴球:下半部深绿斑点。"""
+    def draw(d, x, y, s):
+        dark = (48, 120, 56)
+        for px, py in ((2, 5), (3, 7), (6, 5), (5, 7)):
+            d.rectangle([x + px, y + py, x + px, y + py], fill=dark)
+    return draw
+
+
+def _em_v():
+    """等级球:下半部 V 形箭头。"""
+    def draw(d, x, y, s):
+        d.polygon([(x + 1, y + 4), (x + 4, y + 7), (x + 7, y + 4), (x + 7, y + 6),
+                   (x + 4, y + 8), (x + 1, y + 6)], fill=(248, 208, 72),
+                  outline=BOX_EDGE)
+    return draw
+
+
+def _em_iron():
+    """沉重球:铁质横条 + 竖向铆条。"""
+    def draw(d, x, y, s):
+        iron = (88, 88, 98)
+        d.rectangle([x + 1, y + 5, x + s - 2, y + 7], fill=iron, outline=BOX_EDGE)
+        d.rectangle([x + 4, y + 3, x + 4, y + 8], fill=iron)
+    return draw
+
+
+def _em_gem():
+    """究极球:金顶 + 蓝宝石。"""
+    def draw(d, x, y, s):
+        d.polygon([(x + 4, y + 3), (x + 7, y + 5), (x + 4, y + 8), (x + 1, y + 5)],
+                  fill=(64, 128, 224), outline=BOX_EDGE)
+    return draw
+
+
+# ── 瓶子:药品 / 状态药 / PP 药 ──
+def _bottle(color, *, cross=None, cap=_CAP, marks=0):
+    def draw(d, x, y, s):
+        c = s // 2
+        d.rectangle([x + c - 1, y, x + c + 1, y + s // 4], fill=cap, outline=BOX_EDGE)
+        d.rounded_rectangle([x + 1, y + s // 4, x + s - 2, y + s - 1], radius=2,
+                            fill=color, outline=BOX_EDGE)
+        if cross:
+            _plus(d, x + c, y + s // 2 + 1, max(1, s // 5), cross)
+        for i in range(marks):
+            d.rectangle([x + 2 + i * 2, y + s - 4, x + 2 + i * 2, y + s - 3],
+                        fill=_WHITE)
+    return draw
+
+
+def _rainbow_bottle():
+    def draw(d, x, y, s):
+        c = s // 2
+        d.rectangle([x + c - 1, y, x + c + 1, y + s // 4], fill=_CAP, outline=BOX_EDGE)
+        bands = [(224, 96, 96), (248, 200, 88), (120, 200, 120), (120, 168, 240)]
+        for i, col in enumerate(bands):
+            d.rectangle([x + 1, y + s // 4 + i, x + s - 2, y + s // 4 + i], fill=col)
+        d.rounded_rectangle([x + 1, y + s // 4, x + s - 2, y + s - 1], radius=2,
+                            outline=BOX_EDGE)
+        _plus(d, x + c, y + s // 2 + 1, 2, _WHITE)
+    return draw
+
+
+def _flask(color, cap=_CAP):
+    def draw(d, x, y, s):
+        c = s // 2
+        d.rectangle([x + c - 1, y, x + c + 1, y + 3], fill=cap, outline=BOX_EDGE)
+        d.ellipse([x + 1, y + 2, x + s - 2, y + s - 1], fill=color, outline=BOX_EDGE)
+        d.line([x + 2, y + 4, x + 3, y + 3], fill=_WHITE)
+    return draw
+
+
+def _spray(color=(140, 196, 224)):
+    def draw(d, x, y, s):
+        c = s // 2
+        d.rectangle([x + c - 1, y, x + c + 1, y + 2], fill=_CAP, outline=BOX_EDGE)
+        d.rounded_rectangle([x + 1, y + 2, x + s - 2, y + s - 1], radius=2, fill=color,
+                            outline=BOX_EDGE)
+        for dx in (2, 4, 6):
+            d.rectangle([x + dx, y + 1, x + dx, y + 1], fill=_WHITE)
+    return draw
+
+
+# ── 石头 / 树果 / 宝石 ──
+def _stone(color, hi=_WHITE):
+    def draw(d, x, y, s):
+        e = s - 1
+        d.polygon([(x, y + e), (x + s // 4, y + 1), (x + s // 2, y + s // 3),
+                   (x + s - 3, y + 1), (x + e, y + e)], fill=color, outline=BOX_EDGE)
+        d.line([x + 2, y + e - 2, x + s // 3, y + 2], fill=hi)
+    return draw
+
+
+def _oval_stone(color=(208, 200, 176)):
+    def draw(d, x, y, s):
+        d.ellipse([x + 1, y + 1, x + s - 2, y + s - 2], fill=color, outline=BOX_EDGE)
+        d.line([x + 3, y + 4, x + 4, y + 2], fill=_WHITE)
+    return draw
+
+
+def _berry(color, leaf=(96, 152, 72)):
+    def draw(d, x, y, s):
+        m = s // 2
+        d.polygon([(x + m, y + 2), (x + s - 2, y), (x + m + 1, y + 1)], fill=leaf,
+                  outline=BOX_EDGE)
+        d.ellipse([x + 1, y + 1, x + s - 2, y + s - 1], fill=color, outline=BOX_EDGE)
+        d.rectangle([x + 2, y + 3, x + 3, y + 4], fill=_WHITE)
+    return draw
+
+
+def _gem(color):
+    def draw(d, x, y, s):
+        m = s // 2
+        d.polygon([(x + m, y), (x + s - 1, y + m), (x + m, y + s - 1), (x, y + m)],
+                  fill=color, outline=BOX_EDGE)
+        d.line([x + m - 1, y + 1, x + m, y + 1], fill=_WHITE)
+    return draw
+
+
+def _drop(color):
+    def draw(d, x, y, s):
+        m = s // 2
+        d.polygon([(x + m, y), (x + s - 1, y + s - 3), (x + m, y + s - 1),
+                   (x, y + s - 3)], fill=color, outline=BOX_EDGE)
+    return draw
+
+
+def _seed(color, spot=(96, 72, 48)):
+    def draw(d, x, y, s):
+        d.ellipse([x + 2, y + 1, x + s - 2, y + s - 1], fill=color, outline=BOX_EDGE)
+        d.ellipse([x + s // 2 - 1, y + 3, x + s // 2 + 1, y + 5], fill=spot)
+    return draw
+
+
+def _ice(color=(152, 216, 236)):
+    def draw(d, x, y, s):
+        d.rectangle([x + 1, y + 2, x + s - 2, y + s - 1], fill=color, outline=BOX_EDGE)
+        d.line([x + 2, y + 3, x + s // 2, y + 3], fill=_WHITE)
+        d.line([x + 2, y + 3, x + 2, y + s - 2], fill=_WHITE)
+    return draw
+
+
+def _sand(color=(232, 208, 152)):
+    def draw(d, x, y, s):
+        d.polygon([(x, y + s - 1), (x + 2, y + s // 2), (x + s // 2, y + 1),
+                   (x + s - 2, y + s // 2), (x + s - 1, y + s - 1)], fill=color,
+                  outline=BOX_EDGE)
+        d.rectangle([x + 3, y + s - 5, x + 4, y + s - 5], fill=_WHITE)
+    return draw
+
+
+def _sludge():
+    def draw(d, x, y, s):
+        d.polygon([(x, y + s - 1), (x + 1, y + s // 2), (x + s // 2, y + 1),
+                   (x + s - 2, y + s // 2), (x + s - 1, y + s - 1)],
+                  fill=(120, 88, 152), outline=BOX_EDGE)
+        d.rectangle([x + 3, y + 4, x + 3, y + 4], fill=(196, 168, 224))
+    return draw
+
+
+def _target(color):
+    def draw(d, x, y, s):
+        d.ellipse([x, y, x + s - 1, y + s - 1], outline=color)
+        d.ellipse([x + 2, y + 2, x + s - 3, y + s - 3], outline=color)
+        d.rectangle([x + s // 2, y + s // 2 - 1, x + s // 2, y + s // 2 + 1], fill=color)
+    return draw
+
+
+def _orb(color, core=None):
+    def draw(d, x, y, s):
+        d.ellipse([x + 1, y + 1, x + s - 2, y + s - 2], fill=color, outline=BOX_EDGE)
+        if core:
+            d.ellipse([x + 3, y + 3, x + s - 4, y + s - 4], fill=core)
+    return draw
+
+
+# ── 持有道具 / 装备 ──
+def _band(color, *, knot=False):
+    def draw(d, x, y, s):
+        d.rounded_rectangle([x, y + s // 3, x + s - 1, y + s // 3 + 3], radius=1,
+                            fill=color, outline=BOX_EDGE)
+        if knot:
+            d.polygon([(x + 1, y + 1), (x + 4, y + 2), (x + 2, y + 5)], fill=color,
+                      outline=BOX_EDGE)
+    return draw
+
+
+def _glasses(color):
+    def draw(d, x, y, s):
+        d.ellipse([x + 1, y + 2, x + s // 2 - 1, y + s - 3], fill=color, outline=BOX_EDGE)
+        d.ellipse([x + s // 2 + 1, y + 2, x + s - 2, y + s - 3], fill=color,
+                  outline=BOX_EDGE)
+        d.line([x + s // 2 - 1, y + 4, x + s // 2 + 1, y + 4], fill=BOX_EDGE)
+    return draw
+
+
+def _cloth(color):
+    def draw(d, x, y, s):
+        d.polygon([(x, y + 2), (x + s // 3, y), (x + s - 1, y + 2), (x + s - 1, y + s - 3),
+                   (x + 2 * s // 3, y + s - 1), (x, y + s - 3)], fill=color,
+                  outline=BOX_EDGE)
+        d.line([x + 2, y + 3, x + s - 3, y + 3], fill=_WHITE)
+    return draw
+
+
+def _armor(color):
+    def draw(d, x, y, s):
+        m = s // 2
+        d.polygon([(x + m, y), (x + s - 1, y + 2), (x + s - 3, y + s - 1),
+                   (x + 2, y + s - 1), (x, y + 2)], fill=color, outline=BOX_EDGE)
+        d.line([x + m, y + 2, x + m, y + s - 3], fill=_WHITE)
+    return draw
+
+
+def _vest(color=(200, 96, 72)):
+    def draw(d, x, y, s):
+        d.polygon([(x, y + 1), (x + 3, y), (x + s // 2, y + 2), (x + s - 4, y),
+                   (x + s - 1, y + 1), (x + s - 2, y + s - 1), (x + 1, y + s - 1)],
+                  fill=color, outline=BOX_EDGE)
+        d.line([x + s // 2, y + 2, x + s // 2, y + s - 2], fill=_WHITE)
+    return draw
+
+
+def _boots(color=(148, 104, 72)):
+    def draw(d, x, y, s):
+        d.rectangle([x + 2, y, x + 5, y + s - 3], fill=color, outline=BOX_EDGE)
+        d.rectangle([x + 2, y + s - 4, x + s - 1, y + s - 1], fill=color, outline=BOX_EDGE)
+    return draw
+
+
+def _helmet(color=(168, 176, 196)):
+    def draw(d, x, y, s):
+        d.pieslice([x, y + 1, x + s - 1, y + s - 2], 180, 360, fill=color, outline=BOX_EDGE)
+        d.rectangle([x, y + s // 2, x + s - 1, y + s // 2 + 1], fill=BOX_EDGE)
+        d.line([x + s // 2, y + 2, x + s // 2, y + s // 2], fill=BOX_EDGE)
+    return draw
+
+
+def _goggles(color=(120, 176, 224)):
+    def draw(d, x, y, s):
+        d.rounded_rectangle([x, y + 2, x + s - 1, y + s - 3], radius=2, fill=color,
+                            outline=BOX_EDGE)
+        d.ellipse([x + 1, y + 3, x + s // 2 - 1, y + s - 4], fill=(230, 240, 250),
+                  outline=BOX_EDGE)
+        d.ellipse([x + s // 2 + 1, y + 3, x + s - 2, y + s - 4], fill=(230, 240, 250),
+                  outline=BOX_EDGE)
+    return draw
+
+
+def _clay(color=(200, 156, 112)):
+    def draw(d, x, y, s):
+        d.rounded_rectangle([x + 1, y + 2, x + s - 2, y + s - 1], radius=2, fill=color,
+                            outline=BOX_EDGE)
+        d.line([x + 2, y + 3, x + s - 3, y + 3], fill=(240, 216, 184))
+    return draw
+
+
+def _balloon(color=(240, 96, 112)):
+    def draw(d, x, y, s):
+        d.ellipse([x + 1, y, x + s - 2, y + s - 3], fill=color, outline=BOX_EDGE)
+        d.line([x + s // 2, y + s - 3, x + s // 2, y + s - 1], fill=BOX_EDGE)
+    return draw
+
+
+def _dice():
+    def draw(d, x, y, s):
+        d.rounded_rectangle([x + 1, y + 1, x + s - 2, y + s - 2], radius=2, fill=_WHITE,
+                            outline=BOX_EDGE)
+        for px, py in ((2, 2), (5, 2), (2, 5), (5, 5), (3, 3)):
+            d.rectangle([x + px, y + py, x + px, y + py], fill=BOX_EDGE)
+    return draw
+
+
+def _food():
+    def draw(d, x, y, s):
+        d.ellipse([x + 1, y + 1, x + s - 2, y + s - 4], fill=(240, 208, 128),
+                  outline=BOX_EDGE)
+        d.rectangle([x + 1, y + s - 4, x + s - 2, y + s - 1], fill=(224, 168, 96),
+                    outline=BOX_EDGE)
+    return draw
+
+
+def _tag(color):
+    def draw(d, x, y, s):
+        d.polygon([(x, y), (x + s - 3, y), (x + s - 1, y + s // 2), (x + s - 3, y + s - 1),
+                   (x, y + s - 1)], fill=color, outline=BOX_EDGE)
+        d.rectangle([x + 2, y + 3, x + 3, y + 4], fill=_WHITE)
+    return draw
+
+
+def _sheet(color=_METAL):
+    def draw(d, x, y, s):
+        d.polygon([(x + 1, y + 3), (x + s - 3, y), (x + s - 1, y + s - 3),
+                   (x + 3, y + s - 1)], fill=color, outline=BOX_EDGE)
+        d.line([x + 3, y + 3, x + s - 4, y + 2], fill=_WHITE)
+    return draw
+
+
+def _ingot(color=(168, 176, 196)):
+    def draw(d, x, y, s):
+        d.polygon([(x + 2, y + 1), (x + s - 3, y + 1), (x + s - 1, y + s - 2),
+                   (x, y + s - 2)], fill=color, outline=BOX_EDGE)
+        d.line([x + 2, y + 2, x + s - 4, y + 2], fill=_WHITE)
+    return draw
+
+
+def _tooth(color=_WHITE):
+    def draw(d, x, y, s):
+        d.polygon([(x + 1, y + 1), (x + s - 2, y + 1), (x + s // 2, y + s - 1)],
+                  fill=color, outline=BOX_EDGE)
+    return draw
+
+
+def _claw(color=_METAL):
+    def draw(d, x, y, s):
+        for i, ox in enumerate((0, 3, 6)):
+            d.polygon([(x + ox + 1, y + 1 + i), (x + ox + 2, y + s - 1),
+                       (x + ox, y + s - 2)], fill=color, outline=BOX_EDGE)
+    return draw
+
+
+def _scale(color):
+    def draw(d, x, y, s):
+        d.polygon([(x, y + s // 3), (x + s // 2, y), (x + s - 1, y + s // 3),
+                   (x + s // 2, y + s - 1)], fill=color, outline=BOX_EDGE)
+        d.line([x + s // 2 - 2, y + 2, x + s // 2 + 2, y + 2], fill=_WHITE)
+    return draw
+
+
+def _prism():
+    def draw(d, x, y, s):
+        bands = [(232, 96, 96), (248, 200, 80), (120, 200, 120), (120, 168, 240)]
+        for i, col in enumerate(bands):
+            d.polygon([(x + i * 2, y + s - 2), (x + 1 + i * 2, y + 1),
+                       (x + 2 + i * 2, y + s - 2)], fill=col, outline=BOX_EDGE)
+    return draw
+
+
+def _crown_rock(color=(168, 160, 148)):
+    def draw(d, x, y, s):
+        d.polygon([(x, y + 3), (x + s // 4, y + 1), (x + s // 2, y + 4),
+                   (x + s - 4, y + 1), (x + s - 1, y + 3), (x + s - 2, y + s - 1),
+                   (x + 1, y + s - 1)], fill=color, outline=BOX_EDGE)
+        d.polygon([(x + 2, y + s - 3), (x + s // 2, y + s - 6), (x + s - 3, y + s - 3)],
+                  fill=(240, 200, 72), outline=BOX_EDGE)
+    return draw
+
+
+def _plug(color=(240, 208, 72)):
+    def draw(d, x, y, s):
+        d.rounded_rectangle([x + 2, y + 1, x + s - 3, y + s - 3], radius=2, fill=color,
+                            outline=BOX_EDGE)
+        d.rectangle([x + s // 2 - 1, y + s - 3, x + s // 2 + 1, y + s - 1], fill=_CAP,
+                    outline=BOX_EDGE)
+        d.line([(x + s // 2 - 2, y + 2), (x + s // 2, y + 4), (x + s // 2 + 2, y + 2)],
+               fill=BOX_EDGE)
+    return draw
+
+
+def _pot(color=(176, 120, 88)):
+    def draw(d, x, y, s):
+        d.rounded_rectangle([x + 1, y + 3, x + s - 3, y + s - 1], radius=2, fill=color,
+                            outline=BOX_EDGE)
+        d.rectangle([x + s - 3, y + 4, x + s - 1, y + 6], fill=color, outline=BOX_EDGE)
+        d.line([x + 3, y + 5, x + s - 5, y + 5], fill=(232, 200, 168))
+    return draw
+
+
+def _cup(color=(244, 244, 240)):
+    def draw(d, x, y, s):
+        d.rounded_rectangle([x + 1, y + 3, x + s - 3, y + s - 1], radius=1, fill=color,
+                            outline=BOX_EDGE)
+        d.arc([x + s - 4, y + 4, x + s - 1, y + s - 3], 270, 90, fill=BOX_EDGE)
+        d.line([x + 2, y + 4, x + s - 4, y + 4], fill=(200, 168, 120))
+    return draw
+
+
+def _cream():
+    def draw(d, x, y, s):
+        d.rounded_rectangle([x + 1, y + s // 2, x + s - 2, y + s - 1], radius=2,
+                            fill=(248, 208, 168), outline=BOX_EDGE)
+        d.ellipse([x + 2, y + 2, x + s - 3, y + s // 2 + 2], fill=_WHITE, outline=BOX_EDGE)
+        d.ellipse([x + s // 3, y + 1, x + s - 3, y + s // 3 + 2], fill=(248, 176, 196),
+                  outline=BOX_EDGE)
+    return draw
+
+
+def _chip(color=(96, 168, 200)):
+    def draw(d, x, y, s):
+        d.rounded_rectangle([x + 1, y + 1, x + s - 2, y + s - 2], radius=1, fill=color,
+                            outline=BOX_EDGE)
+        for i in range(3):
+            d.line([x, y + 2 + i * 2, x + 1, y + 2 + i * 2], fill=BOX_EDGE)
+            d.line([x + s - 2, y + 2 + i * 2, x + s - 1, y + 2 + i * 2], fill=BOX_EDGE)
+    return draw
+
+
+def _feather(color):
+    def draw(d, x, y, s):
+        d.polygon([(x + 1, y + s - 1), (x + 3, y + 2), (x + s - 2, y),
+                   (x + s // 2, y + s - 2)], fill=color, outline=BOX_EDGE)
+        d.line([x + 2, y + s - 2, x + s - 3, y + 2], fill=_WHITE)
+    return draw
+
+
+def _magnet():
+    def draw(d, x, y, s):
+        red = (216, 72, 64)
+        d.pieslice([x + 1, y + 1, x + s - 2, y + s - 1], 180, 360, fill=red,
+                   outline=BOX_EDGE)
+        d.rectangle([x + 1, y + s // 2, x + s // 2 - 2, y + s - 1], fill=red,
+                    outline=BOX_EDGE)
+        d.rectangle([x + s // 2 + 1, y + s // 2, x + s - 2, y + s - 1], fill=red,
+                    outline=BOX_EDGE)
+        d.rectangle([x + 1, y + s - 4, x + s // 2 - 2, y + s - 1], fill=_WHITE,
+                    outline=BOX_EDGE)
+        d.rectangle([x + s // 2 + 1, y + s - 4, x + s - 2, y + s - 1], fill=_WHITE,
+                    outline=BOX_EDGE)
+    return draw
+
+
+def _spoon(color=_METAL):
+    def draw(d, x, y, s):
+        m = s // 2
+        d.ellipse([x + 2, y + 1, x + s - 3, y + 4], fill=color, outline=BOX_EDGE)
+        d.rectangle([x + m - 1, y + 4, x + m, y + s - 1], fill=color, outline=BOX_EDGE)
+    return draw
+
+
+def _pouch(color):
+    def draw(d, x, y, s):
+        d.polygon([(x + 2, y), (x + s - 3, y), (x + s - 1, y + s - 1), (x, y + s - 1)],
+                  fill=color, outline=BOX_EDGE)
+        d.line([x + 1, y + 2, x + s - 2, y + 2], fill=_WHITE)
+    return draw
+
+
+def _apple(color, leaf=(96, 168, 72)):
+    def draw(d, x, y, s):
+        d.polygon([(x + s // 2, y + 2), (x + s // 2 + 2, y)], fill=leaf, outline=BOX_EDGE)
+        d.ellipse([x + 1, y + 1, x + s - 2, y + s - 1], fill=color, outline=BOX_EDGE)
+        d.rectangle([x + 2, y + 3, x + 2, y + 4], fill=_WHITE)
+    return draw
+
+
+def _heart(color):
+    def draw(d, x, y, s):
+        r = max(1, s // 4)
+        d.ellipse([x + 1, y + 1, x + 2 * r - 1, y + 2 * r], fill=color, outline=BOX_EDGE)
+        d.ellipse([x + s - 2 * r, y + 1, x + s - 2, y + 2 * r], fill=color,
+                  outline=BOX_EDGE)
+        d.polygon([(x, y + 2 * r - 2), (x + s - 1, y + 2 * r - 2), (x + s // 2, y + s - 1)],
+                  fill=color, outline=BOX_EDGE)
+    return draw
+
+
+# ── 战斗强化 / 稀有道具 ──
+def _stat_up(color, icon=None):
+    def draw(d, x, y, s):
+        d.rounded_rectangle([x, y, x + s - 1, y + s - 1], radius=2, fill=color,
+                            outline=BOX_EDGE)
+        c = s // 2
+        if icon == "shield":
+            d.polygon([(x + c, y + 1), (x + s - 2, y + 3), (x + c, y + s - 2),
+                       (x + 1, y + 3)], fill=_WHITE)
+        elif icon == "spark":
+            d.line([(x + c, y + 3), (x + s // 3, y + c), (x + c, y + c)], fill=_WHITE)
+            d.line([(x + c, y + 3), (x + 2 * s // 3, y + c)], fill=_WHITE)
+        elif icon == "double":
+            d.line([(x + 2, y + c), (x + c, y + 2), (x + s - 2, y + c)], fill=_WHITE)
+            d.line([(x + 2, y + s - 3), (x + c, y + c - 1), (x + s - 2, y + s - 3)],
+                   fill=_WHITE)
+        else:
+            d.polygon([(x + c, y + 1), (x + s - 2, y + c), (x + 2, y + c)], fill=_WHITE)
+            d.rectangle([x + c - 1, y + c, x + c + 1, y + s - 2], fill=_WHITE)
+    return draw
+
+
+def _arrow_up(color):
+    def draw(d, x, y, s):
+        d.polygon([(x + s // 2, y), (x + s - 2, y + s // 2), (x + 2, y + s // 2)],
+                  fill=color, outline=BOX_EDGE)
+        d.rectangle([x + s // 2 - 1, y + s // 2, x + s // 2 + 1, y + s - 1], fill=color,
+                    outline=BOX_EDGE)
+    return draw
+
+
+def _capsule(c1, c2):
+    def draw(d, x, y, s):
+        radius = max(1, s // 3)
+        d.rounded_rectangle([x + 1, y, x + s - 2, y + s - 1], radius=radius, fill=c1,
+                            outline=BOX_EDGE)
+        d.pieslice([x + 1, y, x + s - 2, y + s - 1], 0, 180, fill=c2)
+        d.rounded_rectangle([x + 1, y, x + s - 2, y + s - 1], radius=radius,
+                            outline=BOX_EDGE)
+    return draw
+
+
+def _patch(color):
+    def draw(d, x, y, s):
+        d.rounded_rectangle([x, y + 1, x + s - 1, y + s - 2], radius=2, fill=color,
+                            outline=BOX_EDGE)
+        _plus(d, x + s // 2, y + s // 2, 2, _WHITE)
+    return draw
+
+
+def _candy(color, wrap=(250, 232, 244)):
+    def draw(d, x, y, s):
+        m = s // 2
+        d.polygon([(x, y + m - 2), (x + 2, y + m), (x, y + m + 2)], fill=wrap,
+                  outline=BOX_EDGE)
+        d.polygon([(x + s - 1, y + m - 2), (x + s - 3, y + m), (x + s - 1, y + m + 2)],
+                  fill=wrap, outline=BOX_EDGE)
+        d.ellipse([x + 2, y + 1, x + s - 3, y + s - 2], fill=color, outline=BOX_EDGE)
+    return draw
+
+
+# 五角星:外顶点 / 内顶点按 36° 交错,半径按 s 缩放。
+_STAR_OUTER = [(0.0, -1.0), (0.951, -0.309), (0.588, 0.809), (-0.588, 0.809),
+               (-0.951, -0.309)]
+_STAR_INNER = [(0.588, -0.809), (0.951, 0.309), (0.0, 1.0), (-0.951, 0.309),
+               (-0.588, -0.809)]
+
+
+def _star(color, *, small=False, crack=False):
+    def draw(d, x, y, s):
+        c = s / 2.0
+        ro = (c - 1.6) if small else (c - 0.5)
+        ri = ro * 0.42
+        pts = []
+        for i in range(5):
+            ox, oy = _STAR_OUTER[i]
+            ix, iy = _STAR_INNER[i]
+            pts.append((x + c + ox * ro, y + c + oy * ro))
+            pts.append((x + c + ix * ri, y + c + iy * ri))
+        d.polygon(pts, fill=color, outline=BOX_EDGE)
+        if crack:
+            d.line([x + c, y + c - ro * 0.5, x + c - 1, y + c + ro * 0.3], fill=BOX_EDGE)
+    return draw
+
+
+# ── 道具 key → 图标(覆盖全部 BAG_ITEMS 与持有道具 ITEMS)──
+_ITEM_ICONS = {
+    # 精灵球家族:靠顶部配色 + 花纹区分
+    "poke-ball": _ball((224, 64, 56)),
+    "great-ball": _ball((72, 112, 224), _em_great()),
+    "ultra-ball": _ball((240, 208, 48), _em_ultra()),
+    "master-ball": _ball((144, 72, 176), _em_master()),
+    "premier-ball": _ball(_WHITE, _em_premier()),
+    "heal-ball": _ball((240, 144, 176), _em_plus((248, 216, 72))),
+    "net-ball": _ball((72, 176, 208), _em_net()),
+    "dusk-ball": _ball((56, 48, 72), _em_moon()),
+    "quick-ball": _ball((248, 216, 64), _em_bolt()),
+    "timer-ball": _ball((168, 112, 64), _em_clock()),
+    "repeat-ball": _ball((224, 64, 56), _em_ring()),
+    "nest-ball": _ball((104, 184, 88), _em_spots()),
+    "level-ball": _ball((224, 72, 56), _em_v()),
+    "heavy-ball": _ball((152, 152, 160), _em_iron()),
+    "beast-ball": _ball((216, 176, 64), _em_gem()),
+    # 伤药:瓶子颜色由浅到深 + 十字由小到大
+    "potion": _bottle((160, 220, 170)),
+    "super-potion": _bottle((120, 196, 140)),
+    "hyper-potion": _bottle((88, 170, 116)),
+    "max-potion": _bottle((56, 140, 96), cross=_WHITE),
+    "full-restore": _bottle((64, 168, 200), cross=_GOLD),
+    "fresh-water": _bottle((128, 192, 240)),
+    "soda-pop": _bottle((240, 144, 128)),
+    "lemonade": _bottle((240, 208, 96)),
+    "moomoo-milk": _bottle((248, 248, 244), cap=(248, 160, 180)),
+    "berry-juice": _flask((208, 88, 144)),
+    "sweet-heart": _heart((248, 136, 168)),
+    # 状态回复:颜色对应异常状态
+    "antidote": _bottle((168, 88, 200), cross=_WHITE),
+    "paralyze-heal": _bottle((232, 192, 48), cross=_WHITE),
+    "burn-heal": _bottle((224, 96, 48), cross=_WHITE),
+    "ice-heal": _bottle((96, 196, 232), cross=_WHITE),
+    "awakening": _bottle((240, 240, 236), cross=(120, 124, 148)),
+    "full-heal": _rainbow_bottle(),
+    # PP 回复:蓝色药瓶 + 白点数量表示回复量
+    "ether": _bottle((120, 150, 230), marks=1),
+    "max-ether": _bottle((96, 128, 220), marks=2),
+    "elixir": _bottle((80, 110, 210), marks=3),
+    "max-elixir": _bottle((64, 92, 200), marks=4),
+    # 复活:半星(有裂痕)/ 满星
+    "revive": _star(_GOLD, small=True, crack=True),
+    "max-revive": _star((252, 216, 72)),
+    # 树果:颜色 + 叶片
+    "oran-berry": _berry((248, 152, 64)),
+    "cheri-berry": _berry((232, 72, 72)),
+    "chesto-berry": _berry((136, 88, 192)),
+    "pecha-berry": _berry((240, 144, 176)),
+    "rawst-berry": _berry((96, 176, 200)),
+    "aspear-berry": _berry((152, 200, 72)),
+    "lum-berry": _berry((104, 176, 88), (200, 232, 120)),
+    "sitrus-berry": _berry((232, 200, 72)),
+    "leppa-berry": _berry((224, 104, 88), (144, 208, 96)),
+    # 战斗强化(仅战斗中使用)
+    "x-attack": _stat_up((224, 80, 72)),
+    "x-defense": _stat_up((72, 120, 224), "shield"),
+    "x-special": _stat_up((168, 96, 216), "spark"),
+    "x-sp-defense": _stat_up((72, 176, 160), "shield"),
+    "x-speed": _stat_up((240, 200, 64), "double"),
+    "dire-hit": _target((200, 72, 72)),
+    "guard-spec": _stat_up((96, 176, 112), "shield"),
+    # 稀有用具
+    "rare-candy": _candy((240, 152, 192)),
+    "pp-up": _arrow_up((96, 196, 120)),
+    "pp-max": _arrow_up((80, 140, 224)),
+    "ability-capsule": _capsule((160, 96, 216), (248, 160, 208)),
+    "ability-patch": _patch((248, 160, 208)),
+    # 进化石:按原作石头的印象配色
+    "fire-stone": _stone((240, 112, 48)),
+    "water-stone": _stone((96, 160, 240)),
+    "thunder-stone": _stone((248, 208, 48)),
+    "leaf-stone": _stone((112, 200, 88)),
+    "moon-stone": _stone((72, 56, 104)),
+    "sun-stone": _stone((248, 152, 56)),
+    "shiny-stone": _stone((240, 244, 248)),
+    "dusk-stone": _stone((64, 60, 72)),
+    "dawn-stone": _stone((96, 208, 184)),
+    "ice-stone": _stone((168, 224, 240)),
+    # 进化道具
+    "sweet-apple": _apple((224, 72, 72)),
+    "tart-apple": _apple((120, 192, 88)),
+    "syrupy-apple": _apple((232, 184, 72)),
+    "cracked-pot": _pot(),
+    "unremarkable-teacup": _cup(),
+    "auspicious-armor": _armor((232, 192, 88)),
+    "malicious-armor": _armor((128, 88, 160)),
+    "metal-alloy": _ingot(),
+    "oval-stone": _oval_stone(),
+    "razor-claw": _claw(),
+    "razor-fang": _tooth(),
+    "dragon-scale": _scale((112, 144, 232)),
+    "deep-sea-scale": _scale((248, 152, 184)),
+    "deep-sea-tooth": _tooth((168, 212, 240)),
+    "kings-rock": _crown_rock(),
+    "electirizer": _plug(),
+    "magmarizer": _flask((232, 96, 64)),
+    "protector": _armor((152, 168, 200)),
+    "reaper-cloth": _cloth((120, 88, 152)),
+    "sachet": _pouch((248, 176, 200)),
+    "whipped-dream": _cream(),
+    "prism-scale": _prism(),
+    "up-grade": _chip((96, 168, 200)),
+    # 持有道具
+    "leftovers": _food(),
+    "black-sludge": _sludge(),
+    "life-orb": _orb((232, 80, 80), (240, 200, 96)),
+    "toxic-orb": _orb((152, 88, 200), (200, 160, 232)),
+    "flame-orb": _orb((232, 112, 64), (248, 208, 96)),
+    "choice-band": _band((224, 96, 72)),
+    "choice-specs": _glasses((232, 96, 112)),
+    "choice-scarf": _cloth((96, 144, 232)),
+    "assault-vest": _vest((200, 96, 72)),
+    "eviolite": _gem((176, 180, 196)),
+    "focus-sash": _band(_WHITE, knot=True),
+    "rocky-helmet": _helmet((148, 148, 160)),
+    "heavy-duty-boots": _boots((120, 88, 64)),
+    "light-clay": _clay((232, 200, 120)),
+    "terrain-extender": _clay((120, 176, 152)),
+    "heat-rock": _stone((232, 120, 64)),
+    "damp-rock": _stone((96, 152, 224)),
+    "smooth-rock": _stone((224, 200, 152)),
+    "icy-rock": _stone((152, 216, 232)),
+    "booster-energy": _capsule((248, 160, 64), (96, 144, 240)),
+    "loaded-dice": _dice(),
+    "covert-cloak": _cloth((112, 88, 72)),
+    "clear-amulet": _gem((120, 200, 220)),
+    "weakness-policy": _gem((224, 96, 96)),
+    "throat-spray": _spray(),
+    "air-balloon": _balloon(),
+    "safety-goggles": _goggles(),
+    "expert-belt": _band((96, 72, 56)),
+    "muscle-band": _band((200, 80, 72)),
+    "wise-glasses": _glasses((96, 160, 232)),
+    "silk-scarf": _cloth((248, 244, 236)),
+    # 属性增强道具:统一宝石造型,靠属性配色区分
+    "charcoal": _stone((72, 64, 60)),
+    "mystic-water": _drop((96, 160, 240)),
+    "miracle-seed": _seed((112, 192, 112)),
+    "magnet": _magnet(),
+    "never-melt-ice": _ice(),
+    "black-belt": _band((64, 56, 52)),
+    "poison-barb": _tooth((168, 96, 200)),
+    "soft-sand": _sand(),
+    "sharp-beak": _tooth((240, 168, 64)),
+    "twisted-spoon": _spoon((192, 196, 208)),
+    "silver-powder": _sand((232, 232, 240)),
+    "hard-stone": _stone((180, 176, 168)),
+    "spell-tag": _tag((152, 112, 200)),
+    "dragon-fang": _tooth((240, 224, 200)),
+    "black-glasses": _glasses((56, 56, 64)),
+    "metal-coat": _sheet(_METAL),
+    "fairy-feather": _feather((248, 176, 200)),
+}
+
+# 大类型兜底图标(旧界面只传 kind 时的退路)
+_KIND_ICONS = {
+    "ball": _ball((224, 64, 56)),
+    "medicine": _bottle((120, 200, 168)),
+    "pp": _bottle((120, 150, 230), marks=1),
+    "status": _bottle((232, 200, 120)),
+    "revive": _star(_GOLD),
+    "battle": _stat_up((232, 128, 96)),
+    "berry": _berry((232, 96, 112)),
+    "stone": _stone((168, 176, 196)),
+    "evo": _stone((176, 168, 200)),
+    "rare": _gem((180, 140, 232)),
+    "_default": _panel(),
+}
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -445,41 +1300,14 @@ class Screen:
                     fill=BADGE_ON_HI)
 
     def item_icon(self, kind: str, x: float, y: float, size: float = 9) -> None:
-        """按道具类别画一个小图标。"""
-        d = self.d
-        s = size
-        if kind == "ball":
-            d.ellipse([x, y, x + s, y + s], fill=(250, 250, 245), outline=BOX_EDGE)
-            d.pieslice([x, y, x + s, y + s], 180, 360, fill=(224, 64, 56))
-            d.rectangle([x, y + s / 2 - 1, x + s, y + s / 2 + 1], fill=BOX_EDGE)
-        elif kind in ("medicine", "pp"):
-            body = (120, 200, 168) if kind == "medicine" else (120, 150, 230)
-            d.rounded_rectangle([x + 1, y + 1, x + s - 1, y + s], radius=2, fill=body,
-                                outline=BOX_EDGE)
-            d.rectangle([x + s * 0.4, y - 1, x + s * 0.6, y + 2], fill=BOX_EDGE)
-        elif kind == "status":
-            d.rounded_rectangle([x + 2, y + 2, x + s - 1, y + s], radius=2,
-                                fill=(232, 200, 120), outline=BOX_EDGE)
-            d.rectangle([x + s * 0.42, y, x + s * 0.58, y + 3], fill=BOX_EDGE)
-        elif kind == "revive":
-            d.polygon([(x + s / 2, y), (x + s, y + s / 2), (x + s / 2, y + s),
-                       (x, y + s / 2)], fill=(250, 216, 96), outline=BOX_EDGE)
-        elif kind == "battle":
-            d.polygon([(x + 1, y + s), (x + s * 0.35, y + 1), (x + s * 0.65, y + 1),
-                       (x + s - 1, y + s)], fill=(232, 128, 96), outline=BOX_EDGE)
-        elif kind == "berry":
-            d.ellipse([x + 1, y + 1, x + s - 1, y + s - 1], fill=(232, 96, 112),
-                      outline=BOX_EDGE)
-            d.line([x + s / 2, y + 1, x + s * 0.8, y], fill=(96, 152, 72))
-        elif kind in ("stone", "evo"):
-            d.polygon([(x, y + s), (x + s * 0.3, y), (x + s * 0.7, y + s * 0.35),
-                       (x + s, y + s)], fill=(168, 176, 196), outline=BOX_EDGE)
-        elif kind == "rare":
-            d.polygon([(x + s / 2, y), (x + s, y + s * 0.6), (x + s / 2, y + s),
-                       (x, y + s * 0.6)], fill=(180, 140, 232), outline=BOX_EDGE)
-        else:
-            d.rounded_rectangle([x + 1, y + 1, x + s - 1, y + s - 1], radius=2,
-                                fill=(198, 168, 112), outline=BOX_EDGE)
+        """画道具图标:优先按道具 key,退化到大类,最后退化到默认。
+
+        调用方既可传道具 key(``"great-ball"``),也可传大类(``"ball"``);
+        两者共用同一个签名,旧界面无需改动。图标严格画在
+        ``[x, x + size - 1] × [y, y + size - 1]`` 内。
+        """
+        draw = _ITEM_ICONS.get(kind) or _KIND_ICONS.get(kind) or _KIND_ICONS["_default"]
+        draw(self.d, x, y, size)
 
     # ── 精灵图 ──
     def sprite(self, species: str, *, ground: tuple[float, float], factor: float = 1.0,
@@ -648,7 +1476,7 @@ def render_bag(
             y0 = 33 + i * 13
             if i == selected:
                 sc.highlight((7, y0, 233, y0 + 12))
-            sc.item_icon(str(it.get("kind") or ""), 10, y0 + 1.5, 9)
+            sc.item_icon(str(it.get("key") or it.get("kind") or ""), 10, y0 + 1.5, 9)
             sc.text(23, y0 + 1.5, str(it.get("zh") or it.get("key") or ""), size=8.4,
                     fill=TEXT)
             sc.text_right(228, y0 + 1.5, f"×{int(it.get('count') or 0)}", size=8.4,

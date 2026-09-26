@@ -39,6 +39,7 @@ class TurnResult:
     lines: list[str] = field(default_factory=list)
     finished: bool = False
     outcome: str = ""  # win / loss / caught / escaped / forfeit / ""
+    item_key: str = ""  # 本次投出的精灵球 key(捕获画面要显示实际用的球)
     awaiting_switch: bool = False
     growth: list[str] = field(default_factory=list)
     rewards: list[str] = field(default_factory=list)
@@ -316,6 +317,8 @@ def take_turn(
     meta = data.get("meta") or {}
     if battle.captured:
         res.outcome = "caught"
+        if action.get("type") == "catch":
+            res.item_key = str(action.get("item") or "")   # 捕获画面显示实际用的球
         _finish_catch(trainer, battle, res, day=day)
     elif battle.escaped:
         res.outcome = "escaped"
