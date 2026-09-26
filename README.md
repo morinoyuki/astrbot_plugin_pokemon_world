@@ -127,7 +127,7 @@ python tools/build_map_graph.py      # → pw/static/maps.json
 # 重建道馆数据(真实游戏数据,内置于脚本)
 python tools/build_gym_data.py       # → pw/static/gyms.json
 # 测试
-python -m pytest tests/ -q           # 24 passed
+python -m pytest tests/ -q           # 27 passed
 ruff check .
 ```
 
@@ -156,5 +156,5 @@ pw/
 ├── sprites.py          缩略图
 └── static/             data:species/moves/abilities/learnsets/locations/maps/gyms + sprites
 tools/                  数据构建脚本(开发期)
-tests/                  内核测试
+tests/                  内核测试 + 指令层集成测试
 ```

@@ -14,7 +14,7 @@ from functools import lru_cache
 
 from astrbot.api import logger
 
-from .dex import get_dex
+from .dex import _norm, get_dex
 from .items import resolve_item
 from .util import clamp
 
@@ -372,6 +372,33 @@ class WorldMap:
         if self.is_gateway(key):
             out.append("league")
         return out
+
+    def find_location(self, query: str, region: str = "") -> str:
+        """地点名 → 地图节点 key(支持中文名/英文名/标识/模糊匹配)。"""
+        q = str(query or "").strip()
+        if not q:
+            return ""
+        if q in self._index and (not region or self.region_of(q) == region):
+            return q
+        key = get_dex().find_location(q, region)
+        if key and key in self._index:
+            return key
+        # 兜底:按节点中文名/标识做包含匹配(限定在指定地区内)
+        nq = _norm(q)
+        if not nq:
+            return ""
+        pool = (
+            [k for k in self._index if self.region_of(k) == region]
+            if region
+            else list(self._index)
+        )
+        for k in sorted(pool, key=len):
+            if nq == _norm(k) or nq == _norm(self.node_zh(k)):
+                return k
+        for k in sorted(pool, key=len):
+            if nq in _norm(k) or nq in _norm(self.node_zh(k)):
+                return k
+        return ""
 
     def locations_with_species(self, species: str, limit: int = 12) -> list[dict]:
         """反查:哪些地点会出现该物种(基于真实地点分布)。"""
