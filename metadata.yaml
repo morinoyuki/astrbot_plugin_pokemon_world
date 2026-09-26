@@ -5,3 +5,4 @@ author: morinoyuki
 version: 1.0.0
 short_desc: 强规则宝可梦文字冒险(地图/对战/养成/每日事件)
 repo: https://github.com/morinoyuki/astrbot_plugin_pokemon_world
+license: GPL-3.0
