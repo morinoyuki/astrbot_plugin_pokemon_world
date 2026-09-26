@@ -721,3 +721,107 @@ def test_trade_evolution_and_rare_candy_are_usable():
         ev4 = _Event("/交换 1")
         run_cmd(p, ev4, p.cmd_trade)
         assert "宝可梦中心" in "".join(ev4.outputs)
+
+
+def test_learn_move_checks_learnset():
+    """/学招 必须查可学表 —— 否则 Lv5 鲤鱼王都能学大字爆炎。"""
+    from pw.dex import get_dex
+    from pw.engine import create_pokemon
+
+    with tempfile.TemporaryDirectory() as tmp:
+        p, ev = _fresh(tmp)
+        t = p._load(ev)
+        t.data["party"] = [create_pokemon("magikarp", 5).to_dict()]
+        t.data["party"][0]["id"] = "m1"
+        p._save(t)
+
+        ev2 = _Event("/学招 1 大字爆炎")
+        run_cmd(p, ev2, p.cmd_learn)
+        assert "学不会" in "".join(ev2.outputs), "越级招式必须拒绝"
+        assert "fireblast" not in p._load(ev2).party[0]["moves"]
+
+        # 可学表里的招式应当能学(不能把功能本身封死)
+        dex = get_dex()
+        known = [
+            str(x.get("move") or x.get("key") or "")
+            for x in dex.learnable("magikarp", 30, include_tm=True, include_tutor=True)
+        ]
+        assert known, "鲤鱼王在 Lv30 应当有可学招式"
+        # 找一个中文名能反查到的招式
+        target = next(
+            (m for m in known if (dex.moves.get(m) or {}).get("zh")), ""
+        )
+        if target:
+            t = p._load(ev2)
+            t.data["party"][0]["moves"] = ["splash", "tackle", "bounce", "flail"]
+            p._save(t)
+            zh = dex.moves[target]["zh"]
+            ev3 = _Event(f"/学招 1 {zh} 替换 4")
+            run_cmd(p, ev3, p.cmd_learn)
+            assert "学不会" not in "".join(ev3.outputs), "".join(ev3.outputs)
+            assert target in p._load(ev3).party[0]["moves"]
+
+
+def test_item_evolution_respects_gender():
+    """母奇鲁莉安不能用觉醒之石变艾路雷朵(也不能白扣石头)。"""
+    from pw.engine import create_pokemon
+
+    with tempfile.TemporaryDirectory() as tmp:
+        p, ev = _fresh(tmp)
+        t = p._load(ev)
+        mon = create_pokemon("kirlia", 20).to_dict()
+        mon["gender"] = "F"
+        mon["id"] = "m1"
+        t.data["party"] = [mon]
+        t.add_item("dawn-stone", 1)
+        p._save(t)
+
+        ev2 = _Event("/进化 1 觉醒之石")
+        run_cmd(p, ev2, p.cmd_evolve)
+        t2 = p._load(ev2)
+        assert t2.party[0]["species"] == "kirlia", "性别不符不能进化"
+        assert t2.count("dawn-stone") == 1, "失败不能消耗进化石"
+
+        # 公的可以
+        t2.party[0]["gender"] = "M"
+        p._save(t2)
+        ev3 = _Event("/进化 1 觉醒之石")
+        run_cmd(p, ev3, p.cmd_evolve)
+        assert p._load(ev3).party[0]["species"] == "gallade"
+
+
+def test_auto_evolve_handles_multiple_steps():
+    """一次大额经验要连续进化到最终形态(旧实现只进化一段,且 Lv100 后补不上)。"""
+    from pw import growth
+    from pw.engine import create_pokemon
+
+    mon = create_pokemon("charmander", 5)
+    growth.gain_exp(mon, 10 ** 7)
+    assert mon.level == 100
+    assert mon.species == "charizard", f"应直接进化到喷火龙,实际 {mon.species}"
+
+    # 不能因为环状数据死循环
+    mon2 = create_pokemon("eevee", 5)
+    growth.gain_exp(mon2, 10 ** 6)
+    assert mon2.species in {"eevee", "vaporeon", "jolteon", "flareon"}
+
+
+def test_legendary_loss_marks_fled():
+    """神兽逃跑/战败也要标记"今天惊动过",否则当天能无限重挑。"""
+    from pw import legendary
+    from pw.battle import TurnResult
+
+    with tempfile.TemporaryDirectory() as tmp:
+        p, ev = _fresh(tmp)
+        t = p._load(ev)
+        site = legendary.sites_for("kanto")[0]
+        t.data["location"] = site["location"]
+        p._save(t)
+        assert not legendary.fled_today(t, site["species"], 1)
+        p._after_battle(
+            t,
+            {"kind": "legend", "title": "传说战", "legend": site},
+            TurnResult(outcome="escaped", finished=True),
+            1,
+        )
+        assert legendary.fled_today(t, site["species"], 1), "逃跑也要标记当天逃走"

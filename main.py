@@ -1030,6 +1030,21 @@ class PokemonWorldPlugin(Star):
         if mon is None:
             yield event.plain_result("❌ 队伍序号不对。")
             return
+        # 必须查学习表:否则 Lv5 的鲤鱼王也能学会大字爆炎(绕过等级与可学表)。
+        # 等级升级时待学的招式本来就在 learnable 里,所以这里一并覆盖。
+        _mr0 = get_dex().resolve_move(tokens[1])
+        _mr0 = str(_mr0[0]) if _mr0 else ""
+        _known = {
+            str(x.get("move") or x.get("key") or "")
+            for x in get_dex().learnable(
+                mon.species, mon.level, include_tm=True, include_tutor=True
+            )
+        }
+        if not _mr0 or _mr0 not in _known:
+            yield event.plain_result(
+                f"❌ {mon.display} 学不会「{tokens[1]}」(不在它的可学表里,或等级还不够)。"
+            )
+            return
         mr = get_dex().resolve_move(tokens[1])
         if not mr:
             yield event.plain_result(f"❌ 未收录招式「{tokens[1]}」。")
@@ -1124,7 +1139,7 @@ class PokemonWorldPlugin(Star):
                 yield event.plain_result(f"❌ 背包里没有「{item}」。")
                 return
             key, entry = r
-            opts = dex.use_item_evolutions(mon.species, key)
+            opts = dex.use_item_evolutions(mon.species, key, gender=mon.gender)
             if not opts:
                 yield event.plain_result(f"⚠️ {mon.display} 对 {entry['zh']} 没有反应。")
                 return
@@ -2149,6 +2164,10 @@ class PokemonWorldPlugin(Star):
                 lines.append(
                     f"🐉 {site['zh']} 被击退了,它逃走了 —— 明天再来或许还能遇到。"
                 )
+            elif res.outcome in ("escaped", "loss", "forfeit"):
+                # 逃跑/战败也算"今天惊动过它":否则玩家可以当天无限重挑刷捕获
+                legendary.mark_fled(t, site["species"], day)
+                lines.append(f"🐉 {site['zh']} 失去了踪影 —— 明天再来找它吧。")
         rnd = meta.get("tournament_round")
         if rnd is not None:
             if res.outcome == "win":

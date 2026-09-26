@@ -94,24 +94,36 @@ def auto_evolve(
     返回进化后的物种 key;未进化返回 ""。
     """
     dex = get_dex()
-    options = dex.evolution_options(
-        mon.species,
-        level=mon.level,
-        moves=set(mon.moves),
-        item=mon.item or None,
-        friendship=mon.friendship,
-        gender=mon.gender,
-        trade=trade,
-        daytime=daytime,
-        stats=mon.stats,
-    )
-    for opt in options:
-        if not opt.get("met"):
-            continue
-        if opt.get("kind") in ("useItem",):
-            continue
-        return apply_evolution(mon, opt["target"])
-    return ""
+
+    def _options():
+        return dex.evolution_options(
+            mon.species,
+            level=mon.level,
+            moves=set(mon.moves),
+            item=mon.item or None,
+            friendship=mon.friendship,
+            gender=mon.gender,
+            trade=trade,
+            daytime=daytime,
+            stats=mon.stats,
+        )
+
+    # 循环结算:一次大额经验会跨过多级门槛(小火龙→火恐龙→喷火龙),
+    # 只进化一次会卡在中间形态,而到了 Lv100 就再也补不上(只能靠 /进化)。
+    evolved = ""
+    for _ in range(4):          # 最多 4 段,防数据环状导致死循环
+        picked = ""
+        for opt in _options():
+            if not opt.get("met") or opt.get("kind") in ("useItem", "trade"):
+                continue
+            picked = str(opt["target"])
+            break
+        if not picked:
+            break
+        evolved = apply_evolution(mon, picked)
+        if not evolved:
+            break
+    return evolved
 
 
 def apply_evolution(mon: Pokemon, target: str) -> str:
