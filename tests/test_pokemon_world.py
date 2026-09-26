@@ -829,10 +829,11 @@ def test_wild_encounter_levels_stay_in_core_range():
             continue
         lo = min(int(p["min"]) for p in pools)
         hi = max(int(p["max"]) for p in pools)
-        # 上限必须收敛(低等级侧池如摇树允许低于核心下限)
+        # 侧池已收敛进核心区间 → 遭遇等级必须落在该地点的池子区间内
         assert max(levels) <= hi, \
             f"{loc} 遭遇等级最高 {max(levels)} 超出收敛上限 {hi}"
-        assert min(levels) >= 1
+        assert min(levels) >= lo, \
+            f"{loc} 遭遇等级最低 {min(levels)} 低于池子下限 {lo}"
     assert checked
 
 
