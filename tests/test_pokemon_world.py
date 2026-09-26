@@ -1136,3 +1136,48 @@ def test_shop_stock_grows_with_badges_and_covers_items():
     assert set(unreachable) <= {"pp-up", "pp-max", "ability-capsule", "ability-patch"}, (
         f"这些道具没有任何获取途径:{unreachable}"
     )
+
+
+def test_every_form_resolves_a_sprite():
+    """每个形态都必须能画出一张图(缺图要退到基础形态,不能空白)。
+
+    数据源里 PokeAPI 完全没有"超级基格尔德"的官方像素图(所有候选 URL 都是 404),
+    旧实现正面直接返回空串 → 界面里那一只完全没有图;而背面走 baseSpecies 回退,
+    前后不一致。
+    """
+    import json
+    import os
+
+    from pw.sprites import SPRITES_DIR, sprite_path
+
+    with open(os.path.join(SPRITES_DIR, "index.json"), encoding="utf-8") as fh:
+        index = json.load(fh)
+    blank = [key for key in index if not sprite_path(key)]
+    assert not blank, f"这些形态画不出图:{blank}"
+
+    # 已知缺图清单:必须**恰好**是这一个(新增缺口要显式更新这里)
+    files = {f[:-4] for f in os.listdir(SPRITES_DIR) if f.endswith(".png")}
+    real_missing = sorted(key for key in index if key not in files)
+    assert real_missing == ["zygardemega"], (
+        f"缺图清单变了(数据源更新或出现新缺口):{real_missing}"
+    )
+
+    # 缺图时退到的基础形态必须与背面图一致
+    from pw.sprites import back_sprite_path
+
+    front = os.path.basename(sprite_path("zygardemega"))
+    back = os.path.basename(back_sprite_path("zygardemega"))
+    assert front.startswith("zygarde"), front
+    assert back.startswith("zygarde"), back
+
+
+def test_sprite_lookup_does_not_break_normal_forms():
+    from pw.sprites import sprite_path
+
+    for key, expect in (
+        ("pikachu", "pikachu.png"),
+        ("charizard", "charizard.png"),
+        ("zygarde", "zygarde.png"),
+        ("zygardecomplete", "zygardecomplete.png"),
+    ):
+        assert sprite_path(key).endswith(expect), key

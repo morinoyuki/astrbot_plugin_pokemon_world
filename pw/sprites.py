@@ -38,13 +38,41 @@ def available_count() -> int:
     return len(_available())
 
 
-def sprite_path(species_key: str) -> str:
-    """宝可梦 key → 本地缩略图路径(没有则空串)。"""
+def _base_of(species_key: str) -> str:
+    """取该形态的基础物种 key(拿不到就返回空串)。"""
+    try:
+        from .dex import get_dex
+
+        entry = get_dex().species.get(species_key) or {}
+        for field in ("baseSpecies", "base_species"):
+            base = str(entry.get(field) or "")
+            if base and base in _available():
+                return base
+    except Exception:  # 拿不到就当作没有基础形态
+        pass
+    return ""
+
+
+def sprite_path(species_key: str, base_species: str = "") -> str:
+    """宝可梦 key → 本地缩略图路径(没有则空串)。
+
+    缺图时**退到基础形态**(与背面图一致):数据源里极少数形态没有官方像素图
+    (例如 PokeAPI 完全没有超级基格尔德,所有候选 URL 都是 404),
+    旧实现直接返回空串 → 界面里那一只**完全没有图**;背面却走 baseSpecies 回退,
+    前后不一致。
+    """
     if not species_key:
         return ""
-    if species_key not in _available():
-        return ""
-    return os.path.join(SPRITES_DIR, f"{species_key}.png")
+    candidates = [species_key]
+    if base_species:
+        candidates.append(base_species)
+    base = _base_of(species_key)
+    if base:
+        candidates.append(base)
+    for key in candidates:
+        if key in _available():
+            return os.path.join(SPRITES_DIR, f"{key}.png")
+    return ""
 
 
 @lru_cache(maxsize=1)
