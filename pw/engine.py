@@ -36,6 +36,18 @@ STATUS_ZH = {
     "slp": "睡眠",
     "frz": "冰冻",
 }
+# 一击必杀招式(数据里 ohko 字段为空,规则由引擎实现)
+_OHKO_MOVES = {"fissure", "guillotine", "horndrill", "sheercold"}
+# 需要 callback/队伍/道具细节、当前引擎不模拟的招式 —— 明确告知玩家,
+# 而不是"命中却 0 伤害"让人以为卡住了
+_NO_EFFECT_MOVES = {"fling", "beatup"}
+# 数据里 basePower=0、但威力由**状态**决定的攻击招式(见 _effective_power)。
+# 必须显式列出来:下面的分派逻辑用 `basePower` 判断"是不是攻击招式",
+# 不列的话它们会掉进状态招式分支 → 命中但 0 伤害(反击/镜面反射/报恩/撒气/震级)。
+_COMPUTED_POWER_MOVES = {
+    "counter", "mirrorcoat", "metalburst", "return", "frustration", "magnitude",
+}
+
 WEATHER_ZH = {
     "sun": "大晴天",
     "rain": "下雨",
@@ -594,6 +606,7 @@ class Battle:
         if self.awaiting_switch and player_action.get("type") != "switch":
             return ["⚠️ 场上的宝可梦已经倒下,请先换人:用 `/对战 switch <队伍序号>`。"]
         self.turn += 1
+        self._taken = {"player": 0, "enemy": 0}   # 本回合各自受到的伤害(反击类用)
         self._rng_calls = 0
         self.player_damaged = False
         self.enemy_damaged = False
@@ -941,7 +954,14 @@ class Battle:
             return
 
         # 结算
-        if entry.get("category") == "Status" or _is_fixed_damage(move_key) or entry.get("basePower", 0):
+        if (
+            entry.get("category") == "Status"
+            or _is_fixed_damage(move_key)
+            or entry.get("basePower", 0)
+            or move_key in _COMPUTED_POWER_MOVES
+            or move_key in _OHKO_MOVES
+            or move_key in _NO_EFFECT_MOVES
+        ):
             self._resolve_effect(side, foe_side, mon, foe, move_key, entry)
         else:
             self._resolve_status_move(side, foe_side, mon, foe, move_key, entry)
@@ -1317,6 +1337,40 @@ class Battle:
             return
 
         power = self._effective_power(mon, foe, move_key, entry)
+        # 一击必杀类招式:数据里没有 ohko 标记(全是 None),按真实规则实现 ——
+        # 命中率 30%,对手等级高于自己时必定失败。旧实现走"0 威力"路径 →
+        # 命中却 0 伤害,玩家白白浪费回合。
+        # 反击/镜面反射/金属爆破:本回合没被打到就失败(正作规则),
+        # 否则会以"1 威力"蹭一下,看起来像 bug。
+        if move_key in ("counter", "mirrorcoat", "metalburst"):
+            mine = "player" if side is self.player else "enemy"
+            if not int(self._taken.get(mine, 0) or 0):
+                self.log.append(
+                    f"{mon.display} 的 {entry.get('zh') or move_key} 没有效果!"
+                    "(本回合还没有被打到)"
+                )
+                return
+        if move_key in _NO_EFFECT_MOVES:
+            self.log.append(
+                f"{mon.display} 使出了 {entry.get('zh') or move_key},"
+                "但这个招式在当前引擎里没有额外效果。"
+            )
+            return
+        if move_key in _OHKO_MOVES:
+            if foe.level > mon.level:
+                self.log.append(f"{foe.display} 等级更高,{entry.get('zh') or move_key} 没有效果!")
+                return
+            # 命中率不在这里判定:招式数据里 accuracy 已经是 30,引擎通用流程
+            # 已经掷过一次,再掷一次会把命中率压到 9%。
+            lost = foe.cur_hp
+            foe.cur_hp = 0
+            foe.fainted = True
+            self.log.append(
+                f"{mon.display} 使出了 {entry.get('zh') or move_key} —— 一击必杀!"
+                f"{foe.display} 倒下了!(造成 {lost} 点伤害)"
+            )
+            self._after_damage(side, foe_side, mon, foe, move_key, entry, lost)
+            return
         if power <= 0:
             self._resolve_status_move(side, foe_side, mon, foe, move_key, entry)
             return
@@ -1403,6 +1457,10 @@ class Battle:
             self._request_switch(side, mon)
 
     def _after_damage(self, side, foe_side, mon, foe, move_key, entry, dealt) -> None:
+        # 记录"本回合双方各自受到的伤害"(反击/镜面反射/金属爆破要用)
+        if dealt:
+            who = "player" if foe_side is self.player else "enemy"
+            self._taken[who] = self._taken.get(who, 0) + int(dealt)
         # 对手被击中记录(用于报复类招式)
         if foe_side is self.player:
             self.player_damaged = True
@@ -1542,6 +1600,30 @@ class Battle:
 
     def _effective_power(self, mon, foe, move_key: str, entry: dict) -> float:
         power = float(entry.get("basePower", 0) or 0)
+        # ── 数据里 basePower=0、需要按状态计算的招式 ──
+        # 这几类旧实现直接算成 0 威力:命中但 0 伤害,玩家白丢回合。
+        if move_key in ("counter", "mirrorcoat", "metalburst"):
+            mine = "player" if self.player.mon is mon else "enemy"
+            taken = int(self._taken.get(mine, 0) or 0)
+            mult = 1.5 if move_key == "metalburst" else 2.0
+            return max(1.0, taken * mult)
+        if move_key == "return":
+            return max(1.0, mon.friendship / 2.5)
+        if move_key == "frustration":
+            return max(1.0, (255 - mon.friendship) / 2.5)
+        if move_key == "magnitude":
+            rng = self._rng(41)
+            table = [10, 30, 50, 70, 90, 110, 150]
+            weights = [4, 8, 16, 32, 16, 8, 4]
+            total = sum(weights)
+            roll = rng.random() * total
+            acc = 0
+            for mag, w in zip(table, weights, strict=True):
+                acc += w
+                if roll < acc:
+                    self.log.append(f"震级 {mag}!")
+                    return float(mag)
+            return 70.0
         targets_hp = foe.hp_frac()
         if move_key in ("lowkick", "grassknot"):
             w = float(foe.entry.get("weightkg", 10) or 10)

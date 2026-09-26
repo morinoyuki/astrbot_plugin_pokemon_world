@@ -253,3 +253,116 @@ def test_invalid_switch_does_not_clear_awaiting_switch():
     bt.step({"type": "switch", "index": 1})         # 合法换人
     assert bt.awaiting_switch is False
     assert bt.player.mon.display == bench.display
+
+
+def test_base_power_zero_moves_actually_work():
+    """数据里 basePower=0 的攻击招式必须真的产生效果。
+
+    分派逻辑原本用 `basePower` 判断"是不是攻击招式",于是反击/镜面反射/金属爆破/
+    报恩/撒气/震级 全部掉进状态招式分支 → 命中却 0 伤害(玩家白丢回合)。
+    """
+    from pw.engine import _COMPUTED_POWER_MOVES
+    from pw.engine import create_pokemon as mk
+
+    def battle(move, *, friendship=None, foe="pikachu", seed=3, setup=None):
+        a = mk("snorlax", 50, moves=[move])
+        a.pp = {move: 30}
+        if friendship is not None:
+            a.friendship = friendship
+        b = mk(foe, 50, moves=["tackle"])
+        b.pp = {"tackle": 30}
+        bt = start_battle([a], [b], seed=seed)
+        bt.start()
+        return bt, a, b
+
+    # 报恩(亲密越高越强)/ 撒气(越低越强)
+    hi, a1, _ = battle("return", friendship=255)
+    lo, a2, _ = battle("return", friendship=0)
+    assert hi._effective_power(a1, hi.enemy.mon, "return", {"basePower": 0}) == 102
+    assert lo._effective_power(a2, lo.enemy.mon, "return", {"basePower": 0}) == 1
+
+    # 震级:落在真实震级表内
+    bt, mon, foe = battle("magnitude")
+    power = bt._effective_power(mon, foe, "magnitude", {"basePower": 0})
+    assert power in {10, 30, 50, 70, 90, 110, 150}, power
+
+    # 反击:被打到之后才有伤害;没被打到则失败
+    a = mk("snorlax", 50, moves=["counter"])
+    a.pp = {"counter": 30}
+    b = mk("electrode", 60, moves=["tackle"])
+    b.pp = {"tackle": 30}
+    bt = start_battle([a], [b], seed=4)
+    bt.start()
+    lines = bt.step({"type": "move", "move": "counter"})
+    assert any("造成" in line and b.display in line for line in lines), lines
+
+    # 本回合没被打到(对手用变化招式)→ 明确失败,而不是"1 威力蹭一下"。
+    # 注意反击有 -5 先制度,所以只有对手也打不到你时才可能出现这种情况。
+    a2 = mk("snorlax", 50, moves=["counter"])
+    a2.pp = {"counter": 30}
+    b2 = mk("pikachu", 50, moves=["growl"])
+    b2.pp = {"growl": 30}
+    bt2 = start_battle([a2], [b2], seed=4)
+    bt2.start()
+    lines2 = bt2.step({"type": "move", "move": "counter"})
+    assert any("没有效果" in line for line in lines2), lines2
+
+    assert {"counter", "mirrorcoat", "metalburst", "return",
+            "frustration", "magnitude"} <= _COMPUTED_POWER_MOVES
+
+
+def test_ohko_moves_follow_real_rule():
+    """一击必杀:命中即 KO;对手等级更高时必定失败(命中率由数据里的 accuracy=30 管)。"""
+    from pw.engine import create_pokemon as mk
+
+    # 低等级对高等级 → 只要命中判定通过,就必须明确失败(命中率 30%,要扫种子)
+    refused = False
+    for seed in range(1, 40):
+        a = mk("machamp", 40, moves=["fissure"])
+        a.pp = {"fissure": 50}
+        b = mk("snorlax", 50, moves=["tackle"])
+        b.pp = {"tackle": 30}
+        bt = start_battle([a], [b], seed=seed)
+        bt.start()
+        lines = bt.step({"type": "move", "move": "fissure"})
+        if any("但是没有命中" in line for line in lines):
+            continue
+        assert any("没有效果" in line for line in lines), lines
+        assert not b.fainted, "等级更高时一击必杀不能生效"
+        refused = True
+        break
+    assert refused, "应当有一个种子命中判定通过"
+
+    # 同等级:扫种子直到命中一次,必须直接 KO
+    koed = False
+    for seed in range(1, 30):
+        a = mk("machamp", 50, moves=["fissure"])
+        a.pp = {"fissure": 50}
+        b = mk("snorlax", 50, moves=["tackle"])
+        b.pp = {"tackle": 30}
+        bt = start_battle([a], [b], seed=seed)
+        bt.start()
+        lines = bt.step({"type": "move", "move": "fissure"})
+        if any("一击必杀" in line for line in lines):
+            assert b.fainted and b.cur_hp == 0, "一击必杀必须直接倒下"
+            koed = True
+            break
+    assert koed, "30 个种子内应当命中过一次(命中率 30%)"
+
+
+def test_unimplemented_moves_say_so():
+    """引擎不模拟的 callback 招式要明确告知,而不是静默 0 伤害。"""
+    from pw.engine import create_pokemon as mk
+
+    for move in ("fling", "beatup"):
+        a = mk("snorlax", 50, moves=[move])
+        a.pp = {move: 20}
+        b = mk("pikachu", 50, moves=["tackle"])
+        b.pp = {"tackle": 30}
+        bt = start_battle([a], [b], seed=5)
+        bt.start()
+        for _ in range(4):
+            lines = bt.step({"type": "move", "move": move})
+            if any("引擎" in line for line in lines):
+                break
+        assert any("引擎" in line for line in lines), lines
