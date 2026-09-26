@@ -1255,7 +1255,16 @@ class PokemonWorldPlugin(Star):
         arg = self._args(event, ("重置世界", "reset_world", "删除存档")).strip()
         admins = [a.strip() for a in str(self._cfg("admin_uids", "") or "").split(",") if a.strip()]
         if arg in ("all", "-all", "全部"):
-            if admins and uid not in admins:
+            # 必须"默认拒绝":原来写的是 `if admins and uid not in admins`,
+            # 于是**没配置管理员(默认情况)时任何玩家都能清空全群存档**。
+            # 清空是破坏性操作,宁可拒绝也不能放开。
+            if not admins:
+                yield event.plain_result(
+                    "❌ 未配置管理员(`admin_uids`),为避免误删,清空全群存档已禁用。"
+                    "请先在插件配置里填写管理员 QQ。"
+                )
+                return
+            if uid not in admins:
                 yield event.plain_result("❌ 只有管理员能清空全群存档。")
                 return
             n = self.trainers.delete_scope(scope)

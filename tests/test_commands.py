@@ -548,3 +548,31 @@ def test_temp_images_are_unique_and_pruned():
             with contextlib.suppress(OSError):
                 os.remove(path)
         assert glob
+
+
+def test_clear_all_saves_requires_configured_admin():
+    """`/重置世界 -all` 是破坏性操作:没配置管理员时必须拒绝。
+
+    历史 bug:`if admins and uid not in admins` —— 默认 admin_uids 为空,
+    条件永远为假,**任何玩家都能清空全群存档**。
+    """
+    def _run(admin_cfg):
+        tmp = tempfile.mkdtemp()
+        p = _Cmd(tmp)
+        p.config = {"ui_image": False, "quest_enable": False, "admin_uids": admin_cfg}
+        run_cmd(p, _Event("/开始 小智 新叶喵"), p.cmd_start)
+        ev = _Event("/重置世界 -all")
+        run_cmd(p, ev, p.cmd_reset)
+        return "".join(ev.outputs), p.trainers.exists("g10086", "u1")
+
+    out, saved = _run("")                 # 默认:没配置管理员
+    assert "禁用" in out or "管理员" in out, out
+    assert saved, "没配置管理员时绝不能清空存档"
+
+    out, saved = _run("999,888")          # 别人是管理员
+    assert "只有管理员" in out
+    assert saved
+
+    out, saved = _run("u1")               # 自己是管理员(-all 合法)
+    assert "已清空" in out
+    assert not saved
