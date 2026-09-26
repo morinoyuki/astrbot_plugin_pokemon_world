@@ -1,0 +1,7 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.venv/
+# AstrBot 运行/测试时产生的本地数据(不属于插件源码)
+/data/
