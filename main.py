@@ -358,6 +358,7 @@ class PokemonWorldPlugin(Star):
             event, "card",
             lambda: UI.render_trainer_card(self._card_payload(t), scale=self._img_scale()),
             text=text,
+            hint="行动:`/探索` 前进、`/任务` 看委托、`/帮助` 全指令",
         ):
             yield r
 
@@ -412,6 +413,7 @@ class PokemonWorldPlugin(Star):
                 selected=payload["selected"], scale=self._img_scale(),
             ),
             text="\n".join(lines),
+            hint="使用:`/使用 <道具> [队伍序号]`、`/交换 <队伍序号>`(需通信设备)",
         ):
             yield r
 
@@ -442,6 +444,7 @@ class PokemonWorldPlugin(Star):
                 scale=self._img_scale(),
             ),
             text=text,
+            hint="移动:`/前往 <地点>`(只能去相邻地点)、`/飞行 <地点>`(需徽章)",
         ):
             yield r
 
@@ -543,9 +546,12 @@ class PokemonWorldPlugin(Star):
                 )
                 self._save(t)
                 notice.append(f"🐉 传说的宝可梦出现了:{site['zh']} Lv{site['level']}!")
+                _hint = self._battle_hint(t)
                 async for r in self._emit_battle(
                     event, t, meta, log,
-                    text="\n".join(notice) + "\n" + self._battle_hint(t),
+                    text="\n".join(notice) + "\n" + _hint,
+                    keep="\n".join(notice) + "\n" + _hint,
+                    status=True,
                 ):
                     yield r
                 return
@@ -555,8 +561,12 @@ class PokemonWorldPlugin(Star):
                 log = B.start(t, meta["team"], kind="rocket", meta=meta, day=state.day)
                 self._save(t)
                 notice.append(f"🚀 {EV.event_text(ev)}")
+                _hint = self._battle_hint(t)
                 async for r in self._emit_battle(
-                    event, t, meta, log, text="\n".join(notice) + "\n" + self._battle_intro(meta, log)
+                    event, t, meta, log,
+                    text="\n".join(notice) + "\n" + self._battle_intro(meta, log),
+                    keep="\n".join(notice) + "\n" + _hint,
+                    status=True,
                 ):
                     yield r
                 return
@@ -609,10 +619,13 @@ class PokemonWorldPlugin(Star):
                     day=state.day,
                 )
                 self._save(t)
+                _hint = self._battle_hint(t)
                 async for r in self._emit_battle(
                     event, t, meta, log,
                     text="\n".join(notice) + "\n" + self._battle_intro(meta, log)
-                    + f"\n\n{self._battle_hint(t)}",
+                    + f"\n\n{_hint}",
+                    keep="\n".join(notice) + "\n" + _hint,
+                    status=True,
                 ):
                     yield r
                 return
@@ -679,17 +692,27 @@ class PokemonWorldPlugin(Star):
                 return
             text = "\n".join(res.lines)
             if res.finished:
-                text += "\n\n" + self._result_text(t, res)
-                text = self._after_battle(t, meta, res, state.day) + text
+                # 图片里会有对话框(日志)与结果卡(胜负/奖励),所以图片路径只保留
+                # 图片画不出来的部分:主线/神兽/大赛推进 + 委托完成 + LLM 叙事。
+                after = self._after_battle(t, meta, res, state.day)
+                text = after + "\n\n" + self._result_text(t, res) + "\n\n" + text
                 text = await self._narrate(
                     "对战结束", res.lines + res.rewards + res.growth, text
                 )
-                async for r in self._emit_battle(event, t, meta, res.lines, text=text):
+                keep = await self._narrate(
+                    "对战结束", res.lines + res.rewards + res.growth, after,
+                )
+                async for r in self._emit_battle(
+                    event, t, meta, res.lines, text=text, keep=keep
+                ):
                     yield r
                 async for r in self._emit_result_cards(event, t, meta, res):
                     yield r
                 return
-            async for r in self._emit_battle(event, t, meta, res.lines, text=text):
+            async for r in self._emit_battle(
+                event, t, meta, res.lines,
+                text=text, keep=self._battle_hint(t), status=True,
+            ):
                 yield r
             if res.awaiting_switch:
                 yield event.plain_result(
@@ -700,7 +723,6 @@ class PokemonWorldPlugin(Star):
                 yield event.plain_result(
                     await self._narrate("对战回合", res.lines, text)
                 )
-            yield event.plain_result(B.status_text(t))
 
     @filter.command("捕捉", alias={"catch", "投球"})
     async def cmd_catch(self, event: AstrMessageEvent):
@@ -830,6 +852,7 @@ class PokemonWorldPlugin(Star):
                 scale=self._img_scale(),
             ),
             text=text,
+            hint="挑战:`/道馆 挑战`(需要馆主在场)",
         ):
             yield r
 
@@ -891,6 +914,7 @@ class PokemonWorldPlugin(Star):
                     scale=self._img_scale(),
                 ),
                 text="\n".join(lines),
+                hint="挑战:`/联盟 挑战`(四天王连胜才能进冠军杯)",
             ):
                 yield r
             return
@@ -976,6 +1000,7 @@ class PokemonWorldPlugin(Star):
                     scale=self._img_scale(),
                 ),
                 text=text,
+                hint="买卖:`/商店 买 <道具> [数量]`、`/商店 卖 <道具> [数量]`",
             ):
                 yield r
             return
@@ -1391,6 +1416,7 @@ class PokemonWorldPlugin(Star):
                 locations=locs, scale=self._img_scale(),
             ),
             text="\n".join(lines),
+            hint="行动:`/探索` 前进、`/队伍` 查看队伍、`/帮助` 全指令",
         ):
             yield r
 
@@ -1482,6 +1508,8 @@ class PokemonWorldPlugin(Star):
                 scale=self._img_scale(),
             ),
             text=text,
+            hint="委托进度自动记录 —— 行动:`/探索` 前进、`/捕捉 <球>` 收服、"
+                 "`/对战 <序号>` 出招",
         ):
             yield r
 
@@ -1667,13 +1695,35 @@ class PokemonWorldPlugin(Star):
         return f"⚔️ {title}!\n" + "\n".join(f"· {x}" for x in log[-8:])
 
     def _battle_hint(self, t: Trainer) -> str:
-        mon = t.mon(0)
-        if not mon:
+        """对战行动提示 —— **必须列出我方出战宝可梦的招式**,否则玩家不知道能出什么招。
+
+        战斗画面是仿 GBA 的对话框 + 血条,画不出招式表;招式与 PP 只能靠这行文本。
+        数值取自**对战内的队伍**(权威值:回合中 PP 会变),出战序号用
+        `battle.player.active`,不能写死 party[0] —— 换人后 party[0] 不一定在场。
+        """
+        b = (B.session(t) or {}).get("battle") or {}
+        side = b.get("player") or {}
+        active = int(side.get("active") or 0)
+        party = side.get("party") or []
+        mon = B.dict_to_mon(party[active]) if 0 <= active < len(party) else t.mon(0)
+        if mon is None:
             return ""
-        return (
-            "行动示例:`/对战 1`(招式序号)、`/捕捉 精灵球`、`/对战 switch 2`、"
-            "`/对战 item 伤药`、`/对战 run`"
+        dex = get_dex()
+        zh = mon.nickname or (dex.species.get(mon.species) or {}).get("zh") or mon.species
+        types = "/".join(dex.type_label(x) for x in (mon.types or []))
+        moves = " ".join(
+            f"{i}.{growth.move_zh(m)}({mon.pp.get(m, 0)})"
+            for i, m in enumerate(mon.moves, 1)
+        ) or "无"
+        out = [f"🔵 {zh} Lv{mon.level} [{types}] 招式:{moves}"]
+        out.append(
+            f"行动:`/对战 <1-{max(1, len(mon.moves))}>` 出招、`/捕捉 精灵球`、"
+            f"`/对战 switch <1-{max(1, len(t.party))}>` 换人、"
+            "`/对战 item <道具>`、`/对战 run`"
         )
+        if len(t.party) > 1:
+            out.append(f"(出战:队伍第 {active + 1} 只)")
+        return "\n".join(out)
 
     def _result_text(self, t: Trainer, res: B.TurnResult) -> str:
         head = {
@@ -1807,7 +1857,10 @@ class PokemonWorldPlugin(Star):
             )
             self._save(t)
             async for r in self._emit_battle(
-                event, t, meta, log, text=self._battle_intro(meta, log)
+                event, t, meta, log,
+                text=self._battle_intro(meta, log),
+                keep=self._battle_hint(t),
+                status=True,
             ):
                 yield r
 
@@ -1857,10 +1910,12 @@ class PokemonWorldPlugin(Star):
                     weather=_battle_weather(state, t.region), day=state.day,
                 )
                 self._save(t)
+                _hint = self._battle_hint(t)
                 async for r in self._emit_battle(
                     event, t, meta, log,
-                    text=self._battle_intro(meta, log)
-                    + f"\n\n{self._battle_hint(t)}",
+                    text=self._battle_intro(meta, log) + f"\n\n{_hint}",
+                    keep=_hint,
+                status=True,
                 ):
                     yield r
                 return
@@ -1887,6 +1942,7 @@ class PokemonWorldPlugin(Star):
                     scale=self._img_scale(),
                 ),
                 text=legendary.panel_text(t, world=world, day=state.day),
+                hint="挑战:`/神兽 挑战 <名字>`(需先解锁对应地区)",
             ):
                 yield r
 
@@ -1929,6 +1985,7 @@ class PokemonWorldPlugin(Star):
                     is_champion=bool(t.flag("world_champion")), scale=self._img_scale(),
                 ),
                 text="\n".join(lines),
+                hint="挑战:`/大赛 挑战`(连胜 3 轮成为世界冠军)",
             ):
                 yield r
             return
@@ -1952,7 +2009,9 @@ class PokemonWorldPlugin(Star):
             )
             self._save(t)
             async for r in self._emit_battle(
-                event, t, meta, log, text=self._battle_intro(meta, log)
+                event, t, meta, log,
+                text=self._battle_intro(meta, log),
+                keep=self._battle_hint(t), status=True,
             ):
                 yield r
 
@@ -2024,6 +2083,7 @@ class PokemonWorldPlugin(Star):
                         scale=self._img_scale(),
                     ),
                     text="",
+                    hint="推进:`/主线 挑战` 击退敌方组织、`/主线` 查看剧情",
                 ):
                     yield r
             return
@@ -2083,21 +2143,28 @@ class PokemonWorldPlugin(Star):
         return int(coerce_int(self._cfg("battle_image_scale", 3), 3) or 3)
 
     async def _emit_ui(self, event: AstrMessageEvent, label: str, builder, *,
-                       text: str = ""):
-        """按配置输出界面图片(仿 GBA 菜单);失败或未开启则回退文本。"""
+                       text: str = "", hint: str = ""):
+        """按配置输出界面图片(仿 GBA 菜单);失败或未开启则回退文本。
+
+        图片成功时**只**追加 `hint`(玩家接下来要敲什么指令这类图片里画不出来的
+        信息);界面已经画出来的内容不再重复发一遍文本 —— 之前是"图片 + 整段
+        同样的文本",看着很冗余。`text` 专门留给渲染失败时的文本回退。
+        """
         if self._cfg_bool("ui_image", True):
             try:
                 data = builder()
                 if data:
                     path = self._temp_image(data, f"pw_ui_{label}")
                     comps = [Image.fromFileSystem(path)]
-                    comps.append(Plain(text) if text else Plain(" "))
+                    if hint:
+                        comps.append(Plain(hint))
                     yield event.chain_result(comps)
                     return
             except Exception as e:  # 渲染失败必须回退文本
                 logger.debug("宝可梦世界: %s 界面渲染失败,回退文本: %s", label, e)
-        if text:
-            yield event.plain_result(text)
+        body = "\n".join(x for x in (text, hint) if x)
+        if body:
+            yield event.plain_result(body)
 
     def _party_payload(self, t: Trainer) -> list[dict]:
         """队伍界面数据。"""
@@ -2300,8 +2367,18 @@ class PokemonWorldPlugin(Star):
         *,
         res: B.TurnResult | None = None,
         text: str = "",
+        keep: str = "",
+        status: bool = False,
     ):
-        """按配置输出战斗画面:优先图片(仿经典对战界面),失败自动回退文本。"""
+        """按配置输出战斗画面:优先图片(仿经典对战界面),失败自动回退文本。
+
+        图片成功时**只**追加 `keep`:战斗日志已经画在对话框里了,不该再发一遍;
+        但**招式提示**、主线/神兽/大赛推进、LLM 叙事这些图片里没有的信息必须保留。
+
+        `status=True` 时文本回退用 `B.status_text()`(它本身就包含血条/招式/日志),
+        这样图片路径不会再额外跟一条重复的状态文本 —— 之前
+        `cmd_battle` 每回合都无条件再发一次 `status_text`,和图片内容完全重复。
+        """
         if self._cfg_bool("battle_image", True):
             try:
                 from .pw import battle_render
@@ -2323,16 +2400,26 @@ class PokemonWorldPlugin(Star):
                     if data:
                         path = self._temp_image(data, f"pw_battle_{t.uid}")
                         comps = [Image.fromFileSystem(path)]
-                        if text:
-                            comps.append(Plain(text))
-                        else:
-                            comps.append(Plain(" "))
+                        if keep:
+                            comps.append(Plain(keep))
                         yield event.chain_result(comps)
                         return
             except Exception as e:  # 渲染失败必须回退文本
                 logger.debug("宝可梦世界: 战斗图片渲染失败,回退文本: %s", e)
-        if text:
-            yield event.plain_result(text)
+        if status and B.in_battle(t):
+            body = B.status_text(t)
+            head = keep or text
+            if head and "招式:" in body:
+                # status_text 已经列了招式,提示里那行"🔵 … 招式:…"就多余了
+                head = "\n".join(
+                    ln for ln in head.split("\n") if not ln.startswith("🔵 ")
+                ).strip()
+            if head and head not in body:
+                body = f"{head}\n\n{body}"
+        else:
+            body = text or keep
+        if body:
+            yield event.plain_result(body)
 
 # ── 模块级小工具 ──────────────────────────────────────────────────
 def _sp_zh(species: str | None) -> str:

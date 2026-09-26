@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import sys
 import tempfile
 
@@ -585,3 +586,49 @@ def test_fallback_quest_pools_and_completion_guards():
         t.data["dex_seen"] = list(get_dex().species.keys())
         kinds = {Q.fallback_quest(t, 7, idx=i)["objective"]["kind"] for i in range(200)}
         assert "travel" not in kinds and "dex" not in kinds, f"实际 {kinds}"
+
+
+def test_daily_quests_never_duplicate():
+    """同一天刷出的委托不许重复 —— 标题重复或目标完全相同都算重复。
+
+    实测 LLM 会返回两条标题一模一样的委托(「捕虫少年阿明「帮忙补充图鉴」、
+    迷你裙少女「帮忙补充图鉴」」),玩家看到就像同一个任务刷了两遍。
+    """
+    from pw import quests as Q
+    from pw.player import new_trainer
+
+    def dump(t):
+        return [
+            (str(q.get("title")), Q._obj_key(q)) for q in Q.active(t)
+        ]
+
+    # ① LLM 故意返回两条完全一样的委托
+    class _DupNarrator:
+        def available(self):
+            return True
+
+        async def json(self, *a, **kw):
+            q = {
+                "giver": "捕虫少年阿明",
+                "title": "帮忙补充图鉴",
+                "desc": "帮我抓 2 只。",
+                "objective": {"kind": "catch", "count": 2},
+                "reward": {"money": 200, "items": {"poke-ball": 1}},
+            }
+            return {"quests": [dict(q), dict(q, giver="迷你裙少女")]}
+
+    t = new_trainer("u1", "g1", "小智", starter="新叶喵", day=1)
+    added = asyncio.run(Q.roll_daily_async(t, 1, _DupNarrator()))
+    titles = [q["title"] for q in added]
+    keys = [Q._obj_key(q) for q in added]
+    assert len(titles) == len(set(titles)), f"标题重复:{titles}"
+    assert len(keys) == len(set(keys)), f"目标重复:{keys}"
+    assert len(dump(t)) == len(set(dump(t)))
+
+    # ② 本地生成器:同一天多次刷新/多天也不能撞(含与**已有**委托比较)
+    t2 = new_trainer("u2", "g1", "小智", starter="新叶喵", day=1)
+    for day in range(1, 8):
+        Q.roll_daily(t2, day)
+        rows = dump(t2)
+        assert len(rows) == len(set(rows)), f"第 {day} 天出现重复委托:{rows}"
+        assert len(Q.active(t2)) <= Q.MAX_ACTIVE

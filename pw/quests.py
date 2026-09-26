@@ -412,6 +412,67 @@ def _world():
 
 
 # ── 每日生成 ──
+# ════════════════════════════════════════════════════════════════
+# 去重
+# ════════════════════════════════════════════════════════════════
+def _obj_key(q: dict) -> tuple:
+    """目标唯一标识:类别 + 参数 + 数量,全都一样才算同一个任务。"""
+    obj = q.get("objective") if isinstance(q.get("objective"), dict) else {}
+    return (
+        str(obj.get("kind") or ""),
+        str(obj.get("type") or ""),
+        str(obj.get("species") or ""),
+        int(obj.get("count") or 0),
+    )
+
+
+def _dedupe(trainer, day: int, box: dict, added: list[dict]) -> list[dict]:
+    """去掉"标题或目标完全相同"的委托,返回最终新增的委托。
+
+    实测(llm 出题)一次委托刷新生成了两条:
+      捕虫少年阿明「帮忙补充图鉴」、迷你裙少女「帮忙补充图鉴」
+    —— 标题一字不差,玩家看到的就是"同一个任务刷了两遍"。
+    本地生成器也有同样风险(两次都掷到 `steps` 且数量相同时标题就撞了)。
+
+    规则:标题不能重复,目标也不能重复;**还要跟已经挂着的旧委托比**,
+    免得跨天刷出一模一样的。撞了的先用本地生成器换一条(idx 换着试),
+    换不出来就**丢弃** —— 宁可少一条,也不要给玩家两个看起来一样的东西。
+    """
+    pre = active(trainer)[: max(0, len(active(trainer)) - len(added))]
+    seen_t = {str(q.get("title") or "") for q in pre}
+    seen_o = {_obj_key(q) for q in pre}
+    keep: list[dict] = []
+    for i, q in enumerate(added):
+        title = str(q.get("title") or "")
+        key = _obj_key(q)
+        if title and title not in seen_t and key not in seen_o:
+            seen_t.add(title)
+            seen_o.add(key)
+            keep.append(q)
+            continue
+        repl = None
+        for j in range(8):                      # 换一条本地生成的
+            cand = fallback_quest(trainer, day, idx=1000 + i * 10 + j)
+            ct, ck = str(cand.get("title") or ""), _obj_key(cand)
+            if ct and ct not in seen_t and ck not in seen_o:
+                repl = cand
+                break
+        if repl is None:
+            logger.debug("宝可梦世界: 委托重复且换不出新任务,丢弃一条:%s", title or key)
+            continue
+        seen_t.add(str(repl.get("title") or ""))
+        seen_o.add(_obj_key(repl))
+        keep.append(repl)
+    # `added` 里的条目**已经**追加进 box["active"] 了,这里按对象身份(id)
+    # 原地替换成 keep 里的版本、丢掉被去重掉的 —— 用 `in` 比较会按值相等误判。
+    repl = {id(o): k for o, k in zip(added, keep, strict=False)}
+    box["active"] = [
+        (repl.get(id(q)) or q) if any(q is o for o in added) else q
+        for q in box["active"]
+    ]
+    return keep
+
+
 def roll_daily(trainer, day: int, *, count: int = DAILY_COUNT) -> list[dict]:
     """不依赖 LLM 的每日任务生成(幂等:同一天只生成一次)。"""
     box = _box(trainer)
@@ -425,7 +486,7 @@ def roll_daily(trainer, day: int, *, count: int = DAILY_COUNT) -> list[dict]:
         q = fallback_quest(trainer, day, idx=i)
         box["active"].append(q)
         added.append(q)
-    return added
+    return _dedupe(trainer, day, box, added)
 
 
 async def roll_daily_async(trainer, day: int, narrator, *, count: int = DAILY_COUNT) -> list[dict]:
@@ -461,7 +522,7 @@ async def roll_daily_async(trainer, day: int, narrator, *, count: int = DAILY_CO
         q = fallback_quest(trainer, day, idx=i)
         box["active"].append(q)
         added.append(q)
-    return added
+    return _dedupe(trainer, day, box, added)
 
 
 def _expire(trainer, day: int) -> list[dict]:

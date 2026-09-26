@@ -130,22 +130,28 @@ def test_full_command_flow():
         assert t.party[0]["species"] == "sprigatito"
         assert t.bag["poke-ball"] == 5
 
-        # /状态
+        # /状态 —— 内容断言走文本回退路径(图片路径只带提示行,不再重复整段文本)
+        p.config = {"ui_image": False}
         ev = _Event("/状态")
         run_cmd(p, ev, p.cmd_status)
         assert any("训练家档案" in x for x in ev.outputs)
         assert any("真新镇" in x or "出发" in x or "危险度" in x for x in ev.outputs)
+        p.config = None
 
         # /队伍
+        p.config = {"ui_image": False}
         ev = _Event("/队伍")
         run_cmd(p, ev, p.cmd_team)
         assert any("新叶喵" in x for x in ev.outputs)
-        assert any(x.startswith("<chain") or "队伍" in x for x in ev.outputs)
+        assert any("库存" in x for x in ev.outputs), "文本回退应给出完整队伍信息"
+        p.config = None
 
         # /地图
+        p.config = {"ui_image": False}
         ev = _Event("/地图")
         run_cmd(p, ev, p.cmd_map)
         assert any("真新镇" in x for x in ev.outputs)
+        p.config = None
 
         # /前往(相邻 → 成功;不相邻 → 拒绝)
         world = WorldMap()
@@ -175,10 +181,12 @@ def test_full_command_flow():
         assert any("没有宝可梦中心" in x for x in ev.outputs)
 
         # /今日(含事件)
+        p.config = {"ui_image": False}
         ev = _Event("/今日")
         run_cmd(p, ev, p.cmd_today)
         joined = "".join(ev.outputs)
-        assert "游戏日" in joined or "第" in joined
+        assert "世界日" in joined or "第" in joined
+        p.config = None
 
         # /探索:反复探索直到开战或拿到道具
         started = False
@@ -186,7 +194,8 @@ def test_full_command_flow():
             ev = _Event("/探索")
             run_cmd(p, ev, p.cmd_explore)
             joined = "".join(ev.outputs)
-            if "⚔️" in joined:
+            # 图片路径不会把战斗正文再发一遍,所以用**内核状态**判断是否开战
+            if p._load(_Event()).data.get("battle") or "⚔️" in joined:
                 started = True
                 break
             # 步数会影响掷骰,推进一下
@@ -217,9 +226,11 @@ def test_full_command_flow():
         assert finished or not p._load(_Event()).data.get("battle")
 
         # /图鉴
+        p.config = {"ui_image": False}
         ev = _Event("/图鉴 新叶喵")
         run_cmd(p, ev, p.cmd_dex)
         assert any("新叶喵" in x for x in ev.outputs)
+        p.config = None
 
         # /学招 / 进化(无待学、无法进化时应给出提示而非崩溃)
         ev = _Event("/学招 1 飞叶快刀")
@@ -241,9 +252,11 @@ def test_shop_buy_sell_at_town():
         ev = _Event("/开始 小智 新叶喵")
         run_cmd(p, ev, p.cmd_start)
 
+        p.config = {"ui_image": False}   # 文本回退路径才能断言内容
         ev = _Event("/商店")
         run_cmd(p, ev, p.cmd_shop)
         assert any("商店" in x and "余额" in x for x in ev.outputs)
+        p.config = None
 
         before = p._load(ev).money
         ev = _Event("/商店 买 伤药 2")
@@ -293,9 +306,11 @@ def test_gym_and_league_flow():
         t.data["party"] = [d]
         p._save(t)
 
+        p.config = {"ui_image": False}
         ev = _Event("/道馆")
         run_cmd(p, ev, p.cmd_gym)
         assert any("小刚" in x for x in ev.outputs)
+        p.config = None
 
         ev = _Event("/道馆 挑战")
         run_cmd(p, ev, p.cmd_gym)
@@ -322,12 +337,14 @@ def test_story_legend_tournament_commands():
         ev = _Event("/开始 小智 新叶喵")
         run_cmd(p, ev, p.cmd_start)
 
-        # /主线 面板
+        # /主线 面板(文本回退路径:图片路径不含章节文字)
+        p.config = {"ui_image": False}
         ev = _Event("/主线")
         run_cmd(p, ev, p.cmd_story)
         joined = "".join(ev.outputs)
         assert ("主线" in joined and "敌对组织" not in joined) or "主线" in joined
         assert "当前目标" in joined
+        p.config = None
 
         # /主线 挑战(不在正确地点 → 拒绝)
         t = p._load(ev)
@@ -372,9 +389,11 @@ def test_story_legend_tournament_commands():
         assert cur["key"] in (t.flag("story:kanto", []) or [])
 
         # /神兽 面板
+        p.config = {"ui_image": False}
         ev = _Event("/神兽")
         run_cmd(p, ev, p.cmd_legend)
         assert any("传说" in x for x in ev.outputs)
+        p.config = None
         ev = _Event("/神兽 挑战 急冻鸟")
         run_cmd(p, ev, p.cmd_legend)
         assert any(("这里没有" in x) or ("此地没有" in x) or ("传说的宝可梦" in x) for x in ev.outputs)
@@ -388,10 +407,12 @@ def test_story_legend_tournament_commands():
         for i in range(1, int(site["need"]) + 1):
             t.add_badge("kanto", i)
         p._save(t)
+        p.config = {"ui_image": False, "battle_image": False}
         ev = _Event("/神兽 挑战 急冻鸟")
         run_cmd(p, ev, p.cmd_legend)
         assert p._load(ev).data.get("battle"), ev.outputs
         assert any("传说的宝可梦" in x for x in ev.outputs)
+        p.config = None
 
         # /大赛 未夺冠 → 拒绝
         ev = _Event("/大赛")
@@ -402,9 +423,11 @@ def test_story_legend_tournament_commands():
         t = p._load(ev)
         t.set_flag("champion:kanto", True)
         p._save(t)
+        p.config = {"ui_image": False}
         ev = _Event("/大赛")
         run_cmd(p, ev, p.cmd_tournament)
         assert any("世界大赛" in x for x in ev.outputs)
+        p.config = None
         t = p._load(ev)
         t.data["battle"] = None
         p._save(t)
@@ -431,8 +454,14 @@ def test_menu_screens_emit_images_when_enabled():
             run_cmd(p, ev, fn)
             joined = "".join(ev.outputs)
             assert "<chain:" in joined, f"{cmd} 没有输出图片:{ev.outputs}"
-            # 图片卡片里也应夹带原来的文字说明
-            assert len(joined) > 10
+            # 图片路径绝不重发整段正文:要么纯图片(<chain:1>),要么只多一行短提示
+            assert "<chain:2>" not in joined or len(joined) < 200, (
+                f"{cmd} 附带的文本过长(疑似重复发正文):{joined[:120]}"
+            )
+            if "<chain:2>" in joined:
+                assert any(
+                    k in joined for k in ("行动", "使用:", "移动:", "买卖:", "挑战:")
+                ), f"{cmd} 附带的文本不是指令提示:{joined[:120]}"
         # 关闭开关 → 回退纯文本
         p.config = {"ui_image": False}
         ev = _Event("/队伍")
@@ -981,3 +1010,88 @@ def test_second_gym_at_same_location_becomes_reachable():
         ev4 = _Event("/道馆")
         run_cmd(p, ev4, p.cmd_gym)
         assert "柳伯" not in "".join(ev4.outputs)
+
+
+def test_image_mode_does_not_resend_full_text():
+    """图片路径只带一行指令提示,不再把界面里的正文重发一遍。
+
+    用户反馈:「/任务 这些在发送图片时还额外附加了相同内容的文本 有点多余」。
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        p = _Cmd(tmp)
+        p.config = {"ui_image": True, "battle_image_scale": 2}
+        ev = _Event("/开始 小智 新叶喵")
+        run_cmd(p, ev, p.cmd_start)
+        from pw import quests as Q
+
+        t = p._load(ev)
+        Q.roll_daily(t, 1)
+        p._save(t)
+
+        for cmd, fn in (
+            ("/状态", p.cmd_status),
+            ("/队伍", p.cmd_team),
+            ("/背包", p.cmd_bag),
+            ("/图鉴 新叶喵", p.cmd_dex),
+            ("/任务", p.cmd_quest),
+            ("/地图", p.cmd_map),
+        ):
+            ev2 = _Event(cmd)
+            run_cmd(p, ev2, fn)
+            assert len(ev2.outputs) == 1, f"{cmd} 输出了多条消息:{ev2.outputs}"
+            joined = "".join(ev2.outputs)
+            assert joined.startswith("<chain:"), f"{cmd} 没走图片路径:{joined[:60]}"
+            # 图片 + 提示 ≤ 一行提示的量级;正文动辄几百字,一定超这个长度
+            assert len(joined) < 200, f"{cmd} 疑似把正文也发了:{joined[:150]}"
+
+        # 对照:关掉图片后必须是**完整正文**(说明内容没被删掉,只是不再重复发)
+        p.config = {"ui_image": False}
+        ev3 = _Event("/队伍")
+        run_cmd(p, ev3, p.cmd_team)
+        body = "".join(ev3.outputs)
+        assert "<chain:" not in body and "招式:" in body and len(body) > 40
+
+
+def test_battle_hint_shows_our_moves():
+    """对战提示必须列出我方出战宝可梦的招式(用户:不然不知道技能)。"""
+    from pw import battle as B
+    from pw.engine import create_pokemon
+
+    with tempfile.TemporaryDirectory() as tmp:
+        p = _Cmd(tmp)
+        p.config = {"battle_image": True, "battle_image_scale": 2, "quest_enable": False}
+        ev = _Event("/开始 小智 新叶喵")
+        run_cmd(p, ev, p.cmd_start)
+        t = p._load(ev)
+        t.data["region"] = "kanto"
+        second = create_pokemon("pidgey", 3).to_dict()
+        second["id"] = "m2"
+        second["moves"] = ["tackle", "sandattack"]
+        second["pp"] = {"tackle": 35, "sandattack": 15}
+        t.data["party"].append(second)
+        p._save(t)
+        B.start(t, [{"species": "rattata", "level": 5}], kind="wild", wild=True,
+                meta={"kind": "wild", "title": "野生宝可梦"}, day=1)
+        p._save(t)
+
+        ev2 = _Event("/对战 move 1")
+        run_cmd(p, ev2, p.cmd_battle)
+        hint = "".join(ev2.outputs)
+        assert ev2.outputs[0].startswith("<chain:"), "应输出战斗图片"
+        # 我方招式名 + 剩余 PP + 行动格式
+        for token in ("招式:", "摇尾巴(", "/对战 <1-4>", "switch", "item", "run"):
+            assert token in hint, f"战斗提示缺少 {token}:{hint[:200]}"
+
+        # 换人后提示要跟着换(出战第 2 只 → 波波的招式)
+        ev3 = _Event("/对战 switch 2")
+        run_cmd(p, ev3, p.cmd_battle)
+        hint2 = "".join(ev3.outputs)
+        assert "波波" in hint2 and "撞击(" in hint2, f"换人后提示没跟上:{hint2[:200]}"
+
+        # 关掉图片 → 文本回退里既有血条也有招式,且不重复发正文
+        p.config = {"battle_image": False, "quest_enable": False}
+        ev4 = _Event("/对战 move 1")
+        run_cmd(p, ev4, p.cmd_battle)
+        assert len(ev4.outputs) == 1, f"文本回退不该发多条:{ev4.outputs}"
+        body = "".join(ev4.outputs)
+        assert "HP " in body and "招式:" in body
