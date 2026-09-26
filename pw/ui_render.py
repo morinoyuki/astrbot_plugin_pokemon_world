@@ -52,6 +52,129 @@ MALE = (64, 120, 244)
 FEMALE = (248, 96, 160)
 BADGE_ON = (232, 184, 64)
 BADGE_ON_HI = (252, 228, 140)
+# ── 徽章里的属性徽记 ──────────────────────────────────────────────
+# 每个函数在 (x, y) 起、边长 s 的方框内用给定颜色作画。形状尽量简单但可区分,
+# 让 8 枚徽章不再长得一模一样(道馆面板 / 训练家卡 / 联盟都会用到)。
+def _bg_rock(d, x, y, s, c):
+    d.polygon([(x + s * 0.5, y + s * 0.15), (x + s * 0.92, y + s * 0.85),
+               (x + s * 0.08, y + s * 0.85)], fill=c)
+
+
+def _bg_water(d, x, y, s, c):
+    d.polygon([(x + s * 0.5, y + s * 0.08), (x + s * 0.88, y + s * 0.6),
+               (x + s * 0.12, y + s * 0.6)], fill=c)
+    d.ellipse([x + s * 0.12, y + s * 0.42, x + s * 0.88, y + s * 0.92], fill=c)
+
+
+def _bg_electric(d, x, y, s, c):
+    d.polygon([(x + s * 0.58, y + s * 0.06), (x + s * 0.2, y + s * 0.55),
+               (x + s * 0.48, y + s * 0.55), (x + s * 0.38, y + s * 0.94),
+               (x + s * 0.8, y + s * 0.42), (x + s * 0.5, y + s * 0.42)], fill=c)
+
+
+def _bg_fire(d, x, y, s, c):
+    d.polygon([(x + s * 0.5, y + s * 0.06), (x + s * 0.86, y + s * 0.62),
+               (x + s * 0.5, y + s * 0.95), (x + s * 0.14, y + s * 0.62)], fill=c)
+    d.ellipse([x + s * 0.34, y + s * 0.56, x + s * 0.66, y + s * 0.9], fill=BADGE_ON)
+
+
+def _bg_grass(d, x, y, s, c):
+    d.polygon([(x + s * 0.5, y + s * 0.08), (x + s * 0.9, y + s * 0.5),
+               (x + s * 0.5, y + s * 0.92), (x + s * 0.1, y + s * 0.5)], fill=c)
+
+
+def _bg_ice(d, x, y, s, c):
+    for ang in ((0, 1), (1, 0), (1, 1), (1, -1)):
+        d.line([x + s * (0.5 - ang[0] * 0.4), y + s * (0.5 - ang[1] * 0.4),
+                x + s * (0.5 + ang[0] * 0.4), y + s * (0.5 + ang[1] * 0.4)],
+               fill=c, width=2)
+
+
+def _bg_fighting(d, x, y, s, c):
+    d.rounded_rectangle([x + s * 0.16, y + s * 0.3, x + s * 0.84, y + s * 0.88],
+                        radius=2, fill=c)
+    for i in range(3):
+        d.rectangle([x + s * (0.22 + i * 0.2), y + s * 0.14,
+                     x + s * (0.36 + i * 0.2), y + s * 0.34], fill=c)
+
+
+def _bg_poison(d, x, y, s, c):
+    d.ellipse([x + s * 0.16, y + s * 0.2, x + s * 0.84, y + s * 0.88], fill=c)
+    d.ellipse([x + s * 0.4, y + s * 0.46, x + s * 0.6, y + s * 0.66], fill=BADGE_ON)
+
+
+def _bg_ground(d, x, y, s, c):
+    _bg_rock(d, x, y, s, c)
+    d.rectangle([x + s * 0.1, y + s * 0.86, x + s * 0.9, y + s * 0.96], fill=c)
+
+
+def _bg_flying(d, x, y, s, c):
+    d.line([x + s * 0.08, y + s * 0.5, x + s * 0.5, y + s * 0.16,
+            x + s * 0.92, y + s * 0.5], fill=c, width=2)
+    d.line([x + s * 0.24, y + s * 0.78, x + s * 0.5, y + s * 0.52,
+            x + s * 0.76, y + s * 0.78], fill=c, width=2)
+
+
+def _bg_psychic(d, x, y, s, c):
+    d.ellipse([x + s * 0.08, y + s * 0.3, x + s * 0.92, y + s * 0.72], fill=c)
+    d.ellipse([x + s * 0.4, y + s * 0.42, x + s * 0.6, y + s * 0.62], fill=BADGE_ON)
+
+
+def _bg_bug(d, x, y, s, c):
+    d.ellipse([x + s * 0.2, y + s * 0.16, x + s * 0.8, y + s * 0.5], fill=c)
+    for i in range(3):
+        d.line([x + s * 0.5, y + s * 0.44, x + s * (0.14 + i * 0.36), y + s * 0.9],
+               fill=c, width=2)
+
+
+def _bg_ghost(d, x, y, s, c):
+    d.pieslice([x + s * 0.14, y + s * 0.14, x + s * 0.86, y + s * 0.8],
+               180, 360, fill=c)
+    d.rectangle([x + s * 0.14, y + s * 0.46, x + s * 0.86, y + s * 0.8], fill=c)
+    for i in range(2):
+        d.ellipse([x + s * (0.3 + i * 0.26), y + s * 0.38,
+                   x + s * (0.44 + i * 0.26), y + s * 0.52], fill=BADGE_ON)
+
+
+def _bg_dragon(d, x, y, s, c):
+    d.polygon([(x + s * 0.1, y + s * 0.2), (x + s * 0.9, y + s * 0.2),
+               (x + s * 0.5, y + s * 0.92)], fill=c)
+
+
+def _bg_dark(d, x, y, s, c):
+    d.ellipse([x + s * 0.14, y + s * 0.16, x + s * 0.86, y + s * 0.88], fill=c)
+    d.ellipse([x + s * 0.42, y + s * 0.06, x + s * 1.14, y + s * 0.78], fill=BADGE_ON)
+
+
+def _bg_steel(d, x, y, s, c):
+    d.rounded_rectangle([x + s * 0.12, y + s * 0.34, x + s * 0.88, y + s * 0.66],
+                        radius=1, fill=c)
+    for i in range(3):
+        d.line([x + s * (0.28 + i * 0.22), y + s * 0.16,
+                x + s * (0.28 + i * 0.22), y + s * 0.84], fill=c, width=2)
+
+
+def _bg_fairy(d, x, y, s, c):
+    d.polygon([(x + s * 0.5, y + s * 0.08), (x + s * 0.62, y + s * 0.42),
+               (x + s * 0.94, y + s * 0.5), (x + s * 0.62, y + s * 0.58),
+               (x + s * 0.5, y + s * 0.92), (x + s * 0.38, y + s * 0.58),
+               (x + s * 0.06, y + s * 0.5), (x + s * 0.38, y + s * 0.42)], fill=c)
+
+
+def _bg_normal(d, x, y, s, c):
+    d.ellipse([x + s * 0.2, y + s * 0.2, x + s * 0.8, y + s * 0.8], fill=c)
+
+
+_BADGE_GLYPHS = {
+    "Rock": _bg_rock, "Water": _bg_water, "Electric": _bg_electric,
+    "Fire": _bg_fire, "Grass": _bg_grass, "Ice": _bg_ice,
+    "Fighting": _bg_fighting, "Poison": _bg_poison, "Ground": _bg_ground,
+    "Flying": _bg_flying, "Psychic": _bg_psychic, "Bug": _bg_bug,
+    "Ghost": _bg_ghost, "Dragon": _bg_dragon, "Dark": _bg_dark,
+    "Steel": _bg_steel, "Fairy": _bg_fairy, "Normal": _bg_normal,
+}
+
+BADGE_MARK = (124, 86, 26)   # 徽章内的属性徽记(深金褐)
 BADGE_OFF = (176, 172, 148)
 SHADOW = (172, 168, 130)
 MSG_FRAME = (162, 44, 34)
@@ -1230,7 +1353,11 @@ class Screen:
             self.text_right(x1 - 5, y0 + 1.4, right, size=size, fill=TITLE_FG,
                             stroke=0.6, sfill=BOX_EDGE)
 
-    def footer(self, text: str, *, box=(4, 144, 236, 155), size: float = 7.8) -> None:
+    def footer(self, text: str, *, box=None, size: float = 7.8) -> None:
+        if box is None:
+            # 跟着画布高度走:默认 160 高时算出来仍是 (4,144,236,155),与旧版一致;
+            # 加高画布的界面(队伍列表)自动把提示条放到最底部。
+            box = (4, self.h - 16, 236, self.h - 5)
         x0, y0, _x1, _y1 = box
         self.d.rounded_rectangle(box, radius=3, fill=BOX_FILL, outline=BOX_EDGE)
         self.text(x0 + 5, y0 + 1.8, text, size=size, fill=TEXT_DIM)
@@ -1281,13 +1408,23 @@ class Screen:
                                  outline=BOX_EDGE)
         self.text_center(x + 5.5, y + 0.6, style[0], size=size, fill=(255, 255, 250))
 
-    def badge(self, x: float, y: float, size: float = 11, *, on: bool = True) -> None:
-        """徽章:未获得=灰槽,已获得=金色盾牌。"""
+    def badge(self, x: float, y: float, size: float = 11, *, on: bool = True,
+              kind: str = "") -> None:
+        """徽章:已获得=金色盾牌,未获得=灰色槽。
+
+        `kind` 传道馆属性(如 ``"Rock"``/``"Water"``)时,盾牌里会画出对应属性的
+        徽记 —— 正作里每枚徽章都有各自造型,这里用属性做区分,8 枚不再长得一样。
+        未获得的徽章也画一个淡色徽记(让玩家知道后面还有什么)。
+        """
+        d = self.d
         if not on:
-            self.d.rounded_rectangle([x, y, x + size, y + size], radius=2,
-                                     fill=BADGE_OFF, outline=BOX_EDGE)
+            d.rounded_rectangle([x, y, x + size, y + size], radius=2,
+                                fill=BADGE_OFF, outline=BOX_EDGE)
+            glyph = _BADGE_GLYPHS.get(str(kind))
+            if glyph:
+                glyph(d, x, y, size, (196, 192, 176))
             return
-        self.d.polygon(
+        d.polygon(
             [
                 (x + size / 2, y),
                 (x + size, y + size * 0.28),
@@ -1298,8 +1435,11 @@ class Screen:
             ],
             fill=BADGE_ON, outline=BOX_EDGE,
         )
-        self.d.line([x + size * 0.3, y + size * 0.2, x + size * 0.7, y + size * 0.2],
-                    fill=BADGE_ON_HI)
+        d.line([x + size * 0.3, y + size * 0.2, x + size * 0.7, y + size * 0.2],
+               fill=BADGE_ON_HI)
+        glyph = _BADGE_GLYPHS.get(str(kind))
+        if glyph:
+            glyph(d, x, y + size * 0.08, size * 0.82, BADGE_MARK)
 
     def item_icon(self, kind: str, x: float, y: float, size: float = 9) -> None:
         """画道具图标:优先按道具 key,退化到大类,最后退化到默认。
@@ -1392,6 +1532,9 @@ def _ratio(cur, mx) -> float:
 # ══════════════════════════════════════════════════════════════════
 # 界面:队伍(FRLG 队伍菜单)
 # ══════════════════════════════════════════════════════════════════
+PARTY_H = 186   # 队伍界面专用画布高度(比默认 160 高:6 行都要够宽裕)
+
+
 def render_party(
     mons: list[dict],
     *,
@@ -1409,10 +1552,12 @@ def render_party(
     mons: [{species, name, level, cur_hp, max_hp, status, gender, exp_pct}]
     """
     try:
-        sc = Screen(scale=scale)
+        # 行高从 21 加到 26:原版 6×21 正好把最后一行的框压到底部提示条上,
+        # 名字行与 HP 条之间只剩 0.5px(用户反馈"HP 图标与 Lv 贴太近")。
+        sc = Screen(scale=scale, h=PARTY_H)
         sc.title_bar(title, right=f"{money:,}₽")
         top = 19
-        row_h = 21
+        row_h = 26
         for i in range(6):
             y0 = top + i * row_h
             box = (5, y0, 235, y0 + row_h - 1)
@@ -1423,30 +1568,32 @@ def render_party(
             mon = mons[i]
             x_name = 37.0
             if sprites:
-                sc.sprite(str(mon.get("species") or ""), ground=(22, y0 + row_h - 2),
-                          factor=0.62, bounds=(20, 18), back=False,
+                sc.sprite(str(mon.get("species") or ""), ground=(22, y0 + row_h - 4),
+                          factor=0.62, bounds=(20, row_h - 8), back=False,
                           dim=_ratio(mon.get("cur_hp"), mon.get("max_hp")) <= 0)
             else:
                 x_name = 14.0
             name = str(mon.get("name") or "?")
-            sc.text(x_name, y0 + 2.5, name, size=8.6, fill=TEXT)
+            # 第一行:名字 / 性别 / Lv(名字行下移 1px,把下方空间让给血条)
+            sc.text(x_name, y0 + 3.5, name, size=8.6, fill=TEXT)
             w = sc.tw(name, 8.6) + x_name + 2
             gender, gcolor = gender_symbol(str(mon.get("gender") or ""))
             if gender:
-                sc.text(w, y0 + 2.5, gender, size=8.6, fill=gcolor)
+                sc.text(w, y0 + 3.5, gender, size=8.6, fill=gcolor)
                 w += 6
-            sc.text(w + 1, y0 + 2.5, f"Lv{int(mon.get('level') or 0)}", size=8.6,
+            sc.text(w + 2, y0 + 3.5, f"Lv{int(mon.get('level') or 0)}", size=8.6,
                     fill=TEXT)
-            sc.hp_bar((70, y0 + 12.5, 118, 4.5),
+            # 第二行:HP 标签 + 血条(与名字行留出 ~3px 间隙,不再贴着 Lv)
+            sc.hp_bar((70, y0 + 16, 118, 5),
                       _ratio(mon.get("cur_hp"), mon.get("max_hp")), tag=True)
-            sc.text_right(232, y0 + 10.5,
+            sc.text_right(232, y0 + 13.5,
                           f"{int(mon.get('cur_hp') or 0)}/{int(mon.get('max_hp') or 0)}",
                           size=7.6, fill=TEXT)
             if mon.get("status"):
-                sc.status_chip(192, y0 + 2, str(mon["status"]))
+                sc.status_chip(192, y0 + 3, str(mon["status"]))
             if mon.get("item"):
                 # 持有道具:名字前的小星标(别压到右侧 HP 数值上)
-                sc.text(32, y0 + 2.5, "★", size=7.4, fill=(214, 160, 56))
+                sc.text(32, y0 + 3.5, "★", size=7.4, fill=(214, 160, 56))
         sc.footer(f"电脑 {box_count} 只 · 徽章 {badges} 枚 · /对战 出招时用序号换人")
         return sc.finish()
     except Exception as e:  # 渲染失败回退文本
@@ -1557,9 +1704,11 @@ def render_trainer_card(
             # 容错:徽章项约定为 (名称, 是否获得);数据异常时降级为"未获得",
             # 而不是整个界面渲染失败返回空图。
             b = badges[i] if i < len(badges) else None
-            on = bool(b[1]) if isinstance(b, (list, tuple)) and len(b) >= 2 else False
-            name = str(b[0]) if isinstance(b, (list, tuple)) and len(b) >= 2 and b[0] else ""
-            sc.badge(gx, gy, 13, on=on)
+            ok_item = isinstance(b, (list, tuple)) and len(b) >= 2
+            on = bool(b[1]) if ok_item else False
+            name = str(b[0]) if ok_item and b[0] else ""
+            kind = str(b[2]) if ok_item and len(b) >= 3 and b[2] else ""
+            sc.badge(gx, gy, 13, on=on, kind=kind)
             if name and on:
                 sc.text_center(gx + 6.5, gy + 14, name[:4], size=6, fill=TEXT_DIM)
         sc.text(140, 82, "队伍", size=8.5, fill=TEXT_DIM)

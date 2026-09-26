@@ -451,12 +451,23 @@ def render_battle_result(*, outcome: str, title: str = "", lines: list[str] = ()
         # 奖励 / 成长:框高随文本自适应。
         # 原来的框是写死高度的(奖励 99~121 却按 110 起画 2 行 → 第 2 行到 126,
         # 直接压进下面的成长框),奖励文本一长就越界。
-        rtext = " · ".join(_lines(rewards, limit=4)) or "没有获得奖励。"
+        # 战败/认输/逃跑时**不显示奖励栏** —— 输了却列出"没有获得奖励"很怪,
+        # 而且旧实现还会把战斗里发放的少量奖励(如经验)一并列出来。
+        show_reward = key in ("win", "caught")
+        rlabel = "◆ 奖励"
+        rtext = " · ".join(_lines(rewards, limit=4)) if show_reward else ""
+        if not show_reward:
+            # 战败/认输/逃跑**没有奖励**(引擎也确实不发),但引擎会把
+            # "被送回宝可梦中心、队伍已恢复"这类结算信息放进 rewards ——
+            # 这些要照常展示,只是不该挂在"奖励"标题下面。
+            info = " · ".join(_lines(rewards, limit=2))
+            if info:
+                rlabel, rtext = "◆ 结果", info
         gtext = " · ".join(_lines(growth, limit=4)) or "这次没有新的感悟。"
         lw = sc.tw("◆ 奖励 ", 7.6)
         bw = 235 - rx0 - 12 - lw
         lim_r = lim_g = 2
-        n_r = len(sc.wrap(rtext, bw, size=7.6, limit=lim_r))
+        n_r = len(sc.wrap(rtext, bw, size=7.6, limit=lim_r)) if rtext else 0
         n_g = len(sc.wrap(gtext, bw, size=7.6, limit=lim_g))
         while n_r + n_g > 3:  # 44+43 的可用高度只放得下 3 行正文
             if n_r >= n_g and lim_r > 1:
@@ -467,8 +478,11 @@ def render_battle_result(*, outcome: str, title: str = "", lines: list[str] = ()
                 n_g = len(sc.wrap(gtext, bw, size=7.6, limit=lim_g))
             else:
                 break
-        y = _inline_block(sc, 99, rx0, "◆ 奖励", (56, 96, 60), rtext,
-                          TEXT if rewards else TEXT_DIM, 140, limit=lim_r)
+        y = 99
+        if rtext:
+            color = (56, 96, 60) if show_reward else (108, 96, 132)
+            y = _inline_block(sc, y, rx0, rlabel, color, rtext,
+                              TEXT, 140, limit=lim_r)
         _inline_block(sc, y, rx0, "◆ 成长", (120, 84, 48), gtext,
                       TEXT if growth else TEXT_DIM, 142, limit=lim_g)
 

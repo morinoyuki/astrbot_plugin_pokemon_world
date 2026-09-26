@@ -31,17 +31,27 @@ _MOD = _load_plugin_package()
 Plugin = _MOD.PokemonWorldPlugin
 
 from pw.player import TrainerStore  # noqa: E402
+from pw.sqlite_store import SqliteBackend  # noqa: E402
 from pw.world import WorldMap  # noqa: E402
 from pw.worldstate import WorldStore  # noqa: E402
 
 
 class _Cmd:
-    """只绑定方法、不执行 __init__ 的宿主对象。"""
+    """只绑定方法、不执行 __init__ 的宿主对象。
 
-    def __init__(self, tmp):
-        self.trainers = TrainerStore(tmp)
-        self.worlds = WorldStore(tmp)
+    存档后端与真实插件保持一致(默认 SQLite):`config=None` 时 `_cfg` 走默认值,
+    所以这里也按默认建 SQLite 后端 —— 否则测试跑的是"文件存储"这条**玩家不会走**
+    的路径,存档相关的问题测不出来。
+    """
+
+    def __init__(self, tmp, *, storage: str = "sqlite"):
         self.config = None  # → _cfg 全部走默认值(provider_id 为空 = 不调用 LLM)
+        self._storage = storage
+        self._db = SqliteBackend(tmp) if storage != "json" else None
+        if self._db is not None:
+            self._db.import_legacy()
+        self.trainers = TrainerStore(tmp, backend=self._db)
+        self.worlds = WorldStore(tmp, backend=self._db)
         self._locks = {}
         self.context = None
         self.data_dir = tmp

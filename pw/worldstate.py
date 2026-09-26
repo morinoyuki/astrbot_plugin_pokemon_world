@@ -213,21 +213,29 @@ class WorldState:
 
 
 class WorldStore:
-    """世界状态存档:每个 scope 一个 world.json。"""
+    """世界状态存档(默认 SQLite;`backend=None` 时用每个 scope 一个 world.json)。"""
 
-    def __init__(self, data_dir: str):
+    def __init__(self, data_dir: str, *, backend=None):
+        self._db = backend
         self._root = ensure_dir(os.path.join(data_dir, "pokemon_world"))
 
     def _path(self, scope: str) -> str:
         return os.path.join(self._root, safe_name(scope), "_world.json")
 
     def load(self, scope: str) -> dict:
+        if self._db is not None:
+            return self._db.load_world(scope)
         return read_json(self._path(scope)) or {}
 
     def save(self, scope: str, data: dict) -> None:
+        if self._db is not None:
+            self._db.save_world(scope, data)
+            return
         write_json_atomic(self._path(scope), data)
 
     def delete(self, scope: str) -> bool:
+        if self._db is not None:
+            return self._db.delete_world(scope)
         p = self._path(scope)
         if os.path.exists(p):
             os.remove(p)
@@ -235,6 +243,8 @@ class WorldStore:
         return False
 
     def list_scopes(self) -> list[str]:
+        if self._db is not None:
+            return self._db.list_scopes()
         if not os.path.isdir(self._root):
             return []
         return sorted(

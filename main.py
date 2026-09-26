@@ -47,6 +47,7 @@ from .pw.dex import get_dex
 from .pw.items import BAG_ITEMS
 from .pw.narrate import Narrator
 from .pw.player import Trainer, TrainerStore, new_trainer
+from .pw.sqlite_store import SqliteBackend
 from .pw.util import (
     bar,
     clamp,
@@ -75,8 +76,15 @@ class PokemonWorldPlugin(Star):
         super().__init__(context)
         self.config = config
         self.data_dir = StarTools.get_data_dir()
-        self.trainers = TrainerStore(self.data_dir)
-        self.worlds = WorldStore(self.data_dir)
+        # 存档后端:默认 SQLite(单文件、事务原子、写入不必全量重写);
+        # 配置 storage=json 可退回旧的"每 uid 一个 JSON 文件"实现。
+        # 首次打开数据库时会自动导入磁盘上的旧 JSON 存档(改名为 *.imported 保留)。
+        self._storage = str(self._cfg("storage", "sqlite") or "sqlite").strip().lower()
+        self._db = SqliteBackend(self.data_dir) if self._storage != "json" else None
+        if self._db is not None:
+            self._db.import_legacy()
+        self.trainers = TrainerStore(self.data_dir, backend=self._db)
+        self.worlds = WorldStore(self.data_dir, backend=self._db)
         self._locks: dict[str, asyncio.Lock] = {}
         self._scheduler_task: asyncio.Task | None = None
         self._last_notified_day = 0
@@ -2036,8 +2044,10 @@ class PokemonWorldPlugin(Star):
                 event, "result",
                 lambda: UII.render_battle_result(
                     outcome=res.outcome, title=str(meta.get("title") or ""),
-                    lines=res.lines, rewards=res.rewards, growth=res.growth, mon=mon,
-                    scale=self._img_scale(),
+                    lines=res.lines,
+                    # 战败/认输/逃跑不给奖励栏(渲染层也会再挡一次)
+                    rewards=res.rewards if res.outcome in ("win", "caught") else [],
+                    growth=res.growth, mon=mon, scale=self._img_scale(),
                 ),
                 text="",
             ):
@@ -2139,7 +2149,11 @@ class PokemonWorldPlugin(Star):
         region = t.region
         got = {int(b.split(":")[1]) for b in t.badges if str(b).startswith(f"{region}:")}
         badges = [
-            ((g.get("badge") or g.get("title") or "")[:3], int(g.get("order", 0)) in got)
+            (
+                (g.get("badge") or g.get("title") or "")[:3],
+                int(g.get("order", 0)) in got,
+                str(g.get("type") or ""),      # 属性 → 徽章里的徽记造型
+            )
             for g in world.gyms(region)[:8]
         ]
         while len(badges) < 8:

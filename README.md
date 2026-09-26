@@ -188,6 +188,17 @@
 | `starter_choices` | 空 | 自定义可选御三家(逗号分隔) |
 | `admin_uids` | 空 | 管理员 QQ,可 `all` 清档 |
 
+## 存档
+
+默认使用 **SQLite**(``data/pokemon_world/pokemon_world.db``,单文件):
+
+- 表结构:`trainers(scope, uid, data, updated_day, updated_at)` /
+  `worlds(scope, data, updated_at)`,存档本体仍是 JSON 文本存在 `data` 列;
+- WAL 模式 + `busy_timeout`,写入用事务保证原子性(不再需要"临时文件 + rename");
+- 配置 `storage` 设为 `json` 可退回旧版"每人一个 JSON 文件"的存储方式;
+- **首次启动会自动导入**磁盘上的旧 JSON 存档,并把旧文件改名为
+  `*.imported` 保留(不删除数据);导入是幂等的。
+
 ## 质量保障
 
 - **158 个测试全绿**(含指令层端到端、引擎机制回归、界面越界回归、任务系统、数据完整性)

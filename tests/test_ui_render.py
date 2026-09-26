@@ -80,7 +80,9 @@ def test_party_screen_draws_shapes_not_only_text():
     data = UI.render_party([MON_A, MON_B, MON_FAINT], money=12400, box_count=7,
                            badges=3, scale=SCALE)
     im = _img(data)
-    assert im.size == (UI.LOGICAL_W * SCALE, UI.LOGICAL_H * SCALE)
+    # 队伍界面用的是加高画布(6 行 × 26px 才放得下,原来的 160 高会把
+    # 最后一行压到底部提示条上)
+    assert im.size == (UI.LOGICAL_W * SCALE, UI.PARTY_H * SCALE)
     assert len(_colors(im)) > 300, f"颜色过少,疑似空白:{len(_colors(im))}"
     assert _has_near(im, UI.BOX_EDGE), "窗口描边没画出来"
     assert _has_near(im, UI.HP_TRACK), "血条没画出来"
@@ -160,7 +162,7 @@ def test_available_and_scale_variants():
     assert UI.available() is True
     for scale in (1, 2, 4):
         im = _img(UI.render_party([MON_A], scale=scale))
-        assert im.size == (UI.LOGICAL_W * scale, UI.LOGICAL_H * scale)
+        assert im.size == (UI.LOGICAL_W * scale, UI.PARTY_H * scale)
 
 
 def test_glyphs_used_are_present_in_font():

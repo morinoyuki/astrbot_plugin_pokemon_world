@@ -1,4 +1,13 @@
 {
+  "storage": {
+    "type": "string",
+    "description": "存档后端:sqlite(默认,推荐)或 json(兼容旧版按文件存储)",
+    "default": "sqlite",
+    "options": [
+      "sqlite",
+      "json"
+    ]
+  },
   "provider_id": {
     "description": "LLM 提供商",
     "type": "string",

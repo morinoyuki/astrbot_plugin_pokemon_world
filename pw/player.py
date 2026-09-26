@@ -344,9 +344,14 @@ def new_trainer(
 
 
 class TrainerStore:
-    """按 scope(群/私聊)分目录、uid 分文件的训练家存档。"""
+    """训练家存档。
 
-    def __init__(self, data_dir: str):
+    默认走 SQLite(见 `pw/sqlite_store.py`);`backend=None` 时退回旧的
+    "每 scope 一个目录、每 uid 一个 JSON 文件"实现(配置 storage=json)。
+    """
+
+    def __init__(self, data_dir: str, *, backend=None):
+        self._db = backend
         self._root = ensure_dir(os.path.join(data_dir, "pokemon_world"))
 
     def _scope_dir(self, scope: str) -> str:
@@ -361,13 +366,22 @@ class TrainerStore:
         注意语义:损坏与"不存在"都返回 None —— 因此判断"是否已开始旅程"要看
         `exists()`(文件在不在),只看 load() 会把损坏存档误判成"还没开始"。
         """
+        if self._db is not None:
+            return self._db.load_trainer(scope, uid)
         data = read_json(self._path(scope, uid))
         return data if isinstance(data, dict) and data else None
 
     def save(self, scope: str, uid: str, data: dict) -> None:
+        if self._db is not None:
+            self._db.save_trainer(
+                scope, uid, data, day=int((data or {}).get("day") or 0)
+            )
+            return
         write_json_atomic(self._path(scope, uid), data)
 
     def exists(self, scope: str, uid: str) -> bool:
+        if self._db is not None:
+            return self._db.trainer_exists(scope, uid)
         return os.path.exists(self._path(scope, uid))
 
     def backup_corrupt(self, scope: str, uid: str) -> str:
@@ -377,6 +391,8 @@ class TrainerStore:
         而 `/开始` 看到文件存在又说"已经开始了" —— 玩家被两句话夹住、一脸茫然。
         改名备份后允许重新开始,旧文件也不丢。
         """
+        if self._db is not None:
+            return self._db.backup_corrupt_trainer(scope, uid, "unreadable")
         path = self._path(scope, uid)
         bak = path + ".bak"
         try:
@@ -388,6 +404,8 @@ class TrainerStore:
         return os.path.basename(bak)
 
     def delete(self, scope: str, uid: str) -> bool:
+        if self._db is not None:
+            return self._db.delete_trainer(scope, uid)
         p = self._path(scope, uid)
         if os.path.exists(p):
             os.remove(p)
@@ -395,12 +413,16 @@ class TrainerStore:
         return False
 
     def list_players(self, scope: str) -> list[str]:
+        if self._db is not None:
+            return self._db.list_players(scope)
         d = self._scope_dir(scope)
         return sorted(
             f[:-5] for f in os.listdir(d) if f.endswith(".json") and not f.startswith("_")
         )
 
     def delete_scope(self, scope: str) -> int:
+        if self._db is not None:
+            return self._db.delete_scope(scope)
         import shutil
 
         d = os.path.join(self._root, safe_name(scope))

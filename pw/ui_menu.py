@@ -13,6 +13,7 @@ from itertools import pairwise
 
 from astrbot.api import logger
 
+from .dex import get_dex
 from .ui_render import (
     BOX_EDGE,
     BOX_FILL,
@@ -86,9 +87,14 @@ def _lighten(c: tuple[int, int, int], d: int = 70) -> tuple[int, int, int]:
     return tuple(min(255, int(v) + d) for v in c)  # type: ignore[return-value]
 
 
+def type_name(t: str) -> str:
+    """属性英文 key → 中文(拿不到就原样返回)。"""
+    return get_dex().type_label(str(t))
+
+
 def _type_chip(sc: Screen, x: float, y: float, t: str, *, size: float = 7.4) -> float:
-    """属性色小标签,返回宽度。"""
-    label = str(t or "?")
+    """属性色小标签,返回宽度(传入的应为中文属性名)。"""
+    label = type_name(t)
     w = sc.tw(label, size) + 8
     sc.d.rounded_rectangle([x, y, x + w, y + 10], radius=2,
                            fill=type_color(label), outline=BOX_EDGE)
@@ -431,7 +437,7 @@ def render_gym(
             sc.d.rounded_rectangle([60, 45, 96, 55], radius=2, fill=(222, 218, 196),
                                    outline=BOX_EDGE)
             sc.text(64, 46.6, "未获得", size=7, fill=TEXT_DIM)
-        sc.badge(11, 58, 13, on=owned)
+        sc.badge(11, 58, 13, on=owned, kind=str(gym.get("type") or ""))
         sc.text(28, 60, _fit(sc, badge_name, 96, 8), size=8, fill=TEXT)
         sc.d.line([9, 75, 126, 75], fill=BOX_HI)
 
@@ -491,7 +497,7 @@ def render_gym(
         # 徽章条
         sc.d.rounded_rectangle([139, 104, 229, 138], radius=3, fill=BOX_FILL,
                                outline=BOX_EDGE)
-        sc.badge(146, 109, 14, on=owned)
+        sc.badge(146, 109, 14, on=owned, kind=str(gym.get("type") or ""))
         sc.text(166, 110, _fit(sc, badge_name, 60, 8), size=8, fill=TEXT)
         state = "已获得 · 可重复挑战" if owned else "战胜馆主即可获得"
         sc.text(146, 127, state, size=7, fill=DONE_GREEN if owned else TEXT_DIM)
@@ -523,7 +529,7 @@ def render_league(
         done_set = {str(d) for d in (done or [])}
 
         sc.title_bar("宝可梦联盟", right=str(region_zh or ""))
-        sc.window((5, 19, 235, 141), radius=3)
+        sc.window((5, 19, 235, 142), radius=3)
 
         rows: list[tuple[dict, bool, bool]] = []  # (数据, 是否已战胜, 是否冠军)
         for i, e in enumerate(elites[:4]):
@@ -533,37 +539,44 @@ def render_league(
             rows.append(({}, False, False))
         rows.append((champ, bool(champion_done), True))
 
-        row_h = 23
+        # 布局:每行两行文字 —— 第一行「名字 + 属性标签」,第二行「队伍 / 状态」。
+        # 旧布局把属性标签放在第二行(y0+13,标签框高 10),而行高只有 23、
+        # 行底在 y0+20 → 标签压住下一行的底色;冠军行的分隔线还画在 y0-3,
+        # 正好从上一行的标签中间穿过(用户报告的"重叠/溢出")。
+        row_h = 24
         top = 21
         for i, (mon, is_done, is_champ) in enumerate(rows):
             y0 = top + i * row_h
             if is_champ:
-                sc.d.line([9, y0 - 3, 231, y0 - 3], fill=BOX_HI)
-                sc.d.rounded_rectangle([7, y0, 233, y0 + row_h - 3], radius=2,
+                # 分隔线画在行**上方的空隙**里(y0-1),不再穿进上一行
+                sc.d.line([9, y0 - 1, 231, y0 - 1], fill=BOX_HI)
+                sc.d.rounded_rectangle([7, y0, 233, y0 + row_h - 4], radius=2,
                                        fill=(252, 240, 198))
             elif i % 2 == 1:
-                sc.d.rounded_rectangle([7, y0, 233, y0 + row_h - 3], radius=2,
+                sc.d.rounded_rectangle([7, y0, 233, y0 + row_h - 4], radius=2,
                                        fill=(244, 243, 224))
             name = str(mon.get("name") or ("???" if not is_champ else "冠军"))
             gtype = str(mon.get("type") or "")
             team = mon.get("team") or []
             tc = type_color(gtype) if gtype else (208, 184, 140)
-            cy = y0 + 9
-            sc.d.ellipse([12, cy - 8, 28, cy + 8], fill=tc, outline=BOX_EDGE)
-            sc.text_center(20, cy - 5.5, (name[:1] or "?"), size=9, fill=(255, 255, 250))
-            sc.text(34, y0 + 3, _fit(sc, name, 92, 8.8), size=8.8, fill=TEXT)
+            cy = y0 + 8
+            sc.d.ellipse([12, cy - 7, 26, cy + 7], fill=tc, outline=BOX_EDGE)
+            sc.text_center(19, cy - 5, (name[:1] or "?"), size=8.6, fill=(255, 255, 250))
+            # 第一行:名字 + 属性标签(标签紧跟名字,属性用中文)
+            label = _fit(sc, name, 66, 8.8)
+            sc.text(34, y0 + 3, label, size=8.8, fill=TEXT)
+            chip_x = 34 + sc.tw(label, 8.8) + 4
             if gtype:
-                _type_chip(sc, 34, y0 + 13, gtype, size=6.6)
-            else:
-                sc.text(34, y0 + 13, "—", size=7, fill=TEXT_DIM)
+                _type_chip(sc, chip_x, y0 + 2.5, type_name(gtype), size=6.6)
+            # 第二行:队伍数量 / 冠军标记 / 战胜状态
             if team:
-                sc.text(96, y0 + 4, f"队伍 {len(team)} 只", size=7.4, fill=TEXT_DIM)
+                sc.text(34, y0 + 13, f"队伍 {len(team)} 只", size=7.4, fill=TEXT_DIM)
             if is_champ:
-                label = "冠军" if not is_done else "冠军 · 已战胜"
-                sc.text(96, y0 + 13, label, size=7, fill=GOLD if is_champ else TEXT_DIM)
+                tag = "冠军 · 已战胜" if is_done else "冠军"
+                sc.text(96, y0 + 13, tag, size=7, fill=GOLD)
             glyph, gcolor = _state_glyph(is_done, False)
-            sc.text_right(228, y0 + 4, f"{glyph} {'已战胜' if is_done else '未挑战'}",
-                          size=7.8, fill=gcolor)
+            sc.text_right(228, y0 + 13, f"{glyph} {'已战胜' if is_done else '未挑战'}",
+                          size=7.6, fill=gcolor)
 
         sc.footer("◆ /联盟 挑战 · 击败四天王后挑战冠军")
         return sc.finish()
