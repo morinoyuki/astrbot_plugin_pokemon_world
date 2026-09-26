@@ -860,3 +860,69 @@ def test_shop_stock_has_no_duplicates():
     for loc in ("pewter-city", "goldenrod-city"):
         stock = world.shop_stock(loc)
         assert len(stock) == len(set(stock)), f"{loc} 货架有重复:{stock}"
+
+
+def test_game_day_boundary_is_4am():
+    """游戏日以凌晨 4 点为界:03:59 属前一天,04:00 起算新的一天。"""
+    import datetime as _dt
+
+    import pw.util as U
+
+    real = _dt.datetime
+
+    def day_at(y, mo, d, h, mi=0):
+        class _Fake(_dt.datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return real(y, mo, d, h, mi, 0)
+
+        U.datetime = _Fake
+        try:
+            return U.game_day()
+        finally:
+            U.datetime = real
+
+    before = day_at(2026, 3, 1, 3, 59)
+    after = day_at(2026, 3, 1, 4, 0)
+    assert after == before + 1, "04:00 应当进入新的一天"
+    assert day_at(2026, 3, 2, 3, 59) == after, "次日 03:59 仍属同一天"
+
+
+def test_world_day_never_rolls_backwards():
+    """系统时钟回拨时不能重刷世界事件(世界日必须单调)。"""
+    import asyncio
+
+    from pw import daily
+    from pw.worldstate import WorldState
+
+    class _Narrator:
+        def available(self):
+            return False
+
+        async def json(self, *a, **k):
+            return {}
+
+    state = WorldState({"day": 10, "events": [], "last_roll_day": 10}, "g1")
+    res = asyncio.run(
+        daily.roll_day(scope="g1", state=state, players=[], day=9, narrator=_Narrator())
+    )
+    assert res["rolled"] is False, "时钟回拨不该被当成新的一天"
+    assert int(state.data.get("day") or 0) == 10, "世界日不能倒退"
+
+    # 同一天重复调用幂等
+    res2 = asyncio.run(
+        daily.roll_day(scope="g1", state=state, players=[], day=10, narrator=_Narrator())
+    )
+    assert res2["rolled"] is False
+
+    # 真正推进一天则应当滚动
+    res3 = asyncio.run(
+        daily.roll_day(scope="g1", state=state, players=[], day=11, narrator=_Narrator())
+    )
+    assert res3["rolled"] is True
+    assert int(state.data["last_roll_day"]) == 11
+
+    # 同步版同样单调
+    assert daily.ensure_rolled_sync(state, [], day=11) is False
+    assert daily.ensure_rolled_sync(state, [], day=12) is True
+    assert daily.ensure_rolled_sync(state, [], day=11) is False

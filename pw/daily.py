@@ -45,7 +45,10 @@ async def roll_day(
     """把世界推进到一个新的游戏日(幂等:同一天重复调用不会重复生成)。"""
     day = int(day or game_day())
     result = {"rolled": False, "world_events": [], "player_events": {}}
-    if int(state.data.get("last_roll_day") or 0) == day:
+    # `<=` 而不是 `==`:除了同一天重复调用(幂等),还要挡住**系统时钟回拨**。
+    # 回拨时 day 会变小,若照常滚动会把 until_day 已过的事件清掉、重新生成一天,
+    # 且时钟恢复后会再滚一次;世界日是单调的,不该倒退。
+    if day <= int(state.data.get("last_roll_day") or 0):
         return result
 
     state.data["day"] = day
@@ -117,7 +120,8 @@ def _brief(t) -> dict:
 def ensure_rolled_sync(state: WorldState, players: list, day: int | None = None) -> bool:
     """同步版的"日期是否已推进"检查(用于不需要 LLM 的快速路径)。"""
     day = int(day or game_day())
-    if int(state.data.get("last_roll_day") or 0) == day:
+    # 与 roll_day 一致:世界日单调,回拨不算"新的一天"
+    if day <= int(state.data.get("last_roll_day") or 0):
         return False
     state.data["day"] = day
     state.expire(day)
