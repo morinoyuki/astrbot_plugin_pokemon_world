@@ -84,6 +84,17 @@ NON_WILD_METHODS = {
     "pokemon-channel-pal",
     "pokemon-ranger",
     "wailmer-pail",
+    # 下面这些是"定点/道具触发/扫描"类遭遇,探索(草丛/水面/钓鱼)遇不到。
+    # 之前放行会让 /图鉴 的野外分布与委托的"可完成性校验"都把玩家引到遇不到的物种上。
+    "island-scan",
+    "pokeflute",
+    "devon-scope",
+    "squirt-bottle",
+    "pokespot",
+    "sky-ambush",
+    "wanderer",
+    "wanderer-water",
+    "chase-water",
 }
 # 用于"核心等级区间"的方法(草丛/水面),用于收敛异常等级区间
 CORE_METHODS = {
@@ -586,10 +597,11 @@ class WorldMap:
             hi = max(lo, int(r["max"]))
             if r["method"] not in CORE_METHODS:
                 # 侧池(空中/垂钓/摇树/定点等)不得脱离该地点的核心等级区间
-                lo = max(lo, core_lo)
-                hi = min(hi, max(core_hi, core_lo))
-                if hi < lo:
-                    hi = lo
+                # 侧池必须落进核心区间:下限抬到核心下限(不超过核心上限),
+                # 上限压到核心上限。旧写法在 hi<lo 时执行 `hi = lo`,等于把上限
+                # **抬回原值** —— tier1 的 3 号道路因此能刷出 Lv35 的水面宝可梦。
+                lo = min(max(lo, core_lo), core_hi)
+                hi = max(lo, min(hi, core_hi))
             out.append(
                 {
                     "species": r["species"],
@@ -600,6 +612,15 @@ class WorldMap:
                 }
             )
         return [r for r in out if r["species"]]
+
+    def gyms_at(self, region: str, location: str) -> list[dict]:
+        """该地点的所有道馆(少数地点在原作里有两个道馆,例如城都的卡吉镇/湛蓝市)。
+
+        构建数据时这些城市在 maps 里缺失,两个道馆被并到同一节点;
+        `gym_at` 只返回第一个 → 第二枚徽章永远拿不到 → `/联盟` 要求全部徽章 →
+        冠军拿不到 → 下一个地区永久锁死(整条解锁链死锁)。
+        """
+        return [g for g in self.gyms(region) if g.get("location") == location]
 
     def encounter_methods(self, key: str) -> list[str]:
         return sorted({p["method"] for p in self.wild_pools(key) if p["method"]})
@@ -798,7 +819,6 @@ SHOP_STOCK = [
     "berry-juice",
     "sweet-heart",
     "leppa-berry",
-    "super-potion",
     "hyper-potion",
     "ultra-ball",
     "full-heal",
@@ -832,15 +852,27 @@ def item_price(key: str, *, badge_count: int = 0, discount: float = 1.0) -> int:
     if not r:
         return 0
     k, entry = r
-    kind = str(entry.get("kind") or "")
-    base = {
+    from .items import BAG_ITEMS
+
+    kind = str((BAG_ITEMS.get(k) or entry).get("kind") or entry.get("kind") or "")
+    # 同类道具必须分档:旧实现按 kind 统一定价,导致"全复药(回满+解状态)"
+    # 和"伤药(回 20)"都是 300₽,进化石/进化道具只按默认 500₽ 卖
+    # (ITEMS 里的条目没有 kind,resolve_item 优先返回 ITEMS 条目)。
+    tier = {
+        "potion": 300, "super-potion": 600, "hyper-potion": 900,
+        "max-potion": 1500, "full-restore": 2000, "moomoo-milk": 500,
+        "revive": 1500, "max-revive": 3000, "revival-herb": 2800,
+        "ether": 600, "max-ether": 1200, "elixir": 600, "max-elixir": 1200,
+        "energy-powder": 500, "energy-root": 800, "heal-powder": 300,
+    }
+    base = tier.get(k) or {
         "ball": 200,
-        "medicine": 300,
-        "status": 200,
+        "medicine": 600,
+        "status": 300,
         "revive": 1500,
         "pp": 800,
         "battle": 500,
-        "berry": 100,
+        "berry": 150,
         "rare": 4000,
         "stone": 3000,
         "evo": 5000,

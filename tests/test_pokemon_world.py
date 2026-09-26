@@ -758,3 +758,104 @@ def test_world_modifiers_are_clamped_after_stacking():
     st3.add_event({"id": "b", "title": "大甩卖", "until_day": 105,
                    "effects": {"shop_discount": 0.6}})
     assert abs(st3.modifiers["shop_discount"] - 0.6) < 1e-9
+
+
+def test_gym_collisions_do_not_deadlock_progression():
+    """同一地点挂两个道馆时,第二枚徽章也必须能拿到。
+
+    城都的湛蓝市(阿四 order5 / 柳伯 order7)、合众的帆巴市、卡洛斯的古香镇
+    在数据里各有两个道馆。`gym_at` 只返回第一个 → 第二枚徽章永远拿不到 →
+    `/联盟` 要求全部徽章 → 冠军拿不到 → 下一个地区永久锁死。
+    """
+    from pw.world import REGION_ORDER, WorldMap
+
+    world = WorldMap()
+    for region in REGION_ORDER:
+        by_loc: dict[str, list[dict]] = {}
+        for gym in world.gyms(region):
+            by_loc.setdefault(str(gym.get("location")), []).append(gym)
+        for loc, gyms in by_loc.items():
+            if len(gyms) < 2:
+                continue
+            orders = sorted(int(g.get("order", 0)) for g in gyms)
+            # 该地点的所有道馆都要能被列出来(挑战时按"徽章未获得"挑选)
+            got = sorted(int(g.get("order", 0)) for g in world.gyms_at(region, loc))
+            assert got == orders, f"{region}/{loc} 应能列出全部道馆"
+            assert len(set(orders)) == len(orders), f"{region}/{loc} 道馆 order 重复"
+
+
+def test_item_prices_are_tiered_and_stones_not_dirt_cheap():
+    """同类道具必须分档;进化石/进化道具不能按默认 500₽ 卖。"""
+    from pw.world import item_price
+
+    # 回复药分档
+    assert item_price("potion") < item_price("super-potion") < item_price("hyper-potion")
+    assert item_price("hyper-potion") < item_price("max-potion")
+    assert item_price("max-potion") <= item_price("full-restore")
+    # 复活分档
+    assert item_price("revive") < item_price("max-revive")
+    # 进化石 3000、进化道具 5000(之前都是默认 500)
+    assert item_price("fire-stone") == 3000
+    assert item_price("kings-rock") == 5000
+    # 树果比药便宜
+    assert item_price("oran-berry") < item_price("potion")
+
+
+def test_wild_encounter_levels_stay_in_core_range():
+    """tier1 地点不能刷出 Lv40+ 的野生宝可梦(强规则:地点等级收敛)。"""
+    from pw import battle as B
+    from pw.player import new_trainer
+    from pw.world import WorldMap
+
+    world = WorldMap()
+    trainer = new_trainer("u1", "g1", "小智", starter="新叶喵")
+    checked = 0
+    for loc in ("kanto-route-1", "kalos-route-3", "unova-route-4", "viridian-city"):
+        if loc not in world._index:      # nodes() 收的是地区名,这里判断地点是否存在
+            continue
+        trainer.data["location"] = loc
+        levels = []
+        for i in range(120):
+            trainer.data["steps"] = i * 13
+            hit = B.roll_wild(trainer)
+            if hit:
+                levels.append(int(hit["level"]))
+        if not levels:
+            continue
+        checked += 1
+        # 该地点所有池的收敛区间
+        pools = world.wild_pools(loc)
+        if not pools:
+            continue
+        lo = min(int(p["min"]) for p in pools)
+        hi = max(int(p["max"]) for p in pools)
+        # 上限必须收敛(低等级侧池如摇树允许低于核心下限)
+        assert max(levels) <= hi, \
+            f"{loc} 遭遇等级最高 {max(levels)} 超出收敛上限 {hi}"
+        assert min(levels) >= 1
+    assert checked
+
+
+def test_wild_pools_exclude_non_encounter_methods():
+    """`wild_pools` 不能把"探索遇不到"的方式算进来(否则图鉴分布与委托校验会误导)。"""
+    from pw.world import NON_WILD_METHODS, WorldMap
+
+    world = WorldMap()
+    bad = []
+    for loc in world.nodes("kanto"):
+        for pool in world.wild_pools(loc):
+            m = str(pool.get("method") or "")
+            if m in NON_WILD_METHODS or m.startswith("wanderer"):
+                bad.append((loc, m))
+    assert not bad, f"这些非遭遇方式混进了野生池:{bad[:5]}"
+    for method in ("island-scan", "pokeflute", "devon-scope", "sky-ambush"):
+        assert method in NON_WILD_METHODS
+
+
+def test_shop_stock_has_no_duplicates():
+    from pw.world import WorldMap
+
+    world = WorldMap()
+    for loc in ("pewter-city", "goldenrod-city"):
+        stock = world.shop_stock(loc)
+        assert len(stock) == len(set(stock)), f"{loc} 货架有重复:{stock}"

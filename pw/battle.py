@@ -104,9 +104,24 @@ def roll_wild(trainer: Trainer, *, rng=None, environment: str = "") -> dict | No
                 break
     if hit is None:
         return None
-    # 等级用**该地点真实区间**(强规则:不该出现 1 号道路的 Lv50 大比鸟);
-    # 只有池子没给等级时才退化为按队伍进度估算。
-    if not hit.get("level"):
+    # 等级必须落在**收敛后的核心区间**内:world.wild_pools 会把钓鱼/摇树等
+    # 侧池压进该地点的核心区间,而 roll_location_encounter 用的是原始区间
+    # (tier1 的 3 号道路因此能刷出 Lv35 的水面遭遇)。
+    lo, hi = int(hit.get("min") or 0), int(hit.get("max") or 0)
+    try:
+        from .world import WorldMap
+
+        cand = next(
+            (p for p in WorldMap().wild_pools(loc) if p.get("species") == hit.get("species")),
+            None,
+        )
+        if cand:
+            lo, hi = int(cand["min"]), int(cand["max"])
+    except Exception:  # 拿不到收敛区间时退回原始区间,不影响对战
+        pass
+    if lo > 0 and hi >= lo:
+        hit["level"] = r.randint(lo, hi)
+    elif not hit.get("level"):
         hit["level"] = roll_level(dex, trainer.party, rng=r) or 5
     hit["level"] = int(clamp(hit["level"], 2, 100))
     return hit

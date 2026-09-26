@@ -744,7 +744,18 @@ class PokemonWorldPlugin(Star):
             yield event.plain_result(err)
             return
         world = WorldMap()
-        gym = world.gym_at(t.region, t.location)
+        # 少数地点有两个道馆(数据构建时缺城市被并入同一节点)。gym_at 只返回
+        # 第一个,会导致第二个道馆的徽章永远拿不到 → 联盟要求全部徽章 → 冠军拿不到
+        # → 下一个地区永久锁死。这里优先取"还没拿到徽章"的那个。
+        _here = world.gyms_at(t.region, t.location)
+        gym = next(
+            (
+                g
+                for g in _here
+                if f"{t.region}:{int(g.get('order', 0))}" not in t.badges
+            ),
+            None,
+        ) or (_here[0] if _here else world.gym_at(t.region, t.location))
         sub = self._args(event, ("道馆", "gym", "馆主")).strip()
         if not gym:
             nxt = world.next_gym(t.region, t.badges)
@@ -1160,6 +1171,108 @@ class PokemonWorldPlugin(Star):
         yield event.plain_result(
             f"✨ 咦……?{growth.species_zh(old)} 进化成了 {growth.species_zh(target)}!"
         )
+
+    @filter.command("交换", alias={"trade", "连接交换", "通讯交换"})
+    async def cmd_trade(self, event: AstrMessageEvent):
+        """/交换 <队伍序号> —— 联网连接交换(触发通信进化)"""
+        t, err = self._require(event)
+        if err:
+            yield event.plain_result(err)
+            return
+        if B.in_battle(t):
+            yield event.plain_result("⚠️ 对战中不能交换,先结束当前对战。")
+            return
+        world = WorldMap()
+        if "center" not in world.services(t.location):
+            yield event.plain_result("❌ 连接交换要在宝可梦中心进行。")
+            return
+        arg = self._args(event, ("交换", "trade", "连接交换", "通讯交换")).strip()
+        if not arg:
+            yield event.plain_result("用法:`/交换 <队伍序号>` —— 与远方训练家交换(通信进化)")
+            return
+        idx = coerce_int(arg.split()[0], 1) or 1
+        async with self._lock(t.scope):
+            mon = t.mon(idx - 1)
+            if mon is None:
+                yield event.plain_result("❌ 队伍序号不对。")
+                return
+            dex = get_dex()
+            opts = [
+                o
+                for o in dex.evolution_options(
+                    mon.species, level=mon.level, moves=set(mon.moves),
+                    friendship=mon.friendship, gender=mon.gender, stats=mon.stats,
+                    trade=True,
+                )
+                if o.get("kind") == "trade"
+            ]
+            if not opts:
+                yield event.plain_result(
+                    f"⚠️ {mon.display} 通过连接交换也不会进化"
+                    "(通信进化只对胡地/耿鬼/怪力/大岩蛇这类有效)。"
+                )
+                return
+            old = mon.species
+            target = str(opts[0]["target"])
+            growth.apply_evolution(mon, target)
+            t.commit(idx - 1, mon)
+            self._save(t)
+        yield event.plain_result(
+            f"🔁 你与远方训练家完成了连接交换 —— {growth.species_zh(old)} 进化成了 "
+            f"{growth.species_zh(target)}!"
+        )
+
+    @filter.command("使用", alias={"use", "用道具"})
+    async def cmd_use(self, event: AstrMessageEvent):
+        """/使用 <道具> <队伍序号> —— 在战斗外使用道具(如神奇糖果)"""
+        t, err = self._require(event)
+        if err:
+            yield event.plain_result(err)
+            return
+        if B.in_battle(t):
+            yield event.plain_result("⚠️ 对战中请用 `/对战 item <道具>`。")
+            return
+        arg = self._args(event, ("使用", "use", "用道具")).strip()
+        tokens = arg.split()
+        if len(tokens) < 2:
+            yield event.plain_result("用法:`/使用 神奇糖果 1`(对战中用药请用 `/对战 item`)")
+            return
+        num = coerce_int(tokens[-1], 1) or 1
+        name = " ".join(tokens[:-1])
+        from .pw.items import resolve_bag_item
+
+        r = resolve_bag_item(name)
+        if not r or t.count(r[0]) <= 0:
+            yield event.plain_result(f"❌ 背包里没有「{name}」。")
+            return
+        key, entry = r
+        eff = entry.get("effect") or {}
+        mon = t.mon(num - 1)
+        if mon is None:
+            yield event.plain_result("❌ 队伍序号不对。")
+            return
+        if not eff.get("level_up"):
+            yield event.plain_result(
+                f"⚠️ {entry['zh']} 不能在战斗外这样使用"
+                "(回复/球类请在 `/对战` 里用,进化石用 `/进化 <序号> <道具>`)。"
+            )
+            return
+        # 神奇糖果:直接补足到下一级所需的经验
+        dex = get_dex()
+        rate = dex.growth_of(mon.species)
+        if mon.level >= 100:
+            yield event.plain_result(f"⚠️ {mon.display} 已经是 Lv100 了。")
+            return
+        need = max(1, dex.exp_for_level(rate, mon.level + 1) - mon.exp)
+        res = growth.gain_exp(mon, need, daytime=B.daytime_of())
+        t.take_item(key, 1)
+        t.commit(num - 1, mon)
+        self._save(t)
+        lines = [f"🍬 {mon.display} 使用了 {entry['zh']},升到了 Lv{mon.level}!"]
+        lines.extend(f"　└ 学会了「{growth.move_zh(mv)}」!" for mv in res.learned)
+        if res.evolved_to:
+            lines.append(f"　└ ✨ 进化成了 {growth.species_zh(res.evolved_to)}!")
+        yield event.plain_result("\n".join(lines))
 
     @filter.command("图鉴", alias={"dex", "宝可梦图鉴"})
     async def cmd_dex(self, event: AstrMessageEvent):

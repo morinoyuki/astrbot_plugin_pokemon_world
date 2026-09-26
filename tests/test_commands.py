@@ -689,3 +689,35 @@ def test_help_lists_reset_world():
     from prompts import HELP_TEXT
 
     assert "重置世界" in HELP_TEXT
+
+
+def test_trade_evolution_and_rare_candy_are_usable():
+    """通信进化(30 个物种)与神奇糖果(大赛/委托奖励)必须能真的用掉。"""
+    from pw.engine import create_pokemon
+
+    with tempfile.TemporaryDirectory() as tmp:
+        p, ev = _fresh(tmp)
+        t = p._load(ev)
+        t.data["location"] = "pewter-city"
+        t.data["party"] = [create_pokemon("kadabra", 30).to_dict()]
+        t.data["party"][0]["id"] = "m1"
+        t.add_item("rare-candy", 2)
+        p._save(t)
+
+        ev2 = _Event("/交换 1")
+        run_cmd(p, ev2, p.cmd_trade)
+        assert "胡地" in "".join(ev2.outputs), "勇基拉应通过连接交换进化"
+        assert p._load(ev2).party[0]["species"] == "alakazam"
+
+        ev3 = _Event("/使用 神奇糖果 1")
+        run_cmd(p, ev3, p.cmd_use)
+        t3 = p._load(ev3)
+        assert t3.party[0]["level"] >= 31, "神奇糖果要真的升级"
+        assert t3.count("rare-candy") == 1, "要消耗一颗"
+
+        # 不在宝可梦中心时不能交换
+        t3.data["location"] = "kanto-route-1"
+        p._save(t3)
+        ev4 = _Event("/交换 1")
+        run_cmd(p, ev4, p.cmd_trade)
+        assert "宝可梦中心" in "".join(ev4.outputs)
