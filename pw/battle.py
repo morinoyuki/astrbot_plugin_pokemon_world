@@ -388,7 +388,10 @@ def _finish_win(
     share = max(1, int(total_exp / len(participants)))
     for i in participants:
         cur = dict_to_mon(trainer.party[i])
-        g = growth.gain_exp(cur, share, daytime=daytime)
+        g = growth.gain_exp(
+            cur, share, daytime=daytime,
+            party=[str(m.get("species") or "") for m in trainer.party],
+        )
         cur.friendship = min(255, cur.friendship + 2)
         trainer.party[i] = mon_to_dict(cur, trainer.party[i])
         res.growth.append(

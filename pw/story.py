@@ -173,8 +173,8 @@ STORY: dict[str, dict] = {
              "title": "以太乐园的真相", "org": "以太基金会干部",
              "desc": "以太乐园里藏着究极之洞的秘密。",
              "team": [("bruxish", 45), ("mudsdale", 46), ("salazzle", 47)]},
-            {"key": "阿罗拉联盟", "kind": "league", "need": 8, "title": "阿罗拉联盟",
-             "desc": "集齐 8 枚考验印章,挑战阿罗拉四天王与冠军。"},
+            {"key": "阿罗拉联盟", "kind": "league", "need": 11, "title": "阿罗拉联盟",
+             "desc": "集齐 11 枚考验印章,挑战阿罗拉四天王与冠军。"},
             {"key": "日轮祭坛", "kind": "epilogue", "need": 8, "location": "altar-of-the-sunne",
              "title": "日轮祭坛的光",
              "desc": "冠军之后,祭坛之上的时空洞开启。"},
@@ -386,7 +386,10 @@ def tournament_meta(trainer, round_index: int, *, world: WorldMap | None = None,
         sp = m.get("species") if isinstance(m, dict) else None
         if not sp or sp not in dex.species:
             continue
-        specs.append({"species": sp, "level": int(clamp(hi, lo, hi))})
+        # 取对手的真实等级,只把它钳进该轮的区间 —— 旧写法 clamp(hi, lo, hi)
+        # 恒等于 hi,所有对手都被拉到该轮上限。
+        real = int(m.get("level") or hi) if isinstance(m, dict) else hi
+        specs.append({"species": sp, "level": int(clamp(max(real, lo), lo, hi))})
     if not specs:
         specs = [{"species": "dragonite", "level": hi}]
     return {

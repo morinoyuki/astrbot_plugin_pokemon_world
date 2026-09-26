@@ -519,8 +519,12 @@ class Dex:
         trade: bool = False,
         daytime: str | None = None,
         stats: dict | None = None,
+        party=(),
     ) -> list[dict]:
-        """列出当前状态下所有进化选项,每项 {target, kind, reason, met, ...}。"""
+        """列出当前状态下所有进化选项,每项 {target, kind, reason, met, ...}。
+
+        party 用于判定"队伍里有某只宝可梦"这类条件(小球飞鱼需要铁炮鱼)。
+        """
         entry = self.species.get(species_key) or {}
         moveset = set(moves or ())
         out: list[dict] = []
@@ -549,7 +553,7 @@ class Dex:
             elif kind == "trade":
                 met = bool(trade) and (not req_item or self.item_matches(item, req_item))
             elif kind == "levelExtra":
-                met = self._extra_met(ce, moveset, friendship)
+                met = self._extra_met(ce, moveset, friendship, party)
             else:  # other:特殊条件,需手动 force
                 met = False
             fixed = (ce.get("gender") or "").upper()[:1]
@@ -576,13 +580,24 @@ class Dex:
             )
         return out
 
-    def _extra_met(self, ce: dict, moveset: set, friendship: int) -> bool:
+    def _extra_met(self, ce: dict, moveset: set, friendship: int, party=()) -> bool:
         reason = (ce.get("evoCondition") or "").lower()
         if "fairy" in reason:
             return friendship >= 100 and any(
                 self._move_type(m) == "Fairy" for m in moveset
             )
-        # 磁场 / 特殊地点等:模拟中视为可达成(由叙事决定)
+        if "party" in reason:
+            # "with a Remoraid in party":队伍里真的要有那只宝可梦。
+            # 旧写法无条件返回 True → 小球飞鱼不需要铁炮鱼也能进化。
+            have = {str(x) for x in party}
+            if not have:
+                return False
+            for word in re.findall(r"[a-z][a-z\-]{3,}", reason):
+                hit = self.resolve_species(word)
+                if hit and str(hit[0]) in have:
+                    return True
+            return False
+        # 磁场等特殊地点条件:当前引擎不模拟地点磁场,按可达成处理(已在文档声明)
         return True
 
     def level_evolutions(

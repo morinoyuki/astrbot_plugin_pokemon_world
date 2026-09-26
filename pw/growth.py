@@ -87,6 +87,7 @@ def auto_evolve(
     *,
     daytime: str | None = None,
     trade: bool = False,
+    party=(),
 ) -> str:
     """结算"升级即以当前条件成立"的进化(等级/亲密度/招式/携带/能力值)。
 
@@ -106,6 +107,7 @@ def auto_evolve(
             trade=trade,
             daytime=daytime,
             stats=mon.stats,
+            party=party,
         )
 
     # 循环结算:一次大额经验会跨过多级门槛(小火龙→火恐龙→喷火龙),
@@ -159,7 +161,9 @@ def apply_evolution(mon: Pokemon, target: str) -> str:
     return target
 
 
-def gain_exp(mon: Pokemon, amount: int, *, daytime: str | None = None) -> GrowthResult:
+def gain_exp(
+    mon: Pokemon, amount: int, *, daytime: str | None = None, party=()
+) -> GrowthResult:
     """结算经验:升到足够等级、自动学招(未满 4 招)、条件满足则进化。"""
     dex = get_dex()
     res = GrowthResult()
@@ -167,7 +171,14 @@ def gain_exp(mon: Pokemon, amount: int, *, daytime: str | None = None) -> Growth
     if amount <= 0:
         return res
     if mon.level >= 100:
+        # 满级不再涨经验,但**仍要尝试进化**:否则 Lv100 才凑齐条件的宝可梦
+        # (小球飞鱼、亲密度进化、携带道具进化)会永久停在非最终形态。
         res.capped = True
+        before = mon.species
+        evolved = auto_evolve(mon, daytime=daytime, party=party)
+        if evolved:
+            res.evolved_from = before
+            res.evolved_to = evolved
         return res
 
     mon.exp += amount
@@ -193,7 +204,7 @@ def gain_exp(mon: Pokemon, amount: int, *, daytime: str | None = None) -> Growth
         res.capped = True
 
     before_species = mon.species
-    evolved = auto_evolve(mon, daytime=daytime)
+    evolved = auto_evolve(mon, daytime=daytime, party=party)
     if evolved:
         res.evolved_from = before_species
         res.evolved_to = evolved

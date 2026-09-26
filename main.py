@@ -879,6 +879,23 @@ class PokemonWorldPlugin(Star):
         if B.in_battle(t):
             yield event.plain_result("⚠️ 先结束当前对战。")
             return
+        # 主线必须按序推进:不能跳过"击退敌对组织"等章节直接通关联盟。
+        # 注意只拦"挑战",看板(纯信息展示)照常显示。
+        cur = story.current_stage(t)
+        if cur and cur.get("kind") != "league":
+            need = int(cur.get("need") or 0)
+            loc_key = str(cur.get("location") or "")
+            if cur.get("kind") == "badge" and need > t.badge_count(region):
+                todo = f"先获得 {need} 枚徽章(当前 {t.badge_count(region)} 枚)"
+            elif loc_key:
+                todo = f"前往 {world.node_zh(loc_key)} 用 `/主线 挑战`"
+            else:
+                todo = "用 `/主线 挑战` 开战"
+            yield event.plain_result(
+                f"❌ 主线还没推进到联盟 —— 当前章节「{cur.get('title')}」:{todo}。"
+                "输入 `/主线` 查看下一步。"
+            )
+            return
         err = _start_err(t)
         if err:
             yield event.plain_result(err)
@@ -2159,6 +2176,16 @@ class PokemonWorldPlugin(Star):
             if res.outcome == "caught":
                 legendary.mark_caught(t, site["species"])
                 lines.append(f"🐉 传说的宝可梦 {site['zh']} 成为了你的伙伴!")
+                # 主线"尾声"章节:在该地点收服传说即算完成。
+                # 之前没有任何路径能标记 epilogue → 主线面板永远停在"当前目标"。
+                cur = story.current_stage(t)
+                if (
+                    cur
+                    and cur.get("kind") == "epilogue"
+                    and cur.get("location") == (site.get("location") or "")
+                    and story.mark_stage(t, t.region, cur["key"])
+                ):
+                    lines.append(f"📜 主线推进:{cur.get('title')} —— 传说与你建立了羁绊!")
             elif res.outcome == "win":
                 legendary.mark_fled(t, site["species"], day)
                 lines.append(

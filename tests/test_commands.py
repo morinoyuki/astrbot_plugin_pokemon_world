@@ -825,3 +825,114 @@ def test_legendary_loss_marks_fled():
             1,
         )
         assert legendary.fled_today(t, site["species"], 1), "逃跑也要标记当天逃走"
+
+
+def test_league_requires_story_progress():
+    """主线必须按序:不能跳过章节直接通关联盟。"""
+    with tempfile.TemporaryDirectory() as tmp:
+        p, ev = _fresh(tmp)
+        t = p._load(ev)
+        t.data["location"] = "kanto-pokemon-league"
+        for i in range(1, 9):
+            t.add_badge("kanto", i)
+        p._save(t)
+        ev2 = _Event("/联盟 挑战")
+        run_cmd(p, ev2, p.cmd_league)
+        out = "".join(ev2.outputs)
+        assert "主线还没推进到联盟" in out, out
+        assert "当前章节" in out
+
+
+def test_epilogue_stage_completes_on_legendary_catch():
+    """尾声章节(第 6 章)必须真的能完成 —— 否则主线面板永远停在"当前目标"。"""
+    from pw import legendary, story
+
+    with tempfile.TemporaryDirectory() as tmp:
+        p, ev = _fresh(tmp)
+        t = p._load(ev)
+        epilogue = next(
+            s for s in story.region_stages("kanto") if s.get("kind") == "epilogue"
+        )
+        t.data["location"] = epilogue["location"]
+        # 把前面 5 章标为已完成 → 当前章节就是尾声
+        for stage in story.region_stages("kanto"):
+            if stage["key"] != epilogue["key"]:
+                story.mark_stage(t, "kanto", stage["key"])
+        p._save(t)
+        assert story.current_stage(t)["key"] == epilogue["key"]
+
+        site = next(
+            s for s in legendary.sites_for("kanto") if s.get("location") == epilogue["location"]
+        )
+        text = p._after_battle(
+            t,
+            {"kind": "legend", "title": "传说战", "legend": site},
+            turn_result_caught(),
+            1,
+        )
+        assert "主线推进" in text, text
+        assert epilogue["key"] in list(t.flag("story:kanto") or [])
+        assert story.current_stage(t) is None, "尾声完成后本地区主线应全部完成"
+
+
+def turn_result_caught():
+    from pw.battle import TurnResult
+
+    return TurnResult(outcome="caught", finished=True)
+
+
+def test_alola_league_requirement_matches_actual_gate():
+    """阿罗拉联盟章节写的门槛必须与 /联盟 的实际检查一致。"""
+    from pw import story
+    from pw.world import WorldMap
+
+    world = WorldMap()
+    stage = next(
+        s for s in story.region_stages("alola") if s.get("kind") == "league"
+    )
+    assert int(stage["need"]) == len(world.gyms("alola")), (
+        f"阿罗拉联盟需 {stage['need']} 枚,实际道馆/考验 {len(world.gyms('alola'))} 个"
+    )
+    assert str(len(world.gyms("alola"))) in stage["desc"]
+
+
+def test_tournament_opponent_levels_use_real_levels():
+    """大赛对手等级不该被强制拉成该轮上限。"""
+    from pw import story
+
+    with tempfile.TemporaryDirectory() as tmp:
+        p, ev = _fresh(tmp)
+        t = p._load(ev)
+        t.set_flag("champion:kanto", True)
+        meta = story.tournament_meta(t, 0)
+        lo, hi = story.TOURNAMENT_LEVELS[0]
+        levels = [int(m["level"]) for m in meta["team"]]
+        assert levels, "对手队伍不能为空"
+        assert all(lo <= lv <= hi for lv in levels), levels
+        # 关键:不能被**全部**拉成该轮上限(旧实现 clamp(hi, lo, hi) 恒等于 hi)
+        assert not all(lv == hi for lv in levels), f"全被拉成上限 {hi}:{levels}"
+
+
+def test_mantyke_needs_remoraid_in_party():
+    """小球飞鱼必须有铁炮鱼才进化(旧实现无条件成立)。"""
+    from pw import growth
+    from pw.engine import create_pokemon
+
+    alone = create_pokemon("mantyke", 50)
+    growth.gain_exp(alone, 10 ** 6)
+    assert alone.species == "mantyke"
+
+    with_friend = create_pokemon("mantyke", 50)
+    growth.gain_exp(with_friend, 10 ** 6, party=["remoraid"])
+    assert with_friend.species == "mantine"
+
+
+def test_level_100_still_allows_condition_evolutions():
+    """满级不再涨经验,但仍应结算"条件进化",否则永久停在非最终形态。"""
+    from pw import growth
+    from pw.engine import create_pokemon
+
+    mon = create_pokemon("mantyke", 100)
+    growth.gain_exp(mon, 10 ** 7, party=["remoraid"])
+    assert mon.species == "mantine"
+    assert mon.level == 100
