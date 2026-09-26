@@ -704,3 +704,57 @@ def test_tournament_requires_champion_and_builds_team():
     for rnd in range(3):
         m = story.tournament_meta(t, rnd, world=world, rng=__import__("random").Random(rnd))
         assert m["team"]
+
+
+def test_no_arbitrage_between_buy_and_sell():
+    """卖价绝不能高于买价 —— 否则"买了立刻卖"就是无限刷钱。
+
+    历史 bug:买价会吃徽章折扣 + 世界事件折扣并四舍五入到 10 的整数倍,
+    而卖价用的是不带折扣的价格 // 2。3 徽章 + 事件打五折时精灵球买价 90₽、
+    卖价 95₽,白赚 5₽。
+    """
+    from pw.items import BAG_ITEMS
+    from pw.world import item_price
+
+    worst = None
+    for key in BAG_ITEMS:
+        for badges in range(17):
+            for disc in (1.0, 0.95, 0.9, 0.8, 0.7, 0.65, 0.6, 0.55, 0.5):
+                buy = item_price(key, badge_count=badges, discount=disc)
+                sell = max(1, item_price(key, badge_count=badges, discount=disc) // 2)
+                assert sell <= buy, f"{key} 徽章{badges} 折扣{disc}:买 {buy} 卖 {sell} 可套利"
+                if worst is None or sell - buy > worst[0]:
+                    worst = (sell - buy, key)
+    assert worst[0] <= 0
+
+
+def test_world_modifiers_are_clamped_after_stacking():
+    """多场事件叠加后的总量必须仍在声明区间内(否则 money_mult 能到 19683 倍)。"""
+    from pw.events import EFFECT_RANGES
+    from pw.worldstate import WorldState
+
+    st = WorldState({"day": 100, "events": []}, "g1")
+    for i in range(9):
+        st.add_event({
+            "id": f"e{i}", "kind": "festival", "title": "测试", "until_day": 105,
+            "effects": {"money_mult": 3.0, "encounter_mult": 3.0, "rare_mult": 5.0,
+                        "shop_discount": 0.5},
+        })
+    m = st.modifiers
+    for key in ("money_mult", "encounter_mult", "rare_mult", "shop_discount"):
+        lo, hi = EFFECT_RANGES[key]
+        assert lo <= m[key] <= hi, f"{key}={m[key]} 超出声明区间 {EFFECT_RANGES[key]}"
+
+    # 单场事件仍然按原值生效(钳制不能把正常效果压平)
+    st2 = WorldState({"day": 100, "events": []}, "g1")
+    st2.add_event({"id": "a", "title": "庆典", "until_day": 105,
+                   "effects": {"money_mult": 1.3}})
+    assert abs(st2.modifiers["money_mult"] - 1.3) < 1e-9
+
+    # 折扣取 min(叠加只会更便宜,不会互相相乘)
+    st3 = WorldState({"day": 100, "events": []}, "g1")
+    st3.add_event({"id": "a", "title": "清仓", "until_day": 105,
+                   "effects": {"shop_discount": 0.8}})
+    st3.add_event({"id": "b", "title": "大甩卖", "until_day": 105,
+                   "effects": {"shop_discount": 0.6}})
+    assert abs(st3.modifiers["shop_discount"] - 0.6) < 1e-9

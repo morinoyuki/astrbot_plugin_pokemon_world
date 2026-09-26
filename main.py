@@ -13,6 +13,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import os
 import tempfile
 from datetime import datetime
@@ -89,8 +90,13 @@ class PokemonWorldPlugin(Star):
         )
 
     async def terminate(self):
-        if self._scheduler_task and not self._scheduler_task.done():
-            self._scheduler_task.cancel()
+        # 取消后台调度并**等它真正退出**:只 cancel 不 await 会在重载插件时
+        # 留下 "Task was destroyed but it is pending" 的悬挂任务。
+        task, self._scheduler_task = self._scheduler_task, None
+        if task and not task.done():
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError, Exception):
+                await task
 
     # ══════════════════════════════════════════════════════════════
     # 基础设施
@@ -900,7 +906,12 @@ class PokemonWorldPlugin(Star):
             yield event.plain_result(f"❌ 你没有足够的「{name}」。")
             return
         t.take_item(key, n)
-        gain = max(1, item_price(key, badge_count=t.badge_count()) // 2) * n
+        # 卖价必须与买价用**同一个基准**(同样吃徽章折扣与世界事件折扣)。
+        # 原来的写法是不带折扣的 item_price(...) // 2,而买价会先打折再四舍五入到
+        # 10 的整数倍 —— 3 徽章 + 事件打五折时精灵球买价 90₽、卖价 95₽,
+        # 于是"买了立刻卖"就能白赚 5₽,可无限刷钱。
+        gain = max(1, item_price(key, badge_count=t.badge_count(),
+                                 discount=discount) // 2) * n
         t.add_money(gain)
         self._save(t)
         yield event.plain_result(

@@ -8,7 +8,15 @@ from __future__ import annotations
 
 import os
 
-from .util import ensure_dir, game_day, read_json, safe_name, stable_rng, write_json_atomic
+from .util import (
+    clamp,
+    ensure_dir,
+    game_day,
+    read_json,
+    safe_name,
+    stable_rng,
+    write_json_atomic,
+)
 from .world import REGION_ORDER
 
 WEATHERS = ["", "", "", "sun", "rain", "sand", "snow"]
@@ -122,6 +130,15 @@ class WorldState:
         return gone
 
     def _recompute_modifiers(self) -> None:
+        """把当天所有生效事件折算成一组世界修正值。
+
+        **倍数类效果必须封顶**:单个事件已经被裁剪到各自的区间内,但多场事件
+        同时生效时原来是**连乘**的 —— 9 场满增益叠起来 money_mult 高达 19683 倍
+        (1000₽ 的战斗奖励变成 1968 万₽),rare_mult 更是能到 195 万倍。
+        所以这里对最终结果再做一次区间钳制:总量也必须落在声明范围内。
+        """
+        from .events import EFFECT_RANGES  # 延迟导入,避免模块循环依赖
+
         m = dict(DEFAULT_MODIFIERS)
         for e in self.active_events():
             eff = e.get("effects") or {}
@@ -134,6 +151,9 @@ class WorldState:
                 )
             if eff.get("battle_weather"):
                 m["battle_weather"] = str(eff["battle_weather"])
+        for k, rng in EFFECT_RANGES.items():
+            if rng and k in m:
+                m[k] = float(clamp(float(m[k]), rng[0], rng[1]))
         self.data["modifiers"] = m
 
     def locked_until(self, location: str) -> int | None:
