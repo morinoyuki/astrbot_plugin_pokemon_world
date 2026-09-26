@@ -532,3 +532,65 @@ def test_simultaneous_faint_counts_as_player_win():
             break
     assert bt.finished
     assert bt.winner == "player", f"同归于尽应判玩家胜,实际 {bt.winner}"
+
+
+def test_badge_glyphs_are_centered_in_the_shield():
+    """徽章里的属性徽记必须居中(实测旧实现水平左偏 0.09×边长)。
+
+    旧实现把徽记画在 (x, y+0.08s)、边长 0.82s —— 盾牌是 x..x+size 居中,
+    而徽记从 x 起 → 左偏;未获得状态又用了整格 1.0s,两种状态大小与位置都不一致。
+    """
+    scale = 6
+    size = 16
+
+    def ink_center(image, x0, y0):
+        xs, ys = [], []
+        for y in range(int(y0 * scale), int((y0 + size) * scale)):
+            for x in range(int(x0 * scale), int((x0 + size) * scale)):
+                if image.getpixel((x, y)) == UI.BADGE_MARK:
+                    xs.append(x)
+                    ys.append(y)
+        if not xs:
+            return None
+        return ((min(xs) + max(xs)) / 2 - x0 * scale) / scale, (
+            (min(ys) + max(ys)) / 2 - y0 * scale
+        ) / scale
+
+    kinds = [
+        "Rock", "Water", "Electric", "Grass", "Poison", "Psychic", "Fire",
+        "Ground", "Flying", "Bug", "Ghost", "Dragon", "Dark", "Steel", "Fairy",
+        "Normal", "Ice", "Fighting",
+    ]
+    # 18 枚排一行会超出默认 240 宽画布 → 用更宽的画布(Screen 支持自定义尺寸)
+    sc = UI.Screen(scale=scale, w=len(kinds) * 20 + 8, h=32)
+    for i, kind in enumerate(kinds):
+        sc.badge(4 + i * 20, 6, size, on=True, kind=kind)
+    im = Image.open(io.BytesIO(sc.finish())).convert("RGB")
+
+    # 盾牌主体中心:x + size/2、y + 0.57*size
+    for i, kind in enumerate(kinds):
+        center = ink_center(im, 4 + i * 20, 6)
+        assert center, f"{kind} 没有画出徽记"
+        dx, dy = center[0] - size / 2, center[1] - 0.57 * size
+        assert abs(dx) <= 1.2, f"{kind} 徽记水平偏心 {dx:+.2f}px"
+        assert abs(dy) <= 1.8, f"{kind} 徽记垂直偏心 {dy:+.2f}px"
+
+
+def test_unobtained_badge_glyph_has_no_gold_leak():
+    """未获得徽章的徽记里不能出现金色内芯(那是"已获得"的配色)。
+
+    火焰/毒等图形的镂空原本硬编码成金色,画在灰色槽里会冒出一个金点。
+    """
+    scale = 6
+    sc = UI.Screen(scale=scale)
+    sc.badge(6, 6, 16, on=False, kind="Fire")
+    sc.badge(30, 6, 16, on=False, kind="Poison")
+    im = Image.open(io.BytesIO(sc.finish())).convert("RGB")
+    gold = UI.BADGE_ON
+    leaked = [
+        (x / scale, y / scale)
+        for y in range(im.height)
+        for x in range(im.width)
+        if im.getpixel((x, y)) == gold
+    ]
+    assert not leaked, f"未获得徽章里泄漏了金色像素:{leaked[:5]}"

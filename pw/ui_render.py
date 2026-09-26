@@ -55,42 +55,42 @@ BADGE_ON_HI = (252, 228, 140)
 # ── 徽章里的属性徽记 ──────────────────────────────────────────────
 # 每个函数在 (x, y) 起、边长 s 的方框内用给定颜色作画。形状尽量简单但可区分,
 # 让 8 枚徽章不再长得一模一样(道馆面板 / 训练家卡 / 联盟都会用到)。
-def _bg_rock(d, x, y, s, c):
+def _bg_rock(d, x, y, s, c, hole):
     d.polygon([(x + s * 0.5, y + s * 0.15), (x + s * 0.92, y + s * 0.85),
                (x + s * 0.08, y + s * 0.85)], fill=c)
 
 
-def _bg_water(d, x, y, s, c):
+def _bg_water(d, x, y, s, c, hole):
     d.polygon([(x + s * 0.5, y + s * 0.08), (x + s * 0.88, y + s * 0.6),
                (x + s * 0.12, y + s * 0.6)], fill=c)
     d.ellipse([x + s * 0.12, y + s * 0.42, x + s * 0.88, y + s * 0.92], fill=c)
 
 
-def _bg_electric(d, x, y, s, c):
+def _bg_electric(d, x, y, s, c, hole):
     d.polygon([(x + s * 0.58, y + s * 0.06), (x + s * 0.2, y + s * 0.55),
                (x + s * 0.48, y + s * 0.55), (x + s * 0.38, y + s * 0.94),
                (x + s * 0.8, y + s * 0.42), (x + s * 0.5, y + s * 0.42)], fill=c)
 
 
-def _bg_fire(d, x, y, s, c):
+def _bg_fire(d, x, y, s, c, hole):
     d.polygon([(x + s * 0.5, y + s * 0.06), (x + s * 0.86, y + s * 0.62),
                (x + s * 0.5, y + s * 0.95), (x + s * 0.14, y + s * 0.62)], fill=c)
-    d.ellipse([x + s * 0.34, y + s * 0.56, x + s * 0.66, y + s * 0.9], fill=BADGE_ON)
+    d.ellipse([x + s * 0.34, y + s * 0.56, x + s * 0.66, y + s * 0.9], fill=hole)
 
 
-def _bg_grass(d, x, y, s, c):
+def _bg_grass(d, x, y, s, c, hole):
     d.polygon([(x + s * 0.5, y + s * 0.08), (x + s * 0.9, y + s * 0.5),
                (x + s * 0.5, y + s * 0.92), (x + s * 0.1, y + s * 0.5)], fill=c)
 
 
-def _bg_ice(d, x, y, s, c):
+def _bg_ice(d, x, y, s, c, hole):
     for ang in ((0, 1), (1, 0), (1, 1), (1, -1)):
         d.line([x + s * (0.5 - ang[0] * 0.4), y + s * (0.5 - ang[1] * 0.4),
                 x + s * (0.5 + ang[0] * 0.4), y + s * (0.5 + ang[1] * 0.4)],
                fill=c, width=2)
 
 
-def _bg_fighting(d, x, y, s, c):
+def _bg_fighting(d, x, y, s, c, hole):
     d.rounded_rectangle([x + s * 0.16, y + s * 0.3, x + s * 0.84, y + s * 0.88],
                         radius=2, fill=c)
     for i in range(3):
@@ -98,55 +98,57 @@ def _bg_fighting(d, x, y, s, c):
                      x + s * (0.36 + i * 0.2), y + s * 0.34], fill=c)
 
 
-def _bg_poison(d, x, y, s, c):
+def _bg_poison(d, x, y, s, c, hole):
     d.ellipse([x + s * 0.16, y + s * 0.2, x + s * 0.84, y + s * 0.88], fill=c)
-    d.ellipse([x + s * 0.4, y + s * 0.46, x + s * 0.6, y + s * 0.66], fill=BADGE_ON)
+    d.ellipse([x + s * 0.4, y + s * 0.46, x + s * 0.6, y + s * 0.66], fill=hole)
 
 
-def _bg_ground(d, x, y, s, c):
-    _bg_rock(d, x, y, s, c)
+def _bg_ground(d, x, y, s, c, hole):
+    _bg_rock(d, x, y, s, c, hole)
     d.rectangle([x + s * 0.1, y + s * 0.86, x + s * 0.9, y + s * 0.96], fill=c)
 
 
-def _bg_flying(d, x, y, s, c):
+def _bg_flying(d, x, y, s, c, hole):
     d.line([x + s * 0.08, y + s * 0.5, x + s * 0.5, y + s * 0.16,
             x + s * 0.92, y + s * 0.5], fill=c, width=2)
     d.line([x + s * 0.24, y + s * 0.78, x + s * 0.5, y + s * 0.52,
             x + s * 0.76, y + s * 0.78], fill=c, width=2)
 
 
-def _bg_psychic(d, x, y, s, c):
+def _bg_psychic(d, x, y, s, c, hole):
     d.ellipse([x + s * 0.08, y + s * 0.3, x + s * 0.92, y + s * 0.72], fill=c)
-    d.ellipse([x + s * 0.4, y + s * 0.42, x + s * 0.6, y + s * 0.62], fill=BADGE_ON)
+    d.ellipse([x + s * 0.4, y + s * 0.42, x + s * 0.6, y + s * 0.62], fill=hole)
 
 
-def _bg_bug(d, x, y, s, c):
+def _bg_bug(d, x, y, s, c, hole):
     d.ellipse([x + s * 0.2, y + s * 0.16, x + s * 0.8, y + s * 0.5], fill=c)
     for i in range(3):
         d.line([x + s * 0.5, y + s * 0.44, x + s * (0.14 + i * 0.36), y + s * 0.9],
                fill=c, width=2)
 
 
-def _bg_ghost(d, x, y, s, c):
+def _bg_ghost(d, x, y, s, c, hole):
     d.pieslice([x + s * 0.14, y + s * 0.14, x + s * 0.86, y + s * 0.8],
                180, 360, fill=c)
     d.rectangle([x + s * 0.14, y + s * 0.46, x + s * 0.86, y + s * 0.8], fill=c)
     for i in range(2):
         d.ellipse([x + s * (0.3 + i * 0.26), y + s * 0.38,
-                   x + s * (0.44 + i * 0.26), y + s * 0.52], fill=BADGE_ON)
+                   x + s * (0.44 + i * 0.26), y + s * 0.52], fill=hole)
 
 
-def _bg_dragon(d, x, y, s, c):
+def _bg_dragon(d, x, y, s, c, hole):
     d.polygon([(x + s * 0.1, y + s * 0.2), (x + s * 0.9, y + s * 0.2),
                (x + s * 0.5, y + s * 0.92)], fill=c)
 
 
-def _bg_dark(d, x, y, s, c):
-    d.ellipse([x + s * 0.14, y + s * 0.16, x + s * 0.86, y + s * 0.88], fill=c)
-    d.ellipse([x + s * 0.42, y + s * 0.06, x + s * 1.14, y + s * 0.78], fill=BADGE_ON)
+def _bg_dark(d, x, y, s, c, hole):
+    # 月牙是"两圆相减":剩下的墨迹天然落在左半边(包围盒中心偏左 ~0.13s)。
+    # 把两个圆整体右移,让月牙的**墨迹**在方框里居中(实测偏移 < 0.05s)。
+    d.ellipse([x + s * 0.34, y + s * 0.16, x + s * 1.06, y + s * 0.88], fill=c)
+    d.ellipse([x + s * 0.62, y + s * 0.06, x + s * 1.34, y + s * 0.78], fill=hole)
 
 
-def _bg_steel(d, x, y, s, c):
+def _bg_steel(d, x, y, s, c, hole):
     d.rounded_rectangle([x + s * 0.12, y + s * 0.34, x + s * 0.88, y + s * 0.66],
                         radius=1, fill=c)
     for i in range(3):
@@ -154,14 +156,14 @@ def _bg_steel(d, x, y, s, c):
                 x + s * (0.28 + i * 0.22), y + s * 0.84], fill=c, width=2)
 
 
-def _bg_fairy(d, x, y, s, c):
+def _bg_fairy(d, x, y, s, c, hole):
     d.polygon([(x + s * 0.5, y + s * 0.08), (x + s * 0.62, y + s * 0.42),
                (x + s * 0.94, y + s * 0.5), (x + s * 0.62, y + s * 0.58),
                (x + s * 0.5, y + s * 0.92), (x + s * 0.38, y + s * 0.58),
                (x + s * 0.06, y + s * 0.5), (x + s * 0.38, y + s * 0.42)], fill=c)
 
 
-def _bg_normal(d, x, y, s, c):
+def _bg_normal(d, x, y, s, c, hole):
     d.ellipse([x + s * 0.2, y + s * 0.2, x + s * 0.8, y + s * 0.8], fill=c)
 
 
@@ -1417,12 +1419,18 @@ class Screen:
         未获得的徽章也画一个淡色徽记(让玩家知道后面还有什么)。
         """
         d = self.d
+        # 徽记方框:以盾牌**主体**中心为基准居中。旧实现把徽记画在 (x, y+0.08s)
+        # 且边长 0.82s → 水平方向左偏 0.09s(因为盾牌是 x..x+size 居中,
+        # 而方框从 x 起);未获得状态又用了整格 1.0s,两种状态大小与位置都不一致。
+        gs = size * 0.74
+        gx = x + (size - gs) / 2
+        gy = y + size * 0.57 - gs / 2
         if not on:
             d.rounded_rectangle([x, y, x + size, y + size], radius=2,
                                 fill=BADGE_OFF, outline=BOX_EDGE)
             glyph = _BADGE_GLYPHS.get(str(kind))
             if glyph:
-                glyph(d, x, y, size, (196, 192, 176))
+                glyph(d, gx, gy, gs, (196, 192, 176), BADGE_OFF)
             return
         d.polygon(
             [
@@ -1439,7 +1447,7 @@ class Screen:
                fill=BADGE_ON_HI)
         glyph = _BADGE_GLYPHS.get(str(kind))
         if glyph:
-            glyph(d, x, y + size * 0.08, size * 0.82, BADGE_MARK)
+            glyph(d, gx, gy, gs, BADGE_MARK, BADGE_ON)
 
     def item_icon(self, kind: str, x: float, y: float, size: float = 9) -> None:
         """画道具图标:优先按道具 key,退化到大类,最后退化到默认。
