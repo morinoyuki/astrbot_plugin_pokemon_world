@@ -68,7 +68,7 @@ def _goal_lines(sc, text: str, width: float, size: float, limit: int = 2,
     if len(lines) > 1 and len(lines[-1]) <= 2:
         # 末行只有一两个字 → 合并成一行并省略结尾,不单独占一行
         head = lines[-2]
-        lines = lines[:-2] + [(head[:-1] + "…") if len(head) > 1 else "…"]
+        lines = [*lines[:-2], (head[:-1] + "…") if len(head) > 1 else "…"]
     return lines, size
 
 
