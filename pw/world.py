@@ -633,6 +633,42 @@ class WorldMap:
         """
         return [g for g in self.gyms(region) if g.get("location") == location]
 
+    def nearest_hub(self, current: str, candidates) -> str:
+        """在候选城镇里挑一个到 current **实际路网距离最近**的。
+
+        不能用"访问顺序的最后一项":`visited` 是按**首次到访**顺序追加的,
+        玩家折返回老城镇后失败,旧实现会把他送回那个很远的城镇 ——
+        实测站在 1 号道路(真新镇 1 跳)却被送回 6 跳外的深灰市。
+        """
+        cands = [str(c) for c in (candidates or []) if str(c) in self._index]
+        if not cands:
+            return ""
+        if not current or current not in self._index:
+            return cands[-1]
+        if current in cands:
+            return current
+        from collections import deque
+
+        dist: dict[str, int] = {current: 0}
+        dq = deque([current])
+        remaining = set(cands)
+        found: dict[str, int] = {}
+        while dq and remaining:
+            node = dq.popleft()
+            d = dist[node]
+            for nxt in self.neighbors(node):
+                if nxt in dist:
+                    continue
+                dist[nxt] = d + 1
+                if nxt in remaining:
+                    found[nxt] = d + 1
+                    remaining.discard(nxt)
+                dq.append(nxt)
+        if not found:
+            return cands[-1]      # 路网断连(理论上不会):退回旧行为
+        # 同距离时按候选顺序取第一个,保证结果稳定可测
+        return min(cands, key=lambda k: (found.get(k, 10 ** 9), cands.index(k)))
+
     def encounter_methods(self, key: str) -> list[str]:
         return sorted({p["method"] for p in self.wild_pools(key) if p["method"]})
 

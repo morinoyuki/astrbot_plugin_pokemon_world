@@ -489,9 +489,15 @@ def _finish_loss(
         lost = int(trainer.money * LOSS_MONEY_RATE)
         trainer.add_money(-lost)
     trainer.heal_party()
-    # 送回最近去过的城镇
+    # 送回**离失败地点最近**的城镇。
+    # 旧实现取"visited 里最后一个 hub" = 最近一次**首次到访**的城镇:玩家折返
+    # 回老城镇后失败,会被送回很远的城镇(实测站在 1 号道路被送到 6 跳外的深灰市,
+    # 而真新镇只有 1 跳)。玩家预期是"附近的宝可梦中心"。
     hubs = [k for k in trainer.data.get("visited", []) if world.is_hub(k)]
-    back = hubs[-1] if hubs else world.start_location(region)
+    here = str(trainer.data.get("location") or "")
+    back = world.nearest_hub(here, hubs) or (
+        hubs[-1] if hubs else world.start_location(region)
+    )
     if back:
         trainer.data["location"] = back
     res.rewards.append("😵 你的宝可梦全都失去了战斗能力……")

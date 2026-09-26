@@ -1216,3 +1216,97 @@ def test_cross_region_travel_requires_championship():
         capture_output=True, text=True, cwd=".",
     ).stdout
     assert not src.strip(), f"port: 仍是死条件:{src}"
+
+
+def test_nearest_hub_uses_real_distance_not_visit_order():
+    """团灭后要送回**路网距离最近**的城镇,不是"最近一次首次到访"的城镇。"""
+    from pw.world import WorldMap
+
+    world = WorldMap()
+    # 真新镇/常青市离 1 号道路 1 跳,深灰市 6 跳;但 visited 顺序把深灰市放最后
+    cands = ["pallet-town", "viridian-city", "pewter-city"]
+    got = world.nearest_hub("kanto-route-1", cands)
+    assert got in ("pallet-town", "viridian-city"), f"应送回 1 跳外的城镇,实际 {got}"
+    assert got != "pewter-city", "不该跨 6 跳回深灰市"
+
+    # 同距离时结果稳定(按候选顺序)
+    assert world.nearest_hub("kanto-route-1", cands) == world.nearest_hub(
+        "kanto-route-1", cands
+    )
+    # 已经在候选城镇里 → 就是它自己
+    assert world.nearest_hub("pewter-city", cands) == "pewter-city"
+    # 没有候选 → 空串,由调用方兜底
+    assert world.nearest_hub("kanto-route-1", []) == ""
+    # 候选全是没见过的 key → 空串
+    assert world.nearest_hub("kanto-route-1", ["nowhere-land"]) == ""
+
+
+def test_loss_penalty_and_respawn():
+    """团灭惩罚:非野生战扣一半金钱、队伍全恢复、送回最近的已到访城镇。
+
+    野生战失败不扣钱(低风险),但同样恢复队伍并送回城镇。
+    """
+    from pw import battle as B
+    from pw.engine import create_pokemon
+    from pw.player import new_trainer
+
+    def wipe(kind: str, money: int = 10000):
+        t = new_trainer("u1", "g1", "小智", starter="新叶喵")
+        t.data["region"] = "kanto"
+        t.data["visited"] = ["pallet-town", "viridian-city", "kanto-route-2",
+                             "pewter-city"]
+        t.data["location"] = "kanto-route-1"
+        t.data["money"] = money
+        weak = create_pokemon("caterpie", 2).to_dict()
+        weak["id"] = "m1"
+        t.data["party"] = [weak]
+        B.start(t, [{"species": "dragonite", "level": 60}], kind=kind, wild=(kind == "wild"),
+                meta={"kind": kind, "title": "测试战"}, day=1)
+        res = None
+        for _ in range(8):
+            if not B.in_battle(t):
+                break
+            res = B.take_turn(t, "move tackle", day=1)
+            if res.finished:
+                break
+        return t, res
+
+    # 非野生:扣 50%,送回最近的城镇(真新镇/常青市,1 跳),队伍满血
+    t, res = wipe("trainer")
+    assert res.outcome == "loss"
+    assert t.data["money"] == 5000, f"非野生战失败应扣一半,实际 {t.data['money']}"
+    assert t.data["location"] in ("pallet-town", "viridian-city")
+    assert all(m["cur_hp"] == m["max_hp"] for m in t.data["party"]), "队伍必须全恢复"
+
+    # 野生:不扣钱,但同样恢复 + 送回
+    t2, res2 = wipe("wild")
+    assert res2.outcome == "loss"
+    assert t2.data["money"] == 10000, "野生战失败不该扣钱"
+    assert t2.data["location"] in ("pallet-town", "viridian-city")
+    assert all(m["cur_hp"] == m["max_hp"] for m in t2.data["party"])
+
+
+def test_loss_without_any_visited_hub_falls_back_to_start():
+    """还没到过任何城镇(新手刚出门)时,失败要回到地区起点而不是原地不动。"""
+    from pw import battle as B
+    from pw.engine import create_pokemon
+    from pw.player import new_trainer
+    from pw.world import WorldMap
+
+    world = WorldMap()
+    t = new_trainer("u1", "g1", "小智", starter="新叶喵")
+    t.data["region"] = "kanto"
+    t.data["visited"] = []
+    t.data["location"] = "kanto-route-1"
+    weak = create_pokemon("caterpie", 2).to_dict()
+    weak["id"] = "m1"
+    t.data["party"] = [weak]
+    B.start(t, [{"species": "dragonite", "level": 60}], kind="wild", wild=True,
+            meta={"kind": "wild", "title": "野生战"}, day=1)
+    for _ in range(8):
+        if not B.in_battle(t):
+            break
+        res = B.take_turn(t, "move tackle", day=1)
+        if res.finished:
+            break
+    assert t.data["location"] == world.start_location("kanto")
