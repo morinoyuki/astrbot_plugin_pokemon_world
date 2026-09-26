@@ -111,6 +111,17 @@ def kind_of(identifier: str, region: str = "") -> str:
     return "area"
 
 
+# 上游 locations.json 里混着"不是地点"的伪条目:
+#   roaming-{kanto,johto,hoenn,sinnoh,kalos} —— 游走宝可梦的抽象容器
+#   unknown-all-* / unknown-dungeon        —— Pokéwalker/事件占位符
+# 它们都带着野池,若不剔除,玩家会看到能"前往 Roaming Sinnoh"这种事。
+PSEUDO_LOCATION_RE = re.compile(r"^(roaming-|unknown-)")
+
+
+def is_pseudo_location(identifier: str) -> bool:
+    return bool(PSEUDO_LOCATION_RE.match(identifier))
+
+
 def pools_non_empty(loc: dict) -> bool:
     return any(bool(v) for v in loc.get("pools", {}).values())
 
@@ -151,7 +162,7 @@ def build_region(
     skipped: list[str] = []
     nodes: dict[str, str] = {}  # id -> kind
     for ident, loc in locs.items():
-        if loc.get("region") != region:
+        if loc.get("region") != region or is_pseudo_location(ident):
             continue
         kind = kind_of(ident, region)
         if kind == "town" or pools_non_empty(loc):

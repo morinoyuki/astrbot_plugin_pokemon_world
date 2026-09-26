@@ -53,5 +53,17 @@
     "type": "string",
     "hint": "管理员可执行 `/重置世界 all` 清空本会话全部存档",
     "default": ""
+  },
+  "battle_image": {
+    "description": "战斗画面渲染成图片",
+    "type": "bool",
+    "hint": "模仿经典宝可梦对战界面(敌方/我方血量条、经验条、队伍球、天气、消息框)。渲染失败会自动回退为文字",
+    "default": true
+  },
+  "battle_image_scale": {
+    "description": "战斗图片缩放倍率",
+    "type": "int",
+    "hint": "逻辑分辨率 240×160,默认 3 倍 → 720×480。可设 2(小)/4(大)",
+    "default": 3
   }
 }

@@ -13,6 +13,8 @@
 from __future__ import annotations
 
 import asyncio
+import os
+import tempfile
 from datetime import datetime
 
 from astrbot.api import logger
@@ -31,7 +33,7 @@ from .prompts import (
 from .pw import battle as B
 from .pw import daily as D
 from .pw import events as EV
-from .pw import growth, npc
+from .pw import growth, legendary, npc, story
 from .pw.dex import get_dex
 from .pw.items import BAG_ITEMS
 from .pw.narrate import Narrator
@@ -203,6 +205,9 @@ class PokemonWorldPlugin(Star):
         if pe:
             lines.append("📨 今日个人事件:")
             lines += pe
+        # 主线:达标即完成的章节自动推进(boa需战斗,league需冠军)
+        for st in story.progress(trainer, world=WorldMap(), day=day):
+            lines.append(f"📜 主线推进:{st['title']} —— {st['desc']}")
         self._save_state(state)
         self._save(trainer)
         return lines
@@ -404,14 +409,35 @@ class PokemonWorldPlugin(Star):
             mods = state.modifiers
             ev = state.event_at(loc)
             notice = [*today]
+            # 0) 神兽定点:条件满足且就在此地时,优先遭遇
+            site = (legendary.ready(t, world=world, day=state.day) or [None])[0]
+            if site:
+                if t.all_fainted():
+                    yield event.plain_result("❌ 队伍全部失去战斗能力,先 `/治疗`。")
+                    return
+                meta = legendary.legendary_meta(t, site)
+                log = B.start(
+                    t, meta["team"], kind="legend", wild=True, meta=meta,
+                    weather=state.weather_for(t.region), day=state.day,
+                )
+                self._save(t)
+                notice.append(f"🐉 传说的宝可梦出现了:{site['zh']} Lv{site['level']}!")
+                async for r in self._emit_battle(
+                    event, t, meta, log,
+                    text="\n".join(notice) + "\n" + self._battle_hint(t),
+                ):
+                    yield r
+                return
             # 1) 本地事件:火箭队 / 稀有宝可梦
             if ev and ev.get("kind") == "rocket":
                 meta = npc.rocket_battle(t, ev)
                 log = B.start(t, meta["team"], kind="rocket", meta=meta, day=state.day)
                 self._save(t)
                 notice.append(f"🚀 {EV.event_text(ev)}")
-                yield event.plain_result("\n".join(notice))
-                yield event.plain_result(self._battle_intro(meta, log))
+                async for r in self._emit_battle(
+                    event, t, meta, log, text="\n".join(notice) + "\n" + self._battle_intro(meta, log)
+                ):
+                    yield r
                 return
             # 2) 普通探索掷骰
             roll = rng.random()
@@ -446,12 +472,12 @@ class PokemonWorldPlugin(Star):
                     day=state.day,
                 )
                 self._save(t)
-                if notice:
-                    yield event.plain_result("\n".join(notice))
-                yield event.plain_result(
-                    self._battle_intro(meta, log)
-                    + f"\n\n{self._battle_hint(t)}"
-                )
+                async for r in self._emit_battle(
+                    event, t, meta, log,
+                    text="\n".join(notice) + "\n" + self._battle_intro(meta, log)
+                    + f"\n\n{self._battle_hint(t)}",
+                ):
+                    yield r
                 return
             if roll < min(0.95, wild_p + npc_p):
                 npcs = npc.route_trainers(t, loc, day=state.day)
@@ -489,6 +515,7 @@ class PokemonWorldPlugin(Star):
             return
         async with self._lock(t.scope):
             state = self._state(t.scope)
+            meta = dict(B.session(t).get("meta") or {})
             res = B.take_turn(
                 t,
                 arg,
@@ -504,12 +531,15 @@ class PokemonWorldPlugin(Star):
             text = "\n".join(res.lines)
             if res.finished:
                 text += "\n\n" + self._result_text(t, res)
+                text = self._after_battle(t, meta, res, state.day) + text
                 text = await self._narrate(
                     "对战结束", res.lines + res.rewards + res.growth, text
                 )
-                yield event.plain_result(text)
+                async for r in self._emit_battle(event, t, meta, res.lines, text=text):
+                    yield r
                 return
-            yield event.plain_result(text)
+            async for r in self._emit_battle(event, t, meta, res.lines, text=text):
+                yield r
             if res.awaiting_switch:
                 yield event.plain_result(
                     "⚠️ 你的宝可梦倒下了,必须换人:\n" + B.team_status(t)
@@ -1081,6 +1111,11 @@ class PokemonWorldPlugin(Star):
             f" · 电脑 {len(t.box)} 只",
             f"👟 步数 {t.data.get('steps', 0)} · 第 {game_day()} 天({game_day_str()})",
         ]
+        cur = story.current_stage(t)
+        if cur:
+            lines.append(f"📜 主线:{cur['title']} —— {cur['desc']}")
+        else:
+            lines.append("📜 主线:本地区已完成(可用 `/大赛` 挑战世界大赛)")
         party = t.party_mon()
         if party:
             lines.append("── 队伍 ──")
@@ -1255,6 +1290,252 @@ class PokemonWorldPlugin(Star):
         except Exception as e:
             logger.debug("宝可梦世界: 每日通知失败: %s", e)
 
+
+    @filter.command("主线", alias={"story", "剧情", "主线剧情"})
+    async def cmd_story(self, event: AstrMessageEvent):
+        """/主线 [挑战] —— 主线与敌对组织剧情"""
+        t, err = self._require(event)
+        if err:
+            yield event.plain_result(err)
+            return
+        sub = self._args(event, ("主线", "story", "剧情", "主线剧情")).strip()
+        async with self._lock(t.scope):
+            state = self._state(t.scope)
+            for st in story.progress(t, world=WorldMap(), day=state.day):
+                self._save(t)
+                yield event.plain_result(f"📜 主线推进:{st['title']}")
+            cur = story.current_stage(t)
+            if sub not in ("挑战", "challenge", "打", "开战"):
+                yield event.plain_result(story.chapter_text(t))
+                return
+            if not cur:
+                yield event.plain_result("本地区主线已经完成了。")
+                return
+            reason = story.stage_locked(t, cur)
+            if reason:
+                yield event.plain_result(f"❌ {reason}。\n{cur['desc']}")
+                return
+            if B.in_battle(t):
+                yield event.plain_result("⚠️ 先结束当前对战。")
+                return
+            if t.all_fainted():
+                yield event.plain_result("❌ 队伍全部失去战斗能力,先 `/治疗`。")
+                return
+            meta = story.boss_meta(t, cur)
+            log = B.start(
+                t, meta["team"], kind="rocket", meta=meta,
+                weather=state.weather_for(t.region), day=state.day,
+            )
+            self._save(t)
+            async for r in self._emit_battle(
+                event, t, meta, log, text=self._battle_intro(meta, log)
+            ):
+                yield r
+
+    @filter.command("神兽", alias={"legend", "传说", "传说宝可梦"})
+    async def cmd_legend(self, event: AstrMessageEvent):
+        """/神兽 [挑战 <名字>] —— 传说宝可梦定点遭遇"""
+        t, err = self._require(event)
+        if err:
+            yield event.plain_result(err)
+            return
+        sub = self._args(event, ("神兽", "legend", "传说", "传说宝可梦")).strip()
+        async with self._lock(t.scope):
+            state = self._state(t.scope)
+            world = WorldMap()
+            if sub.startswith(("挑战", "challenge", "打", "捕捉", "catch")):
+                name = sub
+                for prefix in ("挑战", "challenge", "打", "捕捉", "catch"):
+                    if name.startswith(prefix):
+                        name = name[len(prefix) :].strip()
+                        break
+                here = legendary.ready(t, world=world, day=state.day)
+                if not here:
+                    yield event.plain_result(
+                        "❌ 这里没有可挑战的神兽。用 `/神兽` 查看已知栖息地。"
+                    )
+                    return
+                site = None
+                if name:
+                    for cand in here:
+                        if name in (cand["zh"], cand["species"]):
+                            site = cand
+                            break
+                    if site is None:
+                        yield event.plain_result(
+                            f"❌ 此地没有「{name}」。可选:"
+                            + "、".join(c["zh"] for c in here)
+                        )
+                        return
+                else:
+                    site = here[0]
+                if B.in_battle(t):
+                    yield event.plain_result("⚠️ 先结束当前对战。")
+                    return
+                meta = legendary.legendary_meta(t, site)
+                log = B.start(
+                    t, meta["team"], kind="legend", wild=True, meta=meta,
+                    weather=state.weather_for(t.region), day=state.day,
+                )
+                self._save(t)
+                async for r in self._emit_battle(
+                    event, t, meta, log,
+                    text=self._battle_intro(meta, log)
+                    + f"\n\n{self._battle_hint(t)}",
+                ):
+                    yield r
+                return
+            yield event.plain_result(legendary.panel_text(t, world=world, day=state.day))
+
+    @filter.command("大赛", alias={"tournament", "世界大赛", "世界锦标赛"})
+    async def cmd_tournament(self, event: AstrMessageEvent):
+        """/大赛 [挑战] —— 冠军后解锁的世界大赛"""
+        t, err = self._require(event)
+        if err:
+            yield event.plain_result(err)
+            return
+        world = WorldMap()
+        if not story.tournament_unlocked(t, world=world):
+            yield event.plain_result(
+                "❌ 世界大赛只对冠军开放 —— 先成为任意地区的冠军吧。"
+            )
+            return
+        sub = self._args(event, ("大赛", "tournament", "世界大赛", "世界锦标赛")).strip()
+        rnd = int(t.flag("tournament_round", 0) or 0)
+        best = int(t.flag("tournament_best", 0) or 0)
+        if sub not in ("挑战", "challenge", "打", "开战"):
+            lines = [
+                "🏆 世界大赛",
+                f"最佳战绩:{story.TOURNAMENT_ROUNDS[min(best, 2)][0] if best else '未参赛'}",
+                "",
+            ]
+            for i, (name, _order) in enumerate(story.TOURNAMENT_ROUNDS):
+                mark = "✅" if best > i else ("▶️" if rnd == i else "⬜")
+                lines.append(f"{mark} {name}")
+            lines.append("")
+            lines.append(
+                "输入 `/大赛 挑战` 开始"
+                + (f"(下一场:{story.TOURNAMENT_ROUNDS[min(rnd, 2)][0]})" if rnd < 3 else "(已夺冠,可再次挑战)")
+            )
+            yield event.plain_result("\n".join(lines))
+            return
+        if B.in_battle(t):
+            yield event.plain_result("⚠️ 先结束当前对战。")
+            return
+        if rnd >= len(story.TOURNAMENT_ROUNDS):
+            rnd = 0
+        async with self._lock(t.scope):
+            state = self._state(t.scope)
+            if t.all_fainted():
+                yield event.plain_result("❌ 队伍全部失去战斗能力,先 `/治疗`。")
+                return
+            meta = story.tournament_meta(
+                t, rnd, world=world, rng=stable_rng("tour", t.uid, state.day, rnd)
+            )
+            log = B.start(
+                t, meta["team"], kind="tournament", meta=meta,
+                weather=state.weather_for(t.region), day=state.day,
+            )
+            self._save(t)
+            async for r in self._emit_battle(
+                event, t, meta, log, text=self._battle_intro(meta, log)
+            ):
+                yield r
+
+    # ── 战斗结果钩子 / 图片输出 ──
+    def _after_battle(self, t: Trainer, meta: dict, res: B.TurnResult, day: int) -> str:
+        """结算主线/神兽/大赛的额外结果,返回要显示的前置文本。"""
+        lines: list[str] = []
+        stage = meta.get("story")
+        if stage:
+            if res.outcome == "win":
+                if story.mark_stage(t, t.region, stage["key"]):
+                    lines.append(f"📜 主线推进:{stage['title']} —— 你击退了{stage.get('org') or '敌方'}!")
+            elif res.outcome in ("loss", "forfeit"):
+                lines.append("📜 敌方暂时退去了……整理好队伍后再来 `/主线 挑战`。")
+        site = meta.get("legend")
+        if site:
+            if res.outcome == "caught":
+                legendary.mark_caught(t, site["species"])
+                lines.append(f"🐉 传说的宝可梦 {site['zh']} 成为了你的伙伴!")
+            elif res.outcome == "win":
+                legendary.mark_fled(t, site["species"], day)
+                lines.append(
+                    f"🐉 {site['zh']} 被击退了,它逃走了 —— 明天再来或许还能遇到。"
+                )
+        rnd = meta.get("tournament_round")
+        if rnd is not None:
+            if res.outcome == "win":
+                nxt = int(rnd) + 1
+                if nxt > int(t.flag("tournament_best", 0) or 0):
+                    t.set_flag("tournament_best", nxt)
+                if nxt >= len(story.TOURNAMENT_ROUNDS):
+                    if not t.flag("world_champion"):
+                        t.set_flag("world_champion", True)
+                        t.add_item("master-ball", 1)
+                        t.add_item("rare-candy", 3)
+                        t.add_money(20000)
+                        lines.append(
+                            "🏆 你成为了世界冠军!获得大师球 ×1、神奇糖果 ×3、20000₽。"
+                        )
+                    t.set_flag("tournament_round", 0)
+                else:
+                    t.set_flag("tournament_round", nxt)
+                    lines.append(
+                        f"🏆 晋级:{story.TOURNAMENT_ROUNDS[min(nxt, 2)][0]}!输入 `/大赛 挑战` 继续。"
+                    )
+            else:
+                t.set_flag("tournament_round", 0)
+                lines.append("🏆 你被淘汰了,大赛之旅结束。可以再次 `/大赛 挑战`。")
+        self._save(t)
+        return ("\n".join(lines) + "\n\n") if lines else ""
+
+    async def _emit_battle(
+        self,
+        event: AstrMessageEvent,
+        t: Trainer,
+        meta: dict,
+        log: list[str],
+        *,
+        res: B.TurnResult | None = None,
+        text: str = "",
+    ):
+        """按配置输出战斗画面:优先图片(仿经典对战界面),失败自动回退文本。"""
+        if self._cfg("battle_image", True):
+            try:
+                from .pw import battle_render
+
+                if battle_render.available():
+                    v = B.view(t)
+                    data = battle_render.render_battle(
+                        v.get("my") or {},
+                        v.get("foe") or {},
+                        list(log)[-3:],
+                        title=(meta.get("title") or v.get("title") or ""),
+                        weather=v.get("weather") or "",
+                        terrain=v.get("terrain") or "",
+                        location=WorldMap().node_zh(t.location),
+                        my_party=v.get("party") or [],
+                        turn=int(v.get("turn") or 0),
+                        scale=int(coerce_int(self._cfg("battle_image_scale", 3), 3) or 3),
+                    )
+                    if data:
+                        path = os.path.join(
+                            tempfile.gettempdir(), f"pw_battle_{t.uid}_{len(data)}.png"
+                        )
+                        with open(path, "wb") as f:  # noqa: ASYNC230
+                            f.write(data)
+                        comps = [Image.fromFileSystem(path)]
+                        if text:
+                            comps.append(Plain(text))
+                        else:
+                            comps.append(Plain(" "))
+                        yield event.chain_result(comps)
+                        return
+            except Exception as e:  # 渲染失败必须回退文本
+                logger.debug("宝可梦世界: 战斗图片渲染失败,回退文本: %s", e)
+        if text:
+            yield event.plain_result(text)
 
 # ── 模块级小工具 ──────────────────────────────────────────────────
 def _sp_zh(species: str | None) -> str:

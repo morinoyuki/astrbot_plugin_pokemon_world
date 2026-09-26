@@ -35,7 +35,13 @@ from pw.dex import get_dex  # noqa: E402
 from pw.engine import create_pokemon  # noqa: E402
 from pw.items import BAG_ITEMS, resolve_bag_item  # noqa: E402
 from pw.player import Trainer, TrainerStore, new_trainer  # noqa: E402
-from pw.world import REGION_ORDER, WorldMap, item_price  # noqa: E402
+from pw.world import (  # noqa: E402
+    CORE_METHODS,
+    REGION_ORDER,
+    WorldMap,
+    is_wild_method,
+    item_price,
+)
 from pw.worldstate import WorldState  # noqa: E402
 
 DEX = get_dex()
@@ -438,3 +444,263 @@ def test_plugin_package_imports_and_commands_registered():
                  "cmd_catch", "cmd_shop", "cmd_gym", "cmd_league", "cmd_dex",
                  "cmd_evolve", "cmd_learn", "cmd_today", "cmd_help"):
         assert hasattr(cls, name), f"缺少指令 {name}"
+
+
+# ══════════════════════════════════════════════════════════════════
+# 野外池清洗(上游数据带伪条目 / 异常等级 / 串区中文名)
+# ══════════════════════════════════════════════════════════════════
+LEGENDARIES = {
+    "articuno", "zapdos", "moltres", "mewtwo", "mew", "raikou", "entei", "suicune",
+    "lugia", "ho-oh", "celebi", "regirock", "regice", "registeel", "latias", "latios",
+    "kyogre", "groudon", "rayquaza", "jirachi", "deoxys", "uxie", "mesprit", "azelf",
+    "dialga", "palkia", "heatran", "giratina", "cresselia", "reshiram", "zekrom",
+    "kyurem", "xerneas", "yveltal", "zygarde", "solgaleo", "lunala", "necrozma",
+    "zacian", "zamazenta", "eternatus",
+}
+
+
+def test_wild_pools_exclude_non_wild_methods_and_legendaries():
+    """普通野池里不能出现 礼物/定点/团本/游走/`-special` 以及传说宝可梦。"""
+    world = WorldMap()
+    for key in world._index:
+        for p in world.wild_pools(key):
+            assert is_wild_method(p["method"]), (key, p)
+            assert not p["method"].endswith("-special"), (key, p)
+            assert p["species"] not in LEGENDARIES, f"野池混入传说:{key} {p}"
+            assert 1 <= p["min"] <= p["max"] <= 100, (key, p)
+
+
+def test_side_pools_clamped_to_core_level_band():
+    """空中/垂钓等侧池不得脱离该地点核心等级区间。
+
+    PokeAPI 的 Let's Go 空中遭遇是 min=3/max=56,会把 Lv56 大比鸟塞进 1 号道路。
+    """
+    world = WorldMap()
+    checked = 0
+    for key in world._index:
+        pools = world.wild_pools(key)
+        core = [p for p in pools if p["method"] in CORE_METHODS]
+        if not core:
+            continue
+        lo = min(p["min"] for p in core)
+        hi = max(p["max"] for p in core)
+        for p in pools:
+            if p["method"] in CORE_METHODS:
+                continue
+            # 代码保证:min 不低于核心下限;max 不高于核心上限(若侧池本身
+            # 下限就高于核心上限,则收敛为单点 min==max,不再向上扩张)
+            assert p["min"] >= lo, (key, p, lo, hi)
+            assert p["max"] <= max(hi, p["min"]), (key, p, lo, hi)
+            checked += 1
+    assert checked > 50, f"侧池样本太少:{checked}"
+
+
+def test_wild_roll_levels_match_location_band():
+    """实际遭遇等级必须落在该地点真实区间(1 号道路不能出 Lv50 大比鸟)。"""
+    world = WorldMap()
+    t = new_trainer("u1", "g1", "小智", starter="皮卡丘", day=1)
+    for key in ("kanto-route-1", "digletts-cave", "kanto-route-17"):
+        pools = world.wild_pools(key)
+        lo = min(p["min"] for p in pools)
+        hi = max(p["max"] for p in pools)
+        t.data["location"] = key
+        for i in range(60):
+            t.data["steps"] = i * 11
+            hit = B.roll_wild(t)
+            assert hit, key
+            assert lo <= hit["level"] <= hi, (key, hit, lo, hi)
+
+
+def test_pseudo_locations_removed_from_map():
+    """roaming-* / unknown-* 不是地点,不该出现在可前往列表里。"""
+    world = WorldMap()
+    bad = [k for k in world._index if k.startswith(("roaming-", "unknown-"))]
+    assert not bad, bad
+    for region in world.regions_with_data():
+        for key in world.nodes(region):
+            assert not key.startswith(("roaming-", "unknown-"))
+            for nxt in world.neighbors(key):
+                assert not nxt.startswith(("roaming-", "unknown-"))
+
+
+def test_node_names_cleaned_and_routes_localized():
+    """节点名:道路按标识生成,去掉串区后缀,不留繁体。"""
+    world = WorldMap()
+    traditional = "號島碼頭園羅藍灣爾奧樂歐納樹馬礦關圓環離點緣衆會國學車東門長陽雲電龍劍銀鋼鐵紅綠黃陸橋廳場隊華萬縣鎮區鄉燈爐館營徑嶺淵溝灘澗廣廢"
+    for key in world._index:
+        zh = world.node_zh(key)
+        assert zh, key
+        assert not any(c in traditional for c in zh), (key, zh)
+        assert "（" not in zh and "(" not in zh, (key, zh)
+        m = __import__("re").search(r"(?:^|-)(sea-)?route-(\d+)$", key)
+        if m:
+            want = f"{int(m.group(2))}号{'水路' if m.group(1) else '道路'}"
+            assert zh == want, (key, zh, want)
+
+
+def test_legendary_event_uses_curated_pool():
+    from pw import npc
+
+    world = WorldMap()
+    t = new_trainer("u1", "g1", "小智", starter="皮卡丘", day=1)
+    t.data["location"] = "kanto-route-1"
+    ev = {"kind": "rare", "id": "e1", "location": "kanto-route-1", "region": "kanto", "created_day": 3}
+    hit = npc.legendary_at(t, ev)
+    assert hit and hit["species"] in npc.LEGENDARY_POOLS["kanto"], hit
+    assert hit["level"] >= 40 and hit["_rare"] is True
+    # 事件指定了合法物种则用它
+    hit2 = npc.legendary_at(t, {**ev, "species": "snorlax"})
+    assert hit2["species"] == "snorlax"
+    # 指定的非法物种 → 回退到地区池
+    hit3 = npc.legendary_at(t, {**ev, "species": "not-a-pokemon"})
+    assert hit3["species"] in npc.LEGENDARY_POOLS["kanto"]
+    _ = world
+
+
+# ══════════════════════════════════════════════════════════════════
+# 主线剧情 / 神兽 / 世界大赛
+# ══════════════════════════════════════════════════════════════════
+def test_story_stages_are_valid():
+    from pw import story
+
+    world = WorldMap()
+    for region in world.regions_with_data():
+        info = story.STORY.get(region)
+        assert info, f"{region} 没有主线"
+        assert info.get("org") and info.get("leader"), region
+        stages = story.region_stages(region)
+        assert len(stages) >= 5, (region, len(stages))
+        assert [s["kind"] for s in stages].count("boss") >= 2, region
+        for st in stages:
+            for field in ("key", "kind", "title", "desc"):
+                assert st.get(field), (region, st)
+            loc = st.get("location")
+            if st["kind"] in ("boss", "epilogue"):
+                assert loc, f"{region}/{st['key']} 缺少地点"
+            if loc:
+                assert loc in world.nodes(region), (region, st["key"], loc)
+            for sp, lv in st.get("team") or []:
+                assert DEX.resolve_species(sp), (region, st["key"], sp)
+                assert 1 <= int(lv) <= 100
+
+
+def test_story_progress_follows_badges():
+    from pw import story
+
+    t = new_trainer("u1", "g1", "小智", starter="皮卡丘", day=1)
+    newly = story.progress(t)
+    assert any(s["key"] == "出发" for s in newly)
+    assert story.current_stage(t)["key"] == "首枚徽章"
+    t.add_badge("kanto", 1)
+    newly = story.progress(t)
+    assert any(s["key"] == "首枚徽章" for s in newly)
+    # 徽章足够后当前章节应是第一个 boss
+    t.add_badge("kanto", 2)
+    story.progress(t)
+    cur = story.current_stage(t)
+    assert cur and cur["kind"] == "boss", cur
+    meta = story.boss_meta(t, cur)
+    assert meta["team"] and meta["kind"] == "rocket"
+    assert meta["location"] in WorldMap().nodes("kanto")
+    assert story.mark_stage(t, "kanto", cur["key"]) is True
+    assert story.mark_stage(t, "kanto", cur["key"]) is False
+
+
+def test_story_league_and_epilogue_after_champion():
+    from pw import story
+
+    t = new_trainer("u1", "g1", "小智", starter="皮卡丘", day=1)
+    for i in range(1, 9):
+        t.add_badge("kanto", i)
+    t.set_flag("champion:kanto", True)
+    story.progress(t)
+    done = set(t.flag("story:kanto", []) or [])
+    assert {"出发", "首枚徽章", "关都联盟"} <= done, done
+    # 冠军后当前章节应为收尾(神兽)
+    remaining = [s for s in story.region_stages("kanto") if s["key"] not in done]
+    assert remaining and remaining[0]["kind"] in ("boss", "epilogue")
+
+
+def test_legendary_sites_are_valid():
+    from pw import legendary
+
+    world = WorldMap()
+    total = 0
+    for region in world.regions_with_data():
+        sites = legendary.sites_for(region)
+        assert len(sites) >= 3, f"{region} 神兽太少:{len(sites)}"
+        for s in sites:
+            assert s["species"] in DEX.species
+            assert s["location"] in world.nodes(region)
+            assert 1 <= int(s["level"]) <= 100
+            assert s["zh"]
+            total += 1
+    assert total >= 35, total
+
+
+def test_legendary_requires_location_badges_and_champion():
+    from pw import legendary
+
+    world = WorldMap()
+    t = new_trainer("u1", "g1", "小智", starter="皮卡丘", day=1)
+    sites = legendary.sites_for("kanto")
+    mewtwo = next(s for s in sites if s["species"] == "mewtwo")
+    # 不在地点 → 不 ready
+    assert not legendary.ready(t, day=1)
+    t.data["location"] = mewtwo["location"]
+    # 未成为冠军 → 不 ready
+    assert not legendary.ready(t, day=1)
+    t.set_flag("champion:kanto", True)
+    # 冠军 + 地点正确 → ready,但仍需未捕获
+    assert any(s["species"] == "mewtwo" for s in legendary.ready(t, day=1))
+    legendary.mark_caught(t, "mewtwo")
+    assert not any(s["species"] == "mewtwo" for s in legendary.ready(t, day=1))
+    # 徽章门槛
+    articuno = next(s for s in sites if s["species"] == "articuno")
+    t.data["location"] = articuno["location"]
+    assert not any(s["species"] == "articuno" for s in legendary.ready(t, day=1))
+    for i in range(1, int(articuno["need"]) + 1):
+        t.add_badge("kanto", i)
+    assert any(s["species"] == "articuno" for s in legendary.ready(t, day=1))
+    # 逃走后当天不能再战
+    legendary.mark_fled(t, "articuno", 5)
+    assert not any(s["species"] == "articuno" for s in legendary.ready(t, day=5))
+    assert any(s["species"] == "articuno" for s in legendary.ready(t, day=6))
+    _ = world
+
+
+def test_legendary_team_and_panel():
+    from pw import legendary
+
+    t = new_trainer("u1", "g1", "小智", starter="皮卡丘", day=1)
+    site = next(s for s in legendary.sites_for("kanto") if s["species"] == "articuno")
+    t.data["location"] = site["location"]
+    meta = legendary.legendary_meta(t, site)
+    assert meta["kind"] == "legend" and meta["wild"] is True
+    assert meta["team"] == [{"species": "articuno", "level": site["level"]}]
+    assert "传说" in legendary.panel_text(t, day=1)
+    # 打一场:确认能正常开战且捕获率极低(不会秒抓)
+    B.start(t, meta["team"], kind="legend", wild=True, meta=meta, day=1)
+    res = B.take_turn(t, "catch poke-ball", day=1, daytime="day")
+    assert not res.error
+    assert not (res.finished and res.outcome == "caught")
+
+
+def test_tournament_requires_champion_and_builds_team():
+    from pw import story
+
+    world = WorldMap()
+    t = new_trainer("u1", "g1", "小智", starter="皮卡丘", day=1)
+    assert story.tournament_unlocked(t, world=world) is False
+    t.set_flag("champion:kanto", True)
+    assert story.tournament_unlocked(t, world=world) is True
+    meta = story.tournament_meta(t, 0, world=world, rng=__import__("random").Random(1))
+    assert meta["kind"] == "tournament"
+    assert 1 <= len(meta["team"]) <= 6
+    for m in meta["team"]:
+        assert m["species"] in DEX.species
+        assert 1 <= m["level"] <= 100
+    # 三轮都会给出合法队伍
+    for rnd in range(3):
+        m = story.tournament_meta(t, rnd, world=world, rng=__import__("random").Random(rnd))
+        assert m["team"]

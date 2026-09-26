@@ -74,7 +74,9 @@ class _Event:
         return ("text", str(text))
 
     def chain_result(self, comps):
-        self.outputs.append(f"<chain:{len(comps)}>")
+        # 图片卡片里也可能夹着 Plain 文本,测试需要能断言到它
+        texts = "".join(str(getattr(c, "text", "") or "") for c in comps)
+        self.outputs.append(f"<chain:{len(comps)}>{texts}")
         return ("chain", comps)
 
 
@@ -300,3 +302,101 @@ def test_gym_and_league_flow():
         t = p._load(ev)
         assert "kanto:1" in t.badges, t.badges
         assert not t.data.get("battle")
+
+
+def test_story_legend_tournament_commands():
+    """主线/神兽/世界大赛三个指令的面板与挑战入口。"""
+    with tempfile.TemporaryDirectory() as tmp:
+        p = _Cmd(tmp)
+        ev = _Event("/开始 小智 新叶喵")
+        run_cmd(p, ev, p.cmd_start)
+
+        # /主线 面板
+        ev = _Event("/主线")
+        run_cmd(p, ev, p.cmd_story)
+        joined = "".join(ev.outputs)
+        assert ("主线" in joined and "敌对组织" not in joined) or "主线" in joined
+        assert "当前目标" in joined
+
+        # /主线 挑战(不在正确地点 → 拒绝)
+        t = p._load(ev)
+        for i in (1, 2):
+            t.add_badge("kanto", i)  # 满足首个 boss 的徽章门槛
+        p._save(t)
+        ev = _Event("/主线 挑战")
+        run_cmd(p, ev, p.cmd_story)
+        assert any(("先过去" in x) or ("不是战斗章节" in x) for x in ev.outputs)
+
+        # 走到正确地点并挑战 → 开战
+        from pw import story
+        from pw.engine import create_pokemon
+
+        t = p._load(ev)
+        cur = story.current_stage(t)
+        assert cur and cur["kind"] == "boss", cur
+        t.data["location"] = cur["location"]
+        # 必须在开战**之前**换强队:对战会把队伍快照写回存档
+        strong = create_pokemon("charizard", 80).to_dict()
+        strong["id"] = "m1"
+        t.data["party"] = [strong]
+        p._save(t)
+        ev = _Event("/主线 挑战")
+        run_cmd(p, ev, p.cmd_story)
+        assert p._load(ev).data.get("battle"), ev.outputs
+        done = False
+        for _ in range(80):
+            t = p._load(ev)
+            if t.party[0].get("cur_hp", 0) <= 0:
+                t.heal_party()
+                p._save(t)
+            ev2 = _Event(f"/对战 move {t.party[0]['moves'][0]}")
+            run_cmd(p, ev2, p.cmd_battle)
+            joined = "".join(ev2.outputs)
+            if "主线推进" in joined or "战斗胜利" in joined:
+                done = True
+            if "战斗胜利" in joined or "战斗失败" in joined:
+                break
+        t = p._load(ev)
+        assert done, "击败剧情敌人后应推进主线"
+        assert cur["key"] in (t.flag("story:kanto", []) or [])
+
+        # /神兽 面板
+        ev = _Event("/神兽")
+        run_cmd(p, ev, p.cmd_legend)
+        assert any("传说" in x for x in ev.outputs)
+        ev = _Event("/神兽 挑战 急冻鸟")
+        run_cmd(p, ev, p.cmd_legend)
+        assert any(("这里没有" in x) or ("此地没有" in x) or ("传说的宝可梦" in x) for x in ev.outputs)
+
+        # 把玩家送到急冻鸟栖息地并给足条件 → 能开战
+        from pw import legendary
+
+        t = p._load(ev)
+        site = next(s for s in legendary.sites_for("kanto") if s["species"] == "articuno")
+        t.data["location"] = site["location"]
+        for i in range(1, int(site["need"]) + 1):
+            t.add_badge("kanto", i)
+        p._save(t)
+        ev = _Event("/神兽 挑战 急冻鸟")
+        run_cmd(p, ev, p.cmd_legend)
+        assert p._load(ev).data.get("battle"), ev.outputs
+        assert any("传说的宝可梦" in x for x in ev.outputs)
+
+        # /大赛 未夺冠 → 拒绝
+        ev = _Event("/大赛")
+        run_cmd(p, ev, p.cmd_tournament)
+        assert any("冠军" in x for x in ev.outputs)
+
+        # 夺冠后 → 面板 + 挑战
+        t = p._load(ev)
+        t.set_flag("champion:kanto", True)
+        p._save(t)
+        ev = _Event("/大赛")
+        run_cmd(p, ev, p.cmd_tournament)
+        assert any("世界大赛" in x for x in ev.outputs)
+        t = p._load(ev)
+        t.data["battle"] = None
+        p._save(t)
+        ev = _Event("/大赛 挑战")
+        run_cmd(p, ev, p.cmd_tournament)
+        assert any(("对战" in x) or ("大赛" in x) for x in ev.outputs)

@@ -7,7 +7,6 @@
 from __future__ import annotations
 
 from .dex import get_dex
-from .encounter import roll_location_encounter
 from .trainer import generate_team
 from .util import clamp, stable_rng
 from .world import WorldMap
@@ -205,25 +204,50 @@ def rocket_battle(trainer, event: dict) -> dict:
     }
 
 
+# 各地区"稀有现身"的候选传说/幻之宝可梦(手工挑选,避免上游数据的伪条目)
+LEGENDARY_POOLS: dict[str, list[str]] = {
+    "kanto": ["articuno", "zapdos", "moltres", "mewtwo"],
+    "johto": ["raikou", "entei", "suicune", "lugia", "ho-oh"],
+    "hoenn": ["regirock", "regice", "registeel", "latias", "latios", "kyogre", "groudon", "rayquaza"],
+    "sinnoh": ["uxie", "mesprit", "azelf", "dialga", "palkia", "heatran", "giratina"],
+    "unova": ["cobalion", "terrakion", "virizion", "reshiram", "zekrom", "kyurem"],
+    "kalos": ["xerneas", "yveltal", "zygarde"],
+    "alola": ["tapu-koko", "tapu-lele", "tapu-bulu", "tapu-fini", "solgaleo", "lunala"],
+    "galar": ["zacian", "zamazenta", "eternatus"],
+}
+
+
 def legendary_at(trainer, event: dict) -> dict | None:
-    """rare 事件可能引来稀有宝可梦(作为野生战)。"""
+    """`rare` 事件引发的稀有/传说宝可梦遭遇(等级随玩家进度上浮)。"""
+    dex = get_dex()
     world = WorldMap()
     loc = event.get("location") or trainer.location
     if not loc:
         return None
-    rng = stable_rng("legend", trainer.scope, event.get("id") or "", event.get("created_day"))
-    hit = roll_location_encounter(
-        get_dex(), loc, include_special=True, rng=rng
+    region = world.region_of(loc) or trainer.region
+    rng = stable_rng(
+        "legend", trainer.scope, event.get("id") or "", event.get("created_day"), loc
     )
-    if not hit:
-        return None
+    species = ""
     if event.get("species"):
-        hit["species"] = event["species"]
-        entry = get_dex().species.get(hit["species"]) or {}
-        hit["zh"] = entry.get("zh") or entry.get("name") or hit["species"]
-        hit["types"] = list(entry.get("types") or [])
-    lead = trainer.party[0].get("level", 5) if trainer.party else 5
-    hit["level"] = int(clamp(max(hit.get("level", 1), int(lead) + 5), 5, 100))
-    hit["_rare"] = True
-    _ = world
-    return hit
+        r = dex.resolve_species(str(event["species"]))
+        if r:
+            species = r[0]
+    if not species:
+        pool = LEGENDARY_POOLS.get(region) or LEGENDARY_POOLS["kanto"]
+        pool = [s for s in pool if s in dex.species] or ["dragonite"]
+        species = rng.choice(pool)
+    entry = dex.species.get(species) or {}
+    if not entry:
+        return None
+    lead = int(trainer.party[0].get("level", 5) or 5) if trainer.party else 5
+    level = int(clamp(max(lead + 5, 45), 5, 100))
+    return {
+        "species": species,
+        "zh": entry.get("zh") or entry.get("name") or species,
+        "types": list(entry.get("types") or []),
+        "level": level,
+        "method": "rare",
+        "rarity": 1,
+        "_rare": True,
+    }

@@ -27,6 +27,7 @@ BATTLE_KINDS = {
     "champion": "冠军",
     "rocket": "火箭队",
     "legend": "传说宝可梦",
+    "tournament": "世界大赛",
 }
 
 # 道馆(及其他头衔战)失败时的罚金比例
@@ -100,8 +101,10 @@ def roll_wild(trainer: Trainer, *, rng=None, environment: str = "") -> dict | No
                 break
     if hit is None:
         return None
-    lead = trainer.party[0].get("level", 5) if trainer.party else 5
-    hit["level"] = roll_level(dex, trainer.party, rng=r) or int(lead)
+    # 等级用**该地点真实区间**(强规则:不该出现 1 号道路的 Lv50 大比鸟);
+    # 只有池子没给等级时才退化为按队伍进度估算。
+    if not hit.get("level"):
+        hit["level"] = roll_level(dex, trainer.party, rng=r) or 5
     hit["level"] = int(clamp(hit["level"], 2, 100))
     return hit
 
@@ -557,3 +560,79 @@ def team_status(trainer: Trainer) -> str:
             "　招式:" + " ".join(f"{growth.move_zh(m)}({mon.pp.get(m, 0)})" for m in mon.moves)
         )
     return "\n".join(lines)
+
+
+# ── 供图片渲染使用的视图 ─────────────────────────────────────────
+STATUS_CODES = ("brn", "par", "psn", "tox", "slp", "frz")
+
+
+def _mon_view(mon: Pokemon | None, *, exp_pct: float = 0.0) -> dict:
+    if mon is None:
+        return {}
+    dex = get_dex()
+    return {
+        "species": mon.species,
+        "name": mon.display,
+        "level": int(mon.level),
+        "cur_hp": int(mon.cur_hp),
+        "max_hp": int(max(1, mon.max_hp)),
+        "status": str(mon.status or ""),
+        "gender": str(mon.gender or ""),
+        "types": [dex.type_label(t) for t in (mon.types or [])],
+        "exp_pct": float(exp_pct),
+    }
+
+
+def exp_progress(mon: Pokemon) -> float:
+    """当前等级内的经验进度(0-100),用于战斗界面经验条。"""
+    dex = get_dex()
+    growth = dex.growth_of(mon.species)
+    lo = dex.exp_for_level(growth, mon.level)
+    hi = dex.exp_for_level(growth, min(100, mon.level + 1))
+    if hi <= lo:
+        return 100.0
+    return float(clamp(100.0 * (mon.exp - lo) / (hi - lo), 0.0, 100.0))
+
+
+def view(trainer: Trainer) -> dict:
+    """把当前对战(或待机状态)整理成渲染层需要的视图。"""
+    data = session(trainer)
+    party = [dict_to_mon(p) for p in trainer.party]
+    me = party[0] if party else None
+    out = {
+        "my": _mon_view(me, exp_pct=exp_progress(me) if me else 0.0),
+        "foe": {},
+        "party": [
+            {
+                "species": m.species,
+                "cur_hp": int(m.cur_hp),
+                "max_hp": int(max(1, m.max_hp)),
+            }
+            for m in party
+        ],
+        "turn": 0,
+        "weather": "",
+        "terrain": "",
+        "title": "",
+        "kind": "",
+    }
+    if not data:
+        return out
+    battle = battle_from_dict(data["battle"])
+    meta = data.get("meta") or {}
+    out["my"] = _mon_view(battle.player.mon, exp_pct=exp_progress(battle.player.mon) if battle.player.mon else 0.0)
+    out["foe"] = _mon_view(battle.enemy.mon)
+    out["party"] = [
+        {
+            "species": m.species,
+            "cur_hp": int(m.cur_hp),
+            "max_hp": int(max(1, m.max_hp)),
+        }
+        for m in battle.player.party
+    ]
+    out["turn"] = int(battle.turn)
+    out["weather"] = str(battle.weather or "")
+    out["terrain"] = str(battle.terrain or "")
+    out["title"] = str(meta.get("title") or "")
+    out["kind"] = str(data.get("kind") or "")
+    return out

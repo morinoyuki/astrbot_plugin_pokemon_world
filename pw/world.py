@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from functools import lru_cache
 
 from astrbot.api import logger
@@ -55,6 +56,285 @@ TIER_ZH = {
 }
 FLY_COST = 500
 TRAVEL_STEPS = 120
+
+# 这些"遭遇方式"不是随机野生遭遇,不应进入 /探索 与野外反查:
+#  · gift / gift-egg / npc-trade —— 赠送与交换
+#  · static / only-one / snag —— 定点与抢夺
+#  · max-raid / dynamax-adventure —— 团体战与极巨大冒险
+#  · 其余为配信/外设(宝可梦频道、Ranger、Colosseum 特典、吼吼鲸水桶等)
+# 另外所有以 `-special` 结尾的方法都要剔除 —— PokeAPI 的 Let's Go "空中特殊遭遇"
+# 数据不带可信等级区间(常见 min=3,max=56),会把急冻鸟/闪电鸟/火焰鸟/快龙
+# 塞进 1 号道路。实测这些条目共 72 条、覆盖 3 种传说宝可梦。
+NON_WILD_METHODS = {
+    # 游走传说宝可梦:留给"稀有现身"每日事件,不做成路边随机遭遇
+    "roaming-grass",
+    "roaming-water",
+    "gift",
+    "gift-egg",
+    "npc-trade",
+    "static",
+    "only-one",
+    "interact",
+    "max-raid",
+    "dynamax-adventure",
+    "snag",
+    "snag-rematch",
+    "colosseum-bonus-disc-jpn",
+    "colosseum-bonus-disc-us",
+    "pokemon-channel-pal",
+    "pokemon-ranger",
+    "wailmer-pail",
+}
+# 用于"核心等级区间"的方法(草丛/水面),用于收敛异常等级区间
+CORE_METHODS = {
+    "walk",
+    "overworld",
+    "overworld-dirt",
+    "overworld-water",  # Let's Go 的水面即"核心"地形
+    "grass-spots",
+    "dark-grass",
+    "surf",
+}
+
+# 上游地点中文名混有繁体(主要来自岛屿/城市名),这里做一次安全转简。
+# 只包含"繁→简"确定且不会破坏已有简体名的映射。
+_T2S = str.maketrans(
+    {
+        "號": "号",
+        "島": "岛",
+        "碼": "码",
+        "頭": "头",
+        "園": "园",
+        "羅": "罗",
+        "藍": "蓝",
+        "灣": "湾",
+        "爾": "尔",
+        "奧": "奥",
+        "樂": "乐",
+        "歐": "欧",
+        "納": "纳",
+        "樹": "树",
+        "馬": "马",
+        "礦": "矿",
+        "關": "关",
+        "圓": "圆",
+        "環": "环",
+        "離": "离",
+        "點": "点",
+        "緣": "缘",
+        "衆": "众",
+        "會": "会",
+        "國": "国",
+        "學": "学",
+        "車": "车",
+        "東": "东",
+        "門": "门",
+        "長": "长",
+        "陽": "阳",
+        "雲": "云",
+        "電": "电",
+        "龍": "龙",
+        "劍": "剑",
+        "銀": "银",
+        "鋼": "钢",
+        "鐵": "铁",
+        "紅": "红",
+        "綠": "绿",
+        "黃": "黄",
+        "陸": "陆",
+        "橋": "桥",
+        "廳": "厅",
+        "場": "场",
+        "隊": "队",
+        "華": "华",
+        "萬": "万",
+        "縣": "县",
+        "鎮": "镇",
+        "區": "区",
+        "鄉": "乡",
+        "燈": "灯",
+        "爐": "炉",
+        "館": "馆",
+        "營": "营",
+        "徑": "径",
+        "巖": "岩",
+        "嶺": "岭",
+        "淵": "渊",
+        "溝": "沟",
+        "灘": "滩",
+        "澗": "涧",
+        "甯": "宁",
+        "廣": "广",
+        "廢": "废",
+        "誕": "诞",
+        "覺": "觉",
+        "遙": "遥",
+        "憶": "忆",
+        "戰": "战",
+        "爭": "争",
+        "輪": "轮",
+        "豐": "丰",
+        "遺": "遗",
+        "跡": "迹",
+        "蔥": "葱",
+        "鬱": "郁",
+        "鏡": "镜",
+        "閃": "闪",
+        "連": "连",
+        "終": "终",
+        "結": "结",
+        "亞": "亚",
+        "帶": "带",
+        "個": "个",
+        "劃": "划",
+        "動": "动",
+        "塊": "块",
+        "壞": "坏",
+        "寶": "宝",
+        "歲": "岁",
+        "歸": "归",
+        "為": "为",
+        "無": "无",
+        "牆": "墙",
+        "現": "现",
+        "產": "产",
+        "祕": "秘",
+        "種": "种",
+        "稱": "称",
+        "積": "积",
+        "築": "筑",
+        "總": "总",
+        "聯": "联",
+        "聽": "听",
+        "腦": "脑",
+        "臺": "台",
+        "與": "与",
+        "葉": "叶",
+        "藝": "艺",
+        "記": "记",
+        "設": "设",
+        "話": "话",
+        "語": "语",
+        "誌": "志",
+        "認": "认",
+        "課": "课",
+        "誰": "谁",
+        "談": "谈",
+        "諾": "诺",
+        "讀": "读",
+        "貝": "贝",
+        "資": "资",
+        "費": "费",
+        "賞": "赏",
+        "質": "质",
+        "購": "购",
+        "較": "较",
+        "載": "载",
+        "軍": "军",
+        "軟": "软",
+        "農": "农",
+        "遊": "游",
+        "運": "运",
+        "達": "达",
+        "遞": "递",
+        "適": "适",
+        "選": "选",
+        "郵": "邮",
+        "醫": "医",
+        "釋": "释",
+        "鐘": "钟",
+        "際": "际",
+        "雙": "双",
+        "雛": "雏",
+        "靈": "灵",
+        "靜": "静",
+        "頂": "顶",
+        "順": "顺",
+        "須": "须",
+        "風": "风",
+        "飛": "飞",
+        "驗": "验",
+        "髮": "发",
+        "鬥": "斗",
+        "魯": "鲁",
+        "鳥": "鸟",
+        "鳳": "凤",
+        "鳴": "鸣",
+        "鷹": "鹰",
+        "麗": "丽",
+        "毀": "毁",
+        "湧": "涌",
+        "業": "业",
+        "夢": "梦",
+        "串": "串",
+        "挑": "挑",
+        "極": "极",
+        "間": "间",
+        "空": "空",
+        "海": "海",
+        "登": "登",
+        "冰": "冰",
+        "山": "山",
+        "抉": "抉",
+        "擇": "择",
+        "聚": "聚",
+        "圖": "图",
+        "書": "书",
+        "廠": "厂",
+        "雞": "鸡",
+        "鴨": "鸭",
+        "豬": "猪",
+        "貓": "猫",
+        "狗": "狗",
+        "騎": "骑",
+        "峽": "峡",
+        "濱": "滨",
+        "瀨": "濑",
+        "檜": "桧",
+        "橙": "橙",
+        "煙": "烟",
+        "囪": "囱",
+        "釜": "釜",
+        "炎": "炎",
+        "炮": "炮",
+        "塔": "塔",
+        "墳": "坟",
+        "揚": "扬",
+        "揮": "挥",
+        "掃": "扫",
+        "捕": "捕",
+        "獲": "获",
+        "獵": "猎",
+        "獸": "兽",
+        "蟲": "虫",
+        "魚": "鱼",
+        "蝦": "虾",
+        "蟹": "蟹",
+        "殼": "壳",
+        "鑽": "钻",
+        "鋁": "铝",
+        "銅": "铜",
+        "鉛": "铅",
+        "錫": "锡",
+        "鎂": "镁",
+        "鈦": "钛",
+        "鋅": "锌",
+        "鎳": "镍",
+        "銹": "锈",
+        "鏈": "链",
+    }
+)
+
+
+# 不是"地点"的伪条目(游走容器与占位符),即便地图数据里残留也不展示
+PSEUDO_LOCATION_RE = re.compile(r"^(roaming-|unknown-)")
+
+
+def is_wild_method(method: str) -> bool:
+    m = str(method or "")
+    if not m or m in NON_WILD_METHODS:
+        return False
+    return not m.endswith("-special")
 
 
 def _load_json(name: str) -> dict:
@@ -138,6 +418,30 @@ class WorldMap:
             cls._instance._init()
         return cls._instance
 
+    @staticmethod
+    def _clean_zh(zh: str, region: str) -> str:
+        """清洗上游地点中文名。
+
+        上游数据按**英文名**匹配中文名,"Route 16" 这种同名地点会互相覆盖
+        (关都16号道路拿到了阿罗拉的"16號道路(阿羅拉)")。因此:
+          · 道路/水路名一律按标识符重新生成(彻底摆脱串区与繁体);
+          · 其余名字去掉尾部的括号标注(地区/世代/版本),地区已在 UI 中展示。
+        """
+        text = str(zh or "").strip()
+        text = re.sub(r"\s*[（(][^）)]*[）)]\s*$", "", text).strip()
+        return text.translate(_T2S)
+
+    ROUTE_NUM_RE = re.compile(r"(?:^|-)(?:sea-)?route-(\d+)$")
+
+    @classmethod
+    def _localize_zh(cls, key: str, zh: str, region: str) -> str:
+        m = cls.ROUTE_NUM_RE.search(str(key or ""))
+        if m:
+            num = int(m.group(1))
+            water = "-sea-route-" in str(key)
+            return f"{num}号水路" if water else f"{num}号道路"
+        return cls._clean_zh(zh, region) or str(key)
+
     def _init(self) -> None:
         self._map = _load_json("maps.json") or _fallback_map()
         self._gyms = _load_json("gyms.json")
@@ -148,9 +452,20 @@ class WorldMap:
             if (d or {}).get("nodes")
         }
         self._index: dict[str, str] = {}
+        # 第一遍:剔除伪地点并建立全局索引(跨地区剪枝需要完整索引)
         for region, data in self.regions.items():
-            for key in (data.get("nodes") or {}):
+            nodes = data.get("nodes") or {}
+            for key in [k for k in nodes if PSEUDO_LOCATION_RE.match(k)]:
+                nodes.pop(key, None)
+            for key in nodes:
                 self._index[key] = region
+        # 第二遍:修正中文名、剪掉指向伪地点的相邻关系
+        for region, data in self.regions.items():
+            for key, node in (data.get("nodes") or {}).items():
+                node["zh"] = self._localize_zh(key, node.get("zh") or "", region)
+                node["next"] = [
+                    n for n in (node.get("next") or []) if n in self._index
+                ]
 
     # ── 基础查询 ──
     def has_region(self, region: str) -> bool:
@@ -239,22 +554,49 @@ class WorldMap:
 
     # ── 野生分布 ──
     def wild_pools(self, key: str, methods: set[str] | None = None) -> list[dict]:
-        """返回 [{species, min, max, method, rarity}],按当前地区默认版本组。"""
+        """返回该地点可随机遭遇的野生宝可梦 [{species,min,max,method,rarity}]。
+
+        只保留真正的野生遭遇方式(is_wild_method),并按"核心等级区间"收敛
+        异常等级(PokeAPI 的 Let's Go 空中遭遇常见 min=3/max=56)。
+        """
         dex = get_dex()
         region = self.region_of(key)
-        vg = dex.location_default_vg(key) if region else ""
-        rows = dex.location_pools(key, vg, methods=methods, include_special=True)
-        return [
-            {
-                "species": r.get("species") or "",
-                "min": int(r.get("min", 1) or 1),
-                "max": int(r.get("max", r.get("min", 1)) or 1),
-                "method": str(r.get("method") or ""),
-                "rarity": int(r.get("chance", 1) or 1),
-            }
-            for r in rows
-            if r.get("species")
-        ]
+        if not region:
+            return []
+        vg = dex.location_default_vg(key)
+        rows = dex.location_pools(key, vg, include_special=True)
+        rows = [r for r in rows if is_wild_method(str(r.get("method") or ""))]
+        if methods is not None:
+            rows = [r for r in rows if r["method"] in methods]
+        if not rows:
+            return []
+        core = [r for r in rows if r["method"] in CORE_METHODS]
+        if core:
+            core_lo = min(int(r["min"]) for r in core)
+            core_hi = max(int(r["max"]) for r in core)
+        else:
+            core_lo = min(int(r["min"]) for r in rows)
+            core_hi = max(int(r["max"]) for r in rows)
+        out = []
+        for r in rows:
+            lo = max(1, int(r["min"]))
+            hi = max(lo, int(r["max"]))
+            if r["method"] not in CORE_METHODS:
+                # 侧池(空中/垂钓/摇树/定点等)不得脱离该地点的核心等级区间
+                lo = max(lo, core_lo)
+                hi = min(hi, max(core_hi, core_lo))
+                if hi < lo:
+                    hi = lo
+            out.append(
+                {
+                    "species": r["species"],
+                    "min": lo,
+                    "max": hi,
+                    "method": r["method"],
+                    "rarity": int(r.get("chance", 1) or 1),
+                }
+            )
+        return [r for r in out if r["species"]]
 
     def encounter_methods(self, key: str) -> list[str]:
         return sorted({p["method"] for p in self.wild_pools(key) if p["method"]})
