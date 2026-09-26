@@ -326,8 +326,11 @@ _T2S = str.maketrans(
 )
 
 
-# 不是"地点"的伪条目(游走容器与占位符),即便地图数据里残留也不展示
-PSEUDO_LOCATION_RE = re.compile(r"^(roaming-|unknown-)")
+# 不是"地点"的伪条目,即便地图数据里残留也不展示:
+#   roaming-{地区} —— 游走宝可梦的抽象容器
+#   unknown-*      —— Pokéwalker/事件占位符
+#   {地区}-pokemart / {地区}-pokecenter —— PokeAPI 里通用的商店/中心容器
+PSEUDO_LOCATION_RE = re.compile(r"^(roaming-|unknown-)|.*-(pokemart|pokecenter)$")
 
 
 def is_wild_method(method: str) -> bool:

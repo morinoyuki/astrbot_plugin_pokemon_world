@@ -400,3 +400,100 @@ def test_story_legend_tournament_commands():
         ev = _Event("/大赛 挑战")
         run_cmd(p, ev, p.cmd_tournament)
         assert any(("对战" in x) or ("大赛" in x) for x in ev.outputs)
+
+
+def test_menu_screens_emit_images_when_enabled():
+    """队伍/状态/背包/图鉴 在 ui_image 开启时应输出图片卡片(而不是纯文本)。"""
+    with tempfile.TemporaryDirectory() as tmp:
+        p = _Cmd(tmp)
+        ev = _Event("/开始 小智 新叶喵")
+        run_cmd(p, ev, p.cmd_start)
+        # 打开界面图片(默认也是开的,这里显式确认)
+        p.config = {"ui_image": True, "battle_image_scale": 2}
+        for cmd, fn in (
+            ("/状态", p.cmd_status),
+            ("/队伍", p.cmd_team),
+            ("/背包", p.cmd_bag),
+            ("/图鉴 新叶喵", p.cmd_dex),
+        ):
+            ev = _Event(cmd)
+            run_cmd(p, ev, fn)
+            joined = "".join(ev.outputs)
+            assert "<chain:" in joined, f"{cmd} 没有输出图片:{ev.outputs}"
+            # 图片卡片里也应夹带原来的文字说明
+            assert len(joined) > 10
+        # 关闭开关 → 回退纯文本
+        p.config = {"ui_image": False}
+        ev = _Event("/队伍")
+        run_cmd(p, ev, p.cmd_team)
+        assert "<chain:" not in "".join(ev.outputs)
+        assert any("队伍" in x or "招式" in x for x in ev.outputs)
+
+
+def test_all_menu_screens_emit_images():
+    """所有"看板类"指令在 ui_image 开启时都应输出图片卡片。"""
+    with tempfile.TemporaryDirectory() as tmp:
+        p = _Cmd(tmp)
+        p.config = {"ui_image": True, "battle_image_scale": 2}
+        ev = _Event("/开始 小智 新叶喵")
+        run_cmd(p, ev, p.cmd_start)
+        # 给点进度,让道馆/联盟/神兽/大赛都有内容可画
+        t = p._load(ev)
+        for i in range(1, 9):
+            t.add_badge("kanto", i)   # 联盟看板需要 8 枚徽章
+        t.set_flag("champion:kanto", True)
+        t.set_flag("world_champion", True)
+        p._save(t)   # ← 必须落盘:下面每个用例都会重新 load
+        # 每个看板都要求身处合适的地点(例如道馆看板要在道馆城镇,联盟要在联盟)
+        cases = [
+            ("/地图", p.cmd_map, "pewter-city"),
+            ("/商店", p.cmd_shop, "pewter-city"),
+            ("/道馆", p.cmd_gym, "pewter-city"),
+            ("/联盟", p.cmd_league, "kanto-pokemon-league"),
+            ("/主线", p.cmd_story, "pewter-city"),
+            ("/神兽", p.cmd_legend, "pewter-city"),
+            ("/今日", p.cmd_today, "pewter-city"),
+            ("/大赛", p.cmd_tournament, "kanto-pokemon-league"),
+        ]
+        for cmd, fn, loc in cases:
+            t = p._load(_Event(""))
+            t.data["location"] = loc
+            p._save(t)
+            ev = _Event(cmd)
+            run_cmd(p, ev, fn)
+            joined = "".join(ev.outputs)
+            assert "<chain:" in joined, f"{cmd} 没有输出图片:{ev.outputs[:3]}"
+
+
+def test_battle_end_emits_result_card():
+    """战斗结束要额外给一张战报卡(而不只是对战画面)。"""
+    with tempfile.TemporaryDirectory() as tmp:
+        p = _Cmd(tmp)
+        p.config = {"ui_image": True, "battle_image": True, "battle_image_scale": 2}
+        ev = _Event("/开始 小智 新叶喵")
+        run_cmd(p, ev, p.cmd_start)
+        t = p._load(ev)
+        t.data["location"] = "kanto-route-1"
+        p._save(t)
+        # 直接开一场碾压局
+        from pw import battle as B
+        from pw.engine import create_pokemon
+
+        strong = create_pokemon("charizard", 80).to_dict()
+        strong["id"] = "m1"
+        t = p._load(ev)
+        t.data["party"] = [strong]
+        p._save(t)
+        B.start(t, [{"species": "rattata", "level": 3}], kind="wild", wild=True,
+                meta={"title": "野生的 小拉达"}, day=1)
+        p._save(t)
+        chains = 0
+        for _ in range(12):
+            t = p._load(ev)
+            ev2 = _Event(f"/对战 move {t.party[0]['moves'][0]}")
+            run_cmd(p, ev2, p.cmd_battle)
+            chains += "".join(ev2.outputs).count("<chain:")
+            if p._load(ev2).data.get("battle") is None:
+                break
+        # 至少:对战画面 + 结算卡(两张图片卡片)
+        assert chains >= 2, f"战斗结束只输出了 {chains} 张图片"

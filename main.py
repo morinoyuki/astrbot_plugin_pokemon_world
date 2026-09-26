@@ -34,11 +34,13 @@ from .pw import battle as B
 from .pw import daily as D
 from .pw import events as EV
 from .pw import growth, legendary, npc, story
+from .pw import ui_info as UII
+from .pw import ui_menu as UIM
+from .pw import ui_render as UI
 from .pw.dex import get_dex
 from .pw.items import BAG_ITEMS
 from .pw.narrate import Narrator
 from .pw.player import Trainer, TrainerStore, new_trainer
-from .pw.sprites import sprite_path
 from .pw.util import (
     bar,
     clamp,
@@ -46,6 +48,7 @@ from .pw.util import (
     fmt_money,
     game_day,
     game_day_str,
+    hash_int,
     now_ts,
     stable_rng,
 )
@@ -272,7 +275,13 @@ class PokemonWorldPlugin(Star):
             return
         async with self._lock(t.scope):
             today = await self._ensure_day(event, t)
-        yield event.plain_result(self._status_card(t, today))
+        text = self._status_card(t, today)
+        async for r in self._emit_ui(
+            event, "card",
+            lambda: UI.render_trainer_card(self._card_payload(t), scale=self._img_scale()),
+            text=text,
+        ):
+            yield r
 
     @filter.command("队伍", alias={"team", "宝可梦队伍"})
     async def cmd_team(self, event: AstrMessageEvent):
@@ -287,17 +296,20 @@ class PokemonWorldPlugin(Star):
         async with self._lock(t.scope):
             await self._ensure_day(event, t)
         text = B.team_status(t)
-        heads = t.badge_count()
-        text += f"\n\n库存:电脑 {len(t.box)} 只 · 徽章 {heads} 枚 · {fmt_money(t.money)}"
-        yield event.plain_result(text)
-        if self._cfg("sprite_enable", True):
-            comps = [Plain(f"🖼️ {t.name} 的队伍")]
-            for p in t.party[:6]:
-                path = sprite_path(p.get("species") or "")
-                if path:
-                    comps.append(Image.fromFileSystem(path))
-            if len(comps) > 1:
-                yield event.chain_result(comps)
+        text += f"\n\n库存:电脑 {len(t.box)} 只 · 徽章 {t.badge_count()} 枚 · {fmt_money(t.money)}"
+        async for r in self._emit_ui(
+            event, "party",
+            lambda: UI.render_party(
+                self._party_payload(t),
+                title=f"{t.name} 的队伍",
+                money=t.money,
+                box_count=len(t.box),
+                badges=t.badge_count(),
+                scale=self._img_scale(),
+            ),
+            text=text,
+        ):
+            yield r
 
     @filter.command("背包", alias={"bag", "道具"})
     async def cmd_bag(self, event: AstrMessageEvent):
@@ -313,7 +325,16 @@ class PokemonWorldPlugin(Star):
         lines = [f"🎒 {t.name} 的背包({fmt_money(t.money)})"]
         for _k, entry, n in items:
             lines.append(f"· {entry['zh']} ×{n} —— {entry.get('desc', '')}")
-        yield event.plain_result("\n".join(lines))
+        payload = self._bag_payload(t, self._args(event, ("背包", "bag", "道具")))
+        async for r in self._emit_ui(
+            event, "bag",
+            lambda: UI.render_bag(
+                payload["items"], money=t.money, active_pocket=payload["pocket"],
+                selected=payload["selected"], scale=self._img_scale(),
+            ),
+            text="\n".join(lines),
+        ):
+            yield r
 
     @filter.command("地图", alias={"map", "地区", "地点"})
     async def cmd_map(self, event: AstrMessageEvent):
@@ -330,7 +351,20 @@ class PokemonWorldPlugin(Star):
             return
         async with self._lock(t.scope):
             await self._ensure_day(event, t)
-        yield event.plain_result(self._map_text(t, region, own=region == t.region))
+        text = self._map_text(t, region, own=region == t.region)
+        nodes = [{**node, "key": key} for key, node in world.nodes(region).items()]
+        async for r in self._emit_ui(
+            event, "map",
+            lambda: UIM.render_map(
+                world.region_zh(region), nodes,
+                current=t.location, visited=t.data.get("visited") or [],
+                gyms=world.gyms(region), next_goal=self._next_goal(t),
+                region_order=int(world.regions.get(region, {}).get("order") or 0),
+                scale=self._img_scale(),
+            ),
+            text=text,
+        ):
+            yield r
 
     @filter.command("前往", alias={"go", "移动", "去"})
     async def cmd_go(self, event: AstrMessageEvent):
@@ -537,6 +571,8 @@ class PokemonWorldPlugin(Star):
                 )
                 async for r in self._emit_battle(event, t, meta, res.lines, text=text):
                     yield r
+                async for r in self._emit_result_cards(event, t, meta, res):
+                    yield r
                 return
             async for r in self._emit_battle(event, t, meta, res.lines, text=text):
                 yield r
@@ -645,13 +681,23 @@ class PokemonWorldPlugin(Star):
                 yield event.plain_result(self._battle_intro(meta, log))
             return
         done = f"{t.region}:{int(gym.get('order', 0))}" in t.badges
-        yield event.plain_result(
+        text = (
             f"🏛️ {gym.get('title')} —— {gym.get('leader')}({_type_zh(gym.get('type'))})\n"
             f"徽章:{gym.get('badge')}"
             f"{'(已获得)' if done else ''}\n"
             f"队伍:{_team_brief(gym.get('team'))}\n"
             + ("已击败,可再次切磋。" if done else "输入 `/道馆 挑战` 开始对战。")
         )
+        async for r in self._emit_ui(
+            event, "gym",
+            lambda: UIM.render_gym(
+                self._with_zh(gym), region_zh=world.region_zh(t.region),
+                location_zh=world.node_zh(t.location), owned=done,
+                scale=self._img_scale(),
+            ),
+            text=text,
+        ):
+            yield r
 
     @filter.command("联盟", alias={"league", "四天王", "冠军"})
     async def cmd_league(self, event: AstrMessageEvent):
@@ -696,7 +742,23 @@ class PokemonWorldPlugin(Star):
                 "输入 `/联盟 挑战` 依次挑战"
                 + (f"(下一位:{pending[0].get('name')})" if pending else "(冠军)")
             )
-            yield event.plain_result("\n".join(lines))
+            done_flags = [
+                str(e.get("order", 1))
+                for e in e4
+                if t.flag(f"elite:{region}:{int(e.get('order', 1))}")
+            ]
+            async for r in self._emit_ui(
+                event, "league",
+                lambda: UIM.render_league(
+                    world.region_zh(region),
+                    [self._with_zh(e) for e in e4], self._with_zh(champ),
+                    done=done_flags,
+                    champion_done=bool(t.flag(f"champion:{region}")),
+                    scale=self._img_scale(),
+                ),
+                text="\n".join(lines),
+            ):
+                yield r
             return
         if B.in_battle(t):
             yield event.plain_result("⚠️ 先结束当前对战。")
@@ -739,7 +801,17 @@ class PokemonWorldPlugin(Star):
         discount = float(state.modifiers.get("shop_discount", 1.0))
         arg = self._args(event, ("商店", "shop", "购买")).strip()
         if not arg:
-            yield event.plain_result(self._shop_text(t, discount))
+            text = self._shop_text(t, discount)
+            async for r in self._emit_ui(
+                event, "shop",
+                lambda: UIM.render_shop(
+                    self._shop_payload(t, discount), money=t.money,
+                    location_zh=world.node_zh(t.location), discount=discount,
+                    scale=self._img_scale(),
+                ),
+                text=text,
+            ):
+                yield r
             return
         tokens = arg.split()
         action = tokens[0]
@@ -1004,7 +1076,17 @@ class PokemonWorldPlugin(Star):
             lines.append("👁️ 已见到")
         else:
             lines.append("❔ 尚未见到")
-        yield event.plain_result("\n".join(lines))
+        dex_entry = dict(entry)
+        dex_entry["_key"] = key
+        async for r in self._emit_ui(
+            event, "dex",
+            lambda: UI.render_dex(
+                dex_entry, caught=t.caught(key), seen=t.seen(key),
+                locations=locs, scale=self._img_scale(),
+            ),
+            text="\n".join(lines),
+        ):
+            yield r
 
     @filter.command("今日", alias={"today", "事件", "世界动态"})
     async def cmd_today(self, event: AstrMessageEvent):
@@ -1028,7 +1110,31 @@ class PokemonWorldPlugin(Star):
             )
             if rep.text and not rep.used_fallback:
                 text += "\n\n📰 " + rep.text
-        yield event.plain_result(text)
+        state2 = self._state(t.scope)
+        locks = [
+            f"{WorldMap().node_zh(k)}(第{int(v)}天解除)"
+            for k, v in (state2.data.get("locks") or {}).items()
+        ]
+        pe_lines = [
+            f"{e.get('title') or e.get('kind')}:{e.get('desc') or ''}".strip(":")
+            for uid, arr in (state2.data.get("player_events") or {}).items()
+            if uid == t.uid
+            for e in arr
+        ]
+        async for r in self._emit_ui(
+            event, "news",
+            lambda: UII.render_news(
+                state2.day,
+                world_events=[EV.event_text(e) for e in state2.active_events()],
+                player_events=pe_lines,
+                weather_zh=state2.weather_for(t.region),
+                region_zh=WorldMap().region_zh(t.region),
+                location_zh=WorldMap().node_zh(t.location),
+                locks=locks, scale=self._img_scale(),
+            ),
+            text=text,
+        ):
+            yield r
 
     @filter.command("重置世界", alias={"reset_world", "删除存档"})
     async def cmd_reset(self, event: AstrMessageEvent):
@@ -1306,7 +1412,24 @@ class PokemonWorldPlugin(Star):
                 yield event.plain_result(f"📜 主线推进:{st['title']}")
             cur = story.current_stage(t)
             if sub not in ("挑战", "challenge", "打", "开战"):
-                yield event.plain_result(story.chapter_text(t))
+                info = story.STORY.get(t.region) or {}
+                stages = story.region_stages(t.region)
+                done = list(t.flag(f"story:{t.region}", []) or [])
+                cur0 = story.current_stage(t)
+                async for r in self._emit_ui(
+                    event, "story",
+                    lambda: UIM.render_story(
+                        WorldMap().region_zh(t.region),
+                        str(info.get("org") or "敌人"), str(info.get("leader") or "?"),
+                        stages, done=done,
+                        current_key=str((cur0 or {}).get("key") or ""),
+                        badges=t.badge_count(),
+                        total_gyms=len(WorldMap().gyms(t.region)) or 8,
+                        scale=self._img_scale(),
+                    ),
+                    text=story.chapter_text(t),
+                ):
+                    yield r
                 return
             if not cur:
                 yield event.plain_result("本地区主线已经完成了。")
@@ -1385,7 +1508,30 @@ class PokemonWorldPlugin(Star):
                 ):
                     yield r
                 return
-            yield event.plain_result(legendary.panel_text(t, world=world, day=state.day))
+            sites = legendary.sites_for(world.region_of(t.location) or t.region,
+                                        world=world)
+            if not sites:
+                sites = legendary.sites_for(t.region, world=world)
+            ready_keys = [s["species"] for s in legendary.ready(t, world=world, day=state.day)]
+            caught_keys = [s["species"] for s in legendary.sites_for(t.region, world=world)
+                           if legendary.caught(t, s["species"])]
+            known_keys = {s["species"] for s in legendary.known(t, world=world)}
+            locked_keys = [
+                s["species"] for s in legendary.sites_for(t.region, world=world)
+                if s["species"] not in known_keys and s["species"] not in caught_keys
+            ]
+            async for r in self._emit_ui(
+                event, "legend",
+                lambda: UII.render_legendaries(
+                    world.region_zh(t.region), sites,
+                    caught=caught_keys, ready=ready_keys, locked=locked_keys,
+                    badges=t.badge_count(), total_gyms=len(world.gyms(t.region)) or 8,
+                    champion=bool(t.flag(f"champion:{t.region}")), day=state.day,
+                    scale=self._img_scale(),
+                ),
+                text=legendary.panel_text(t, world=world, day=state.day),
+            ):
+                yield r
 
     @filter.command("大赛", alias={"tournament", "世界大赛", "世界锦标赛"})
     async def cmd_tournament(self, event: AstrMessageEvent):
@@ -1417,7 +1563,17 @@ class PokemonWorldPlugin(Star):
                 "输入 `/大赛 挑战` 开始"
                 + (f"(下一场:{story.TOURNAMENT_ROUNDS[min(rnd, 2)][0]})" if rnd < 3 else "(已夺冠,可再次挑战)")
             )
-            yield event.plain_result("\n".join(lines))
+            async for r in self._emit_ui(
+                event, "tournament",
+                lambda: UII.render_tournament(
+                    [name for name, _o in story.TOURNAMENT_ROUNDS],
+                    best=best, current=rnd, titles=story.TOURNAMENT_TITLES,
+                    last_foe=str(t.flag("tournament_last_foe", "") or ""),
+                    is_champion=bool(t.flag("world_champion")), scale=self._img_scale(),
+                ),
+                text="\n".join(lines),
+            ):
+                yield r
             return
         if B.in_battle(t):
             yield event.plain_result("⚠️ 先结束当前对战。")
@@ -1443,6 +1599,209 @@ class PokemonWorldPlugin(Star):
                 yield r
 
     # ── 战斗结果钩子 / 图片输出 ──
+    def _with_zh(self, obj: dict) -> dict:
+        """给队伍条目补上中文名(渲染层优先用 zh)。"""
+        dex = get_dex()
+        out = dict(obj or {})
+        team = []
+        for m in out.get("team") or []:
+            if not isinstance(m, dict):
+                continue
+            item = dict(m)
+            entry = dex.species.get(str(m.get("species") or "")) or {}
+            item.setdefault("zh", entry.get("zh") or m.get("species") or "")
+            team.append(item)
+        if team:
+            out["team"] = team
+        return out
+
+    def _shop_payload(self, t: Trainer, discount: float) -> list[dict]:
+        world = WorldMap()
+        out = []
+        for key in [*world.shop_stock(t.location), *EVO_STONE_STOCK]:
+            entry = BAG_ITEMS.get(key)
+            if not entry:
+                continue
+            out.append(
+                {
+                    "key": key,
+                    "zh": entry.get("zh") or key,
+                    "price": item_price(key, badge_count=t.badge_count(),
+                                        discount=discount),
+                    "desc": entry.get("desc") or "",
+                    "kind": entry.get("kind") or "",
+                    "count": t.count(key),
+                }
+            )
+        return out
+
+    async def _emit_result_cards(self, event: AstrMessageEvent, t: Trainer, meta: dict,
+                                 res: B.TurnResult):
+        """战斗结束后追加:捕获 / 成长 / 战报卡片。"""
+        if not self._cfg("ui_image", True) or not res.finished:
+            return
+        view = B.view(t)
+        mon = view.get("my") or {}
+        if res.outcome == "caught" and res.rewards:
+            caught = B.dict_to_mon(t.party[-1]) if t.party else None
+            if caught is not None:
+                view_c = B._mon_view(caught)  # 复用内部视图构造
+                async for r in self._emit_ui(
+                    event, "gotcha",
+                    lambda: UII.render_gotcha(
+                        view_c, ball_zh="精灵球",
+                        dex_line=f"图鉴已记录:{len(t.data.get('dex_caught') or [])} 种",
+                        scale=self._img_scale(),
+                    ),
+                    text="",
+                ):
+                    yield r
+            return
+        if res.growth:
+            learned = [ln.split("「")[1].rstrip("」!") for ln in res.growth if "学会了" in ln]
+            pending = [ln.split("「")[1].split("」")[0] for ln in res.growth if "想学" in ln]
+            evo_to = ""
+            evo_from = ""
+            for ln in res.growth:
+                if "进化了!" in ln:
+                    part = ln.split("进化了!")[-1]
+                    if "→" in part:
+                        evo_from, evo_to = (x.strip() for x in part.split("→", 1))
+            async for r in self._emit_ui(
+                event, "growth",
+                lambda: UII.render_growth(
+                    mon, before_level=int(mon.get("level") or 0) - 1,
+                    after_level=int(mon.get("level") or 0), learned=learned,
+                    pending=pending, evolved_from_zh=evo_from, evolved_to_zh=evo_to,
+                    scale=self._img_scale(),
+                ),
+                text="",
+            ):
+                yield r
+            return
+        if res.outcome in ("win", "loss", "forfeit", "escaped"):
+            async for r in self._emit_ui(
+                event, "result",
+                lambda: UII.render_battle_result(
+                    outcome=res.outcome, title=str(meta.get("title") or ""),
+                    lines=res.lines, rewards=res.rewards, growth=res.growth, mon=mon,
+                    scale=self._img_scale(),
+                ),
+                text="",
+            ):
+                yield r
+
+    def _img_scale(self) -> int:
+        return int(coerce_int(self._cfg("battle_image_scale", 3), 3) or 3)
+
+    async def _emit_ui(self, event: AstrMessageEvent, label: str, builder, *,
+                       text: str = ""):
+        """按配置输出界面图片(仿 GBA 菜单);失败或未开启则回退文本。"""
+        if self._cfg("ui_image", True):
+            try:
+                data = builder()
+                if data:
+                    path = os.path.join(
+                        tempfile.gettempdir(),
+                        f"pw_ui_{label}_{abs(hash(text)) % 100000}.png",
+                    )
+                    with open(path, "wb") as f:  # noqa: ASYNC230 — 小文件同步写
+                        f.write(data)
+                    comps = [Image.fromFileSystem(path)]
+                    comps.append(Plain(text) if text else Plain(" "))
+                    yield event.chain_result(comps)
+                    return
+            except Exception as e:  # 渲染失败必须回退文本
+                logger.debug("宝可梦世界: %s 界面渲染失败,回退文本: %s", label, e)
+        if text:
+            yield event.plain_result(text)
+
+    def _party_payload(self, t: Trainer) -> list[dict]:
+        """队伍界面数据。"""
+        dex = get_dex()
+        out = []
+        for p in t.party:
+            mon = B.dict_to_mon(p)
+            species_data = dex.species.get(mon.species) or {}
+            out.append(
+                {
+                    "species": mon.species,
+                    "name": mon.nickname or species_data.get("zh") or mon.species,
+                    "level": mon.level,
+                    "cur_hp": mon.cur_hp,
+                    "max_hp": mon.max_hp,
+                    "status": mon.status,
+                    "gender": mon.gender,
+                    "item": mon.item,
+                    "exp_pct": B.exp_progress(mon),
+                }
+            )
+        return out
+
+    def _bag_payload(self, t: Trainer, pocket_arg: str = "") -> dict:
+        """背包界面数据:按口袋分组,返回当前口袋的条目。"""
+        groups: dict[str, list[dict]] = {}
+        for key, entry, n in t.bag_items():
+            pk = UI.KIND_TO_POCKET.get(str(entry.get("kind") or ""), "items")
+            groups.setdefault(pk, []).append(
+                {
+                    "key": key,
+                    "zh": entry.get("zh") or key,
+                    "count": n,
+                    "desc": entry.get("desc") or "",
+                    "kind": entry.get("kind") or "",
+                }
+            )
+        want = (pocket_arg or "").strip()
+        pocket = ""
+        for pk, label in UI.POCKETS:
+            if want and want in (pk, label):
+                pocket = pk
+        if not pocket:
+            for pk, _label in UI.POCKETS:
+                if groups.get(pk):
+                    pocket = pk
+                    break
+            pocket = pocket or "items"
+        return {
+            "items": groups.get(pocket, []),
+            "pocket": pocket,
+            "selected": 0,
+            "groups": groups,
+        }
+
+    def _card_payload(self, t: Trainer) -> dict:
+        """训练家卡数据:`id_no` 由 uid 稳定派生,徽章按当前地区顺序排列。"""
+        world = WorldMap()
+        region = t.region
+        got = {int(b.split(":")[1]) for b in t.badges if str(b).startswith(f"{region}:")}
+        badges = [
+            ((g.get("badge") or g.get("title") or "")[:3], int(g.get("order", 0)) in got)
+            for g in world.gyms(region)[:8]
+        ]
+        while len(badges) < 8:
+            badges.append(("", False))
+        cur = story.current_stage(t)
+        prog = f"{cur['title']}:{cur['desc']}" if cur else "本地区主线已完成"
+        created = int(t.data.get("created_day") or 0)
+        play_day = max(1, game_day() - created + 1) if created else 1
+        return {
+            "name": t.name,
+            "id_no": f"{hash_int('idno', t.uid) % 90000 + 10000}",
+            "money": t.money,
+            "region": world.region_zh(region),
+            "location": world.node_zh(t.location),
+            "play_day": play_day,
+            "steps": t.data.get("steps", 0),
+            "party": len(t.party),
+            "box": len(t.box),
+            "seen": len(t.data.get("dex_seen") or []),
+            "caught": len(t.data.get("dex_caught") or []),
+            "badges": badges,
+            "story_progress": prog,
+            "best": "◆ /帮助 查看全部指令",
+        }
+
     def _after_battle(self, t: Trainer, meta: dict, res: B.TurnResult, day: int) -> str:
         """结算主线/神兽/大赛的额外结果,返回要显示的前置文本。"""
         lines: list[str] = []

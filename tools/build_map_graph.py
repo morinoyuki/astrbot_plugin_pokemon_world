@@ -112,10 +112,12 @@ def kind_of(identifier: str, region: str = "") -> str:
 
 
 # 上游 locations.json 里混着"不是地点"的伪条目:
-#   roaming-{kanto,johto,hoenn,sinnoh,kalos} —— 游走宝可梦的抽象容器
-#   unknown-all-* / unknown-dungeon        —— Pokéwalker/事件占位符
+#   roaming-{kanto,…} —— 游走宝可梦的抽象容器
+#   unknown-all-*/unknown-dungeon —— Pokéwalker/事件占位符
+#   {region}-pokemart / {region}-pokecenter —— PokeAPI 里通用的商店/中心容器
+#     (不是真实地点,出现在地图上会挤占"你在这里"的位置)
 # 它们都带着野池,若不剔除,玩家会看到能"前往 Roaming Sinnoh"这种事。
-PSEUDO_LOCATION_RE = re.compile(r"^(roaming-|unknown-)")
+PSEUDO_LOCATION_RE = re.compile(r"^(roaming-|unknown-)|.*-(pokemart|pokecenter)$")
 
 
 def is_pseudo_location(identifier: str) -> bool:

@@ -122,7 +122,13 @@ MY_GROUND = (56, 120)
 FOE_SCALE = 0.62
 MY_SCALE = 1.05
 
-MSG_BOX = (2, 112, 238, 158)
+# 对话框:高度**自适应**行数(从底部向上长),不再写死 112~158。
+# 之前固定 4 行 + 每行 10px = 40px,而框内只有 38px,长文本会顶破边框。
+MSG_EDGE_X = (2, 238)
+MSG_BOTTOM = 158
+MSG_TOP_MAX = 88          # 再往上长就会压住精灵/血条
+MSG_LINE_H = 9.6          # 逻辑行高
+MSG_MAX_LINES = int((MSG_BOTTOM - 4 - MSG_TOP_MAX) // MSG_LINE_H)
 
 
 @lru_cache(maxsize=16)
@@ -334,32 +340,51 @@ def render_battle(
         _status_chip(d, FOE_BOX[2] - 18, FOE_BOX[1] + 4, foe.get("status") or "")
         _status_chip(d, MY_BOX[2] - 18, MY_BOX[1] + 4, my.get("status") or "")
 
-        # ── 队伍球(对话框左端)──
-        bx = 8
-        for mon in party[:6]:
-            alive = int(mon.get("cur_hp", 0) or 0) > 0
-            _draw_ball(d, bx, 134, 4)
-            if not alive:
-                d.ellipse([bx, 134, bx + 8, 142], fill=(120, 118, 108), outline=BOX_EDGE)
-                d.line([bx + 1, 135, bx + 7, 141], fill=(250, 250, 245), width=1)
-                d.line([bx + 7, 135, bx + 1, 141], fill=(250, 250, 245), width=1)
-            bx += 11
+        # ── 先算对话框内容(高度自适应)──
+        f_name = _font(int(9.5 * S))
+        f_small = _font(int(8.5 * S))
+        f_ball = _font(int(6.5 * S))
+        f_msg = _font(int(9 * S))
+
+        mx0, mx1 = MSG_EDGE_X
+        tx_pad, tx_right = 28, 6
+        maxw = (mx1 - mx0 - tx_pad - tx_right) * S
+        src_lines: list[str] = []
+        if title:
+            src_lines.append("◆ " + str(title))
+        src_lines.extend(log[-3:])
+        wrapped: list[str] = []
+        for line in src_lines:
+            wrapped.extend(_wrap(f_msg, line, maxw, limit=MSG_MAX_LINES))
+        shown_lines = wrapped[-MSG_MAX_LINES:] or [""]
+        box_h = 7 + len(shown_lines) * MSG_LINE_H + 2
+        my1 = MSG_BOTTOM
+        my0 = int(my1 - box_h)
 
         # ── 对话框(暗红框 + 青绿底)──
-        mx0, my0, mx1, my1 = MSG_BOX
         d.rounded_rectangle([mx0, my0, mx1, my1], radius=4, fill=MSG_FRAME)
         d.rounded_rectangle([mx0 + 2, my0 + 2, mx1 - 2, my1 - 2], radius=3,
                             outline=MSG_FRAME_HI)
         d.rounded_rectangle([mx0 + 4, my0 + 4, mx1 - 4, my1 - 4], radius=3, fill=MSG_FILL)
 
+        # ── 队伍球(跟随对话框左端垂直居中)──
+        bx = 8
+        ball_y = my0 + max(2, (box_h - 8) / 2 - 1)
+        for mon in party[:6]:
+            alive = int(mon.get("cur_hp", 0) or 0) > 0
+            _draw_ball(d, bx, ball_y, 4)
+            if not alive:
+                d.ellipse([bx, ball_y, bx + 8, ball_y + 8], fill=(120, 118, 108),
+                          outline=BOX_EDGE)
+                d.line([bx + 1, ball_y + 1, bx + 7, ball_y + 7], fill=(250, 250, 245),
+                       width=1)
+                d.line([bx + 7, ball_y + 1, bx + 1, ball_y + 7], fill=(250, 250, 245),
+                       width=1)
+            bx += 11
+
         # ── 放大(像素风)──
         big = small.resize((W, H), Image.NEAREST)
         d2 = ImageDraw.Draw(big)
-
-        f_name = _font(int(9.5 * S))
-        f_small = _font(int(8.5 * S))
-        f_ball = _font(int(6.5 * S))
-        f_msg = _font(int(9 * S))
 
         # 敌方信息
         _box_text(d2, foe, FOE_BOX, ENEMY_HP_BAR, f_name, f_small, f_ball, S, mine=False)
@@ -381,19 +406,11 @@ def render_battle(
             _chip(big, d2, chip_x, chip_y * S, TERRAIN_STYLE[terrain],
                   (186, 240, 178), (32, 72, 32), f_small, S, align_right=True)
 
-        # 对话框文本
-        tx = (mx0 + 28) * S
-        ty = (my0 + 6) * S
-        maxw = (mx1 - mx0 - 34) * S
-        lines: list[str] = []
-        if title:
-            lines.append("◆ " + str(title))
-        lines.extend(log[-3:])
-        wrapped: list[str] = []
-        for line in lines:
-            wrapped.extend(_wrap(f_msg, line, maxw))
-        for i, line in enumerate(wrapped[-4:]):
-            d2.text((tx, ty + i * int(10 * S)), line, font=f_msg, fill=MSG_TEXT,
+        # 对话框文本(行数与框高已在上面按实际折行结果算好)
+        tx = (mx0 + tx_pad) * S
+        ty = (my0 + 4) * S
+        for i, line in enumerate(shown_lines):
+            d2.text((tx, ty + i * int(MSG_LINE_H * S)), line, font=f_msg, fill=MSG_TEXT,
                     stroke_width=max(1, S // 2), stroke_fill=MSG_SHADOW)
 
         # 「HP」「EXP」标签文字(放大后画才清晰),在标签框内居中

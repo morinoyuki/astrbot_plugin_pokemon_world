@@ -95,29 +95,18 @@
      "tier": 1,
      "next": [
       "kanto-route-4",
-      "kanto-pokecenter",
+      "pattern-bush",
       "pewter-city"
-     ],
-     "hub": false
-    },
-    "kanto-pokecenter": {
-     "zh": "kanto-pokecenter",
-     "kind": "area",
-     "order": 90,
-     "tier": 1,
-     "next": [
-      "kanto-route-5",
-      "pattern-bush"
      ],
      "hub": false
     },
     "pattern-bush": {
      "zh": "标志之林",
      "kind": "area",
-     "order": 100,
+     "order": 90,
      "tier": 1,
      "next": [
-      "kanto-pokecenter",
+      "kanto-route-5",
       "mt-moon"
      ],
      "hub": false
@@ -125,7 +114,7 @@
     "mt-moon": {
      "zh": "月见山",
      "kind": "area",
-     "order": 110,
+     "order": 100,
      "tier": 1,
      "next": [
       "pattern-bush",
@@ -136,7 +125,7 @@
     "rock-tunnel": {
      "zh": "岩山隧道",
      "kind": "area",
-     "order": 120,
+     "order": 110,
      "tier": 2,
      "next": [
       "mt-moon",
@@ -147,7 +136,7 @@
     "four-island": {
      "zh": "第四島",
      "kind": "area",
-     "order": 130,
+     "order": 120,
      "tier": 2,
      "next": [
       "rock-tunnel",
@@ -158,7 +147,7 @@
     "pewter-city": {
      "zh": "深灰市",
      "kind": "town",
-     "order": 140,
+     "order": 130,
      "tier": 2,
      "next": [
       "kanto-route-5",
@@ -170,7 +159,7 @@
     "kanto-route-6": {
      "zh": "6号道路(合众)",
      "kind": "route",
-     "order": 150,
+     "order": 140,
      "tier": 2,
      "next": [
       "pewter-city",
@@ -181,7 +170,7 @@
     "kanto-route-7": {
      "zh": "7号道路(合众)",
      "kind": "route",
-     "order": 160,
+     "order": 150,
      "tier": 2,
      "next": [
       "kanto-route-6",
@@ -192,7 +181,7 @@
     "kanto-route-8": {
      "zh": "8號道路(阿羅拉)",
      "kind": "route",
-     "order": 170,
+     "order": 160,
      "tier": 2,
      "next": [
       "kanto-route-7",
@@ -206,7 +195,7 @@
     "ss-anne": {
      "zh": "圣特安努号",
      "kind": "area",
-     "order": 180,
+     "order": 170,
      "tier": 2,
      "next": [
       "kanto-route-8",
@@ -217,7 +206,7 @@
     "water-labyrinth": {
      "zh": "水之迷宫",
      "kind": "area",
-     "order": 190,
+     "order": 180,
      "tier": 2,
      "next": [
       "ss-anne",
@@ -228,7 +217,7 @@
     "kanto-altering-cave": {
      "zh": "变幻洞窟",
      "kind": "area",
-     "order": 200,
+     "order": 190,
      "tier": 2,
      "next": [
       "water-labyrinth",
@@ -239,7 +228,7 @@
     "memorial-pillar": {
      "zh": "回忆之塔",
      "kind": "area",
-     "order": 210,
+     "order": 200,
      "tier": 2,
      "next": [
       "kanto-altering-cave",
@@ -250,7 +239,7 @@
     "three-isle-port": {
      "zh": "第三島碼頭",
      "kind": "area",
-     "order": 220,
+     "order": 210,
      "tier": 2,
      "next": [
       "memorial-pillar",
@@ -261,7 +250,7 @@
     "five-island": {
      "zh": "第五島",
      "kind": "area",
-     "order": 230,
+     "order": 220,
      "tier": 3,
      "next": [
       "three-isle-port",
@@ -272,7 +261,7 @@
     "resort-gorgeous": {
      "zh": "豪华度假区",
      "kind": "town",
-     "order": 240,
+     "order": 230,
      "tier": 3,
      "next": [
       "kanto-route-8",
@@ -285,7 +274,7 @@
     "green-path": {
      "zh": "绿之步道",
      "kind": "area",
-     "order": 250,
+     "order": 240,
      "tier": 3,
      "next": [
       "resort-gorgeous",
@@ -296,7 +285,7 @@
     "one-island": {
      "zh": "第一島",
      "kind": "area",
-     "order": 260,
+     "order": 250,
      "tier": 3,
      "next": [
       "green-path",
@@ -307,7 +296,7 @@
     "outcast-island": {
      "zh": "外岛",
      "kind": "area",
-     "order": 270,
+     "order": 260,
      "tier": 3,
      "next": [
       "one-island",
@@ -318,7 +307,7 @@
     "digletts-cave": {
      "zh": "地鼠洞穴",
      "kind": "area",
-     "order": 280,
+     "order": 270,
      "tier": 3,
      "next": [
       "outcast-island",
@@ -329,7 +318,7 @@
     "kanto-safari-zone": {
      "zh": "狩猎地带",
      "kind": "town",
-     "order": 290,
+     "order": 280,
      "tier": 3,
      "next": [
       "kanto-route-8",
@@ -342,7 +331,7 @@
     "tanoby-ruins": {
      "zh": "阿斯卡纳遗迹",
      "kind": "area",
-     "order": 300,
+     "order": 290,
      "tier": 3,
      "next": [
       "kanto-safari-zone",
@@ -353,7 +342,7 @@
     "trainer-tower": {
      "zh": "训练家塔",
      "kind": "area",
-     "order": 310,
+     "order": 300,
      "tier": 3,
      "next": [
       "tanoby-ruins",
@@ -364,7 +353,7 @@
     "ruin-valley": {
      "zh": "遗迹山谷",
      "kind": "area",
-     "order": 320,
+     "order": 310,
      "tier": 3,
      "next": [
       "trainer-tower",
@@ -375,7 +364,7 @@
     "pokemon-tower": {
      "zh": "宝可梦塔",
      "kind": "area",
-     "order": 330,
+     "order": 320,
      "tier": 3,
      "next": [
       "ruin-valley",
@@ -386,7 +375,7 @@
     "dilford-chamber": {
      "zh": "阿斯卡纳石室",
      "kind": "area",
-     "order": 340,
+     "order": 330,
      "tier": 4,
      "next": [
       "pokemon-tower",
@@ -397,7 +386,7 @@
     "liptoo-chamber": {
      "zh": "阿斯卡纳石室",
      "kind": "area",
-     "order": 350,
+     "order": 340,
      "tier": 4,
      "next": [
       "dilford-chamber",
@@ -408,7 +397,7 @@
     "monean-chamber": {
      "zh": "阿斯卡纳石室",
      "kind": "area",
-     "order": 360,
+     "order": 350,
      "tier": 4,
      "next": [
       "liptoo-chamber",
@@ -419,7 +408,7 @@
     "rixy-chamber": {
      "zh": "阿斯卡纳石室",
      "kind": "area",
-     "order": 370,
+     "order": 360,
      "tier": 4,
      "next": [
       "monean-chamber",
@@ -430,7 +419,7 @@
     "scufib-chamber": {
      "zh": "Scufib Chamber",
      "kind": "area",
-     "order": 380,
+     "order": 370,
      "tier": 4,
      "next": [
       "rixy-chamber",
@@ -441,7 +430,7 @@
     "viapos-chamber": {
      "zh": "Viapos Chamber",
      "kind": "area",
-     "order": 390,
+     "order": 380,
      "tier": 4,
      "next": [
       "scufib-chamber",
@@ -452,7 +441,7 @@
     "weepth-chamber": {
      "zh": "Weepth Chamber",
      "kind": "area",
-     "order": 400,
+     "order": 390,
      "tier": 4,
      "next": [
       "viapos-chamber",
@@ -463,7 +452,7 @@
     "cerulean-city": {
      "zh": "华蓝市",
      "kind": "town",
-     "order": 410,
+     "order": 400,
      "tier": 4,
      "next": [
       "kanto-route-8",
@@ -475,7 +464,7 @@
     "kanto-route-9": {
      "zh": "9號道路(伽勒爾)",
      "kind": "route",
-     "order": 420,
+     "order": 410,
      "tier": 4,
      "next": [
       "resort-gorgeous",
@@ -488,7 +477,7 @@
     "kanto-route-10": {
      "zh": "10号道路(关都)",
      "kind": "route",
-     "order": 430,
+     "order": 420,
      "tier": 4,
      "next": [
       "kanto-route-9",
@@ -499,7 +488,7 @@
     "kanto-route-11": {
      "zh": "11号道路(合众)",
      "kind": "route",
-     "order": 440,
+     "order": 430,
      "tier": 4,
      "next": [
       "kanto-route-10",
@@ -510,7 +499,7 @@
     "kanto-route-12": {
      "zh": "12号道路(关都)",
      "kind": "route",
-     "order": 450,
+     "order": 440,
      "tier": 5,
      "next": [
       "kanto-route-11",
@@ -522,7 +511,7 @@
     "icefall-cave": {
      "zh": "冻瀑洞窟",
      "kind": "area",
-     "order": 460,
+     "order": 450,
      "tier": 5,
      "next": [
       "kanto-route-12",
@@ -533,7 +522,7 @@
     "treasure-beach": {
      "zh": "宝物海滩",
      "kind": "area",
-     "order": 470,
+     "order": 460,
      "tier": 5,
      "next": [
       "icefall-cave",
@@ -544,7 +533,7 @@
     "five-isle-meadow": {
      "zh": "第五島空地",
      "kind": "area",
-     "order": 480,
+     "order": 470,
      "tier": 5,
      "next": [
       "treasure-beach",
@@ -555,7 +544,7 @@
     "kindle-road": {
      "zh": "热气之路",
      "kind": "area",
-     "order": 490,
+     "order": 480,
      "tier": 5,
      "next": [
       "five-isle-meadow",
@@ -566,7 +555,7 @@
     "bond-bridge": {
      "zh": "牵绊桥",
      "kind": "area",
-     "order": 500,
+     "order": 490,
      "tier": 5,
      "next": [
       "kindle-road",
@@ -577,7 +566,7 @@
     "cape-brink": {
      "zh": "边缘海岬",
      "kind": "area",
-     "order": 510,
+     "order": 500,
      "tier": 5,
      "next": [
       "bond-bridge",
@@ -588,7 +577,7 @@
     "berry-forest": {
      "zh": "樹果森林",
      "kind": "area",
-     "order": 520,
+     "order": 510,
      "tier": 5,
      "next": [
       "cape-brink",
@@ -599,7 +588,7 @@
     "seafoam-islands": {
      "zh": "双子岛",
      "kind": "area",
-     "order": 530,
+     "order": 520,
      "tier": 5,
      "next": [
       "berry-forest",
@@ -610,7 +599,7 @@
     "water-path": {
      "zh": "水之步道",
      "kind": "area",
-     "order": 540,
+     "order": 530,
      "tier": 5,
      "next": [
       "seafoam-islands",
@@ -621,7 +610,7 @@
     "birth-island": {
      "zh": "诞生之岛",
      "kind": "area",
-     "order": 550,
+     "order": 540,
      "tier": 5,
      "next": [
       "water-path",
@@ -632,7 +621,7 @@
     "vermilion-city": {
      "zh": "枯叶市",
      "kind": "town",
-     "order": 560,
+     "order": 550,
      "tier": 6,
      "next": [
       "kanto-route-12",
@@ -644,7 +633,7 @@
     "kanto-route-13": {
      "zh": "13号道路(合众)",
      "kind": "route",
-     "order": 570,
+     "order": 560,
      "tier": 6,
      "next": [
       "vermilion-city",
@@ -655,7 +644,7 @@
     "kanto-route-14": {
      "zh": "14号道路(关都)",
      "kind": "route",
-     "order": 580,
+     "order": 570,
      "tier": 6,
      "next": [
       "kanto-route-13",
@@ -666,7 +655,7 @@
     "kanto-route-15": {
      "zh": "15號水路(阿羅拉)",
      "kind": "route",
-     "order": 590,
+     "order": 580,
      "tier": 6,
      "next": [
       "kanto-route-14",
@@ -678,7 +667,7 @@
     "lost-cave": {
      "zh": "不归之穴",
      "kind": "area",
-     "order": 600,
+     "order": 590,
      "tier": 6,
      "next": [
       "kanto-route-15",
@@ -689,7 +678,7 @@
     "mt-ember": {
      "zh": "灯火山",
      "kind": "area",
-     "order": 610,
+     "order": 600,
      "tier": 6,
      "next": [
       "lost-cave",
@@ -700,7 +689,7 @@
     "pokemon-mansion": {
      "zh": "宝可梦屋",
      "kind": "area",
-     "order": 620,
+     "order": 610,
      "tier": 6,
      "next": [
       "mt-ember",
@@ -711,7 +700,7 @@
     "canyon-entrance": {
      "zh": "溪谷入口",
      "kind": "area",
-     "order": 630,
+     "order": 620,
      "tier": 6,
      "next": [
       "pokemon-mansion",
@@ -722,7 +711,7 @@
     "kanto-power-plant": {
      "zh": "无人发电厂",
      "kind": "area",
-     "order": 640,
+     "order": 630,
      "tier": 6,
      "next": [
       "canyon-entrance",
@@ -733,7 +722,7 @@
     "sevault-canyon": {
      "zh": "七宝溪谷",
      "kind": "area",
-     "order": 650,
+     "order": 640,
      "tier": 6,
      "next": [
       "kanto-power-plant",
@@ -744,7 +733,7 @@
     "kanto-victory-road-1": {
      "zh": "冠军之路",
      "kind": "area",
-     "order": 660,
+     "order": 650,
      "tier": 6,
      "next": [
       "sevault-canyon",
@@ -755,7 +744,7 @@
     "kanto-victory-road-2": {
      "zh": "冠军之路",
      "kind": "area",
-     "order": 670,
+     "order": 660,
      "tier": 7,
      "next": [
       "kanto-victory-road-1",
@@ -766,7 +755,7 @@
     "celadon-city": {
      "zh": "玉虹市",
      "kind": "town",
-     "order": 680,
+     "order": 670,
      "tier": 7,
      "next": [
       "kanto-route-15",
@@ -778,7 +767,7 @@
     "kanto-route-16": {
      "zh": "16號道路(阿羅拉)",
      "kind": "route",
-     "order": 690,
+     "order": 680,
      "tier": 7,
      "next": [
       "celadon-city",
@@ -789,7 +778,7 @@
     "kanto-route-17": {
      "zh": "17号道路(关都)",
      "kind": "route",
-     "order": 700,
+     "order": 690,
      "tier": 7,
      "next": [
       "kanto-route-16",
@@ -800,7 +789,7 @@
     "kanto-route-18": {
      "zh": "18号道路(合众)",
      "kind": "route",
-     "order": 710,
+     "order": 700,
      "tier": 7,
      "next": [
       "kanto-route-17",
@@ -811,7 +800,7 @@
     "kanto-sea-route-19": {
      "zh": "19号水路(关都)",
      "kind": "route",
-     "order": 720,
+     "order": 710,
      "tier": 7,
      "next": [
       "kanto-route-18",
@@ -823,7 +812,7 @@
     "cerulean-cave": {
      "zh": "华蓝洞窟",
      "kind": "area",
-     "order": 730,
+     "order": 720,
      "tier": 7,
      "next": [
       "kanto-sea-route-19",
@@ -834,7 +823,7 @@
     "saffron-city": {
      "zh": "金黄市",
      "kind": "town",
-     "order": 740,
+     "order": 730,
      "tier": 7,
      "next": [
       "kanto-sea-route-19",
@@ -846,7 +835,7 @@
     "kanto-sea-route-20": {
      "zh": "20号水路(关都)",
      "kind": "route",
-     "order": 750,
+     "order": 740,
      "tier": 7,
      "next": [
       "saffron-city",
@@ -857,7 +846,7 @@
     "kanto-sea-route-21": {
      "zh": "21号水路(关都)",
      "kind": "route",
-     "order": 760,
+     "order": 750,
      "tier": 7,
      "next": [
       "kanto-sea-route-20",
@@ -868,7 +857,7 @@
     "kanto-route-22": {
      "zh": "22号道路",
      "kind": "route",
-     "order": 770,
+     "order": 760,
      "tier": 7,
      "next": [
       "kanto-sea-route-21",
@@ -880,7 +869,7 @@
     "kanto-underground-path": {
      "zh": "地下通道(5-6号道路)",
      "kind": "area",
-     "order": 780,
+     "order": 770,
      "tier": 8,
      "next": [
       "kanto-route-22",
@@ -891,7 +880,7 @@
     "fuchsia-city": {
      "zh": "浅红市",
      "kind": "town",
-     "order": 790,
+     "order": 780,
      "tier": 8,
      "next": [
       "kanto-route-22",
@@ -903,7 +892,7 @@
     "kanto-route-23": {
      "zh": "23号道路(合众)",
      "kind": "route",
-     "order": 800,
+     "order": 790,
      "tier": 8,
      "next": [
       "fuchsia-city",
@@ -914,7 +903,7 @@
     "kanto-route-24": {
      "zh": "24号道路(关都)",
      "kind": "route",
-     "order": 810,
+     "order": 800,
      "tier": 8,
      "next": [
       "kanto-route-23",
@@ -925,7 +914,7 @@
     "kanto-route-25": {
      "zh": "25号道路(关都)",
      "kind": "route",
-     "order": 820,
+     "order": 810,
      "tier": 8,
      "next": [
       "kanto-route-24",
@@ -936,7 +925,7 @@
     "kanto-route-26": {
      "zh": "26号道路(关都)",
      "kind": "route",
-     "order": 830,
+     "order": 820,
      "tier": 8,
      "next": [
       "kanto-route-25",
@@ -947,7 +936,7 @@
     "cinnabar-island": {
      "zh": "红莲镇",
      "kind": "town",
-     "order": 840,
+     "order": 830,
      "tier": 8,
      "next": [
       "kanto-route-26",
@@ -959,7 +948,7 @@
     "kanto-route-27": {
      "zh": "27号道路(关都)",
      "kind": "route",
-     "order": 850,
+     "order": 840,
      "tier": 8,
      "next": [
       "cinnabar-island",
@@ -970,7 +959,7 @@
     "kanto-route-28": {
      "zh": "28号道路(关都)",
      "kind": "route",
-     "order": 860,
+     "order": 850,
      "tier": 8,
      "next": [
       "kanto-route-27",
@@ -981,7 +970,7 @@
     "navel-rock": {
      "zh": "肚脐岩",
      "kind": "area",
-     "order": 870,
+     "order": 860,
      "tier": 8,
      "next": [
       "kanto-route-28",
@@ -992,7 +981,7 @@
     "kanto-pokemon-league": {
      "zh": "关都宝可梦联盟",
      "kind": "league",
-     "order": 880,
+     "order": 870,
      "tier": 8,
      "next": [
       "cinnabar-island",
@@ -1014,29 +1003,18 @@
      "order": 10,
      "tier": 1,
      "next": [
-      "johto-pokemart",
+      "sinjoh-ruins",
       "johto-route-29"
      ],
      "hub": true
     },
-    "johto-pokemart": {
-     "zh": "johto-pokemart",
+    "sinjoh-ruins": {
+     "zh": "神都遗迹",
      "kind": "area",
      "order": 20,
      "tier": 1,
      "next": [
       "new-bark-town",
-      "sinjoh-ruins"
-     ],
-     "hub": false
-    },
-    "sinjoh-ruins": {
-     "zh": "神都遗迹",
-     "kind": "area",
-     "order": 30,
-     "tier": 1,
-     "next": [
-      "johto-pokemart",
       "cherrygrove-city"
      ],
      "hub": false
@@ -1044,7 +1022,7 @@
     "cherrygrove-city": {
      "zh": "吉花市",
      "kind": "town",
-     "order": 40,
+     "order": 30,
      "tier": 1,
      "next": [
       "sinjoh-ruins",
@@ -1056,7 +1034,7 @@
     "sprout-tower": {
      "zh": "喇叭芽之塔",
      "kind": "area",
-     "order": 50,
+     "order": 40,
      "tier": 1,
      "next": [
       "cherrygrove-city",
@@ -1067,7 +1045,7 @@
     "violet-city": {
      "zh": "桔梗市",
      "kind": "town",
-     "order": 60,
+     "order": 50,
      "tier": 1,
      "next": [
       "sprout-tower",
@@ -1079,8 +1057,8 @@
     "ilex-forest": {
      "zh": "栎树林",
      "kind": "area",
-     "order": 70,
-     "tier": 2,
+     "order": 60,
+     "tier": 1,
      "next": [
       "violet-city",
       "burned-tower"
@@ -1090,7 +1068,7 @@
     "burned-tower": {
      "zh": "烧焦塔",
      "kind": "area",
-     "order": 80,
+     "order": 70,
      "tier": 2,
      "next": [
       "ilex-forest",
@@ -1101,7 +1079,7 @@
     "lake-of-rage": {
      "zh": "愤怒之湖",
      "kind": "area",
-     "order": 90,
+     "order": 80,
      "tier": 2,
      "next": [
       "burned-tower",
@@ -1112,7 +1090,7 @@
     "azalea-town": {
      "zh": "桧皮镇",
      "kind": "town",
-     "order": 100,
+     "order": 90,
      "tier": 2,
      "next": [
       "lake-of-rage",
@@ -1124,7 +1102,7 @@
     "safari-zone-gate": {
      "zh": "狩猎地带入口",
      "kind": "town",
-     "order": 110,
+     "order": 100,
      "tier": 2,
      "next": [
       "azalea-town",
@@ -1136,7 +1114,7 @@
     "national-park": {
      "zh": "自然公园",
      "kind": "area",
-     "order": 120,
+     "order": 110,
      "tier": 2,
      "next": [
       "safari-zone-gate",
@@ -1147,7 +1125,7 @@
     "dark-cave": {
      "zh": "黑暗洞穴",
      "kind": "area",
-     "order": 130,
+     "order": 120,
      "tier": 2,
      "next": [
       "national-park",
@@ -1158,7 +1136,7 @@
     "ruins-of-alph": {
      "zh": "阿露福遗迹",
      "kind": "area",
-     "order": 140,
+     "order": 130,
      "tier": 3,
      "next": [
       "dark-cave",
@@ -1169,7 +1147,7 @@
     "slowpoke-well": {
      "zh": "呆呆兽之井",
      "kind": "area",
-     "order": 150,
+     "order": 140,
      "tier": 3,
      "next": [
       "ruins-of-alph",
@@ -1180,7 +1158,7 @@
     "union-cave": {
      "zh": "互连洞",
      "kind": "area",
-     "order": 160,
+     "order": 150,
      "tier": 3,
      "next": [
       "slowpoke-well",
@@ -1191,7 +1169,7 @@
     "team-rocket-hq": {
      "zh": "火箭隊基地(城都)",
      "kind": "area",
-     "order": 170,
+     "order": 160,
      "tier": 3,
      "next": [
       "union-cave",
@@ -1202,7 +1180,7 @@
     "goldenrod-city": {
      "zh": "满金市",
      "kind": "town",
-     "order": 180,
+     "order": 170,
      "tier": 3,
      "next": [
       "team-rocket-hq",
@@ -1214,7 +1192,7 @@
     "ice-path": {
      "zh": "冰雪小径",
      "kind": "area",
-     "order": 190,
+     "order": 180,
      "tier": 3,
      "next": [
       "goldenrod-city",
@@ -1225,8 +1203,8 @@
     "mt-mortar": {
      "zh": "擂钵山",
      "kind": "area",
-     "order": 200,
-     "tier": 4,
+     "order": 190,
+     "tier": 3,
      "next": [
       "ice-path",
       "tohjo-falls"
@@ -1236,7 +1214,7 @@
     "tohjo-falls": {
      "zh": "都城瀑布",
      "kind": "area",
-     "order": 210,
+     "order": 200,
      "tier": 4,
      "next": [
       "mt-mortar",
@@ -1247,7 +1225,7 @@
     "dragons-den": {
      "zh": "龙穴",
      "kind": "area",
-     "order": 220,
+     "order": 210,
      "tier": 4,
      "next": [
       "tohjo-falls",
@@ -1258,7 +1236,7 @@
     "whirl-islands": {
      "zh": "漩涡岛",
      "kind": "area",
-     "order": 230,
+     "order": 220,
      "tier": 4,
      "next": [
       "dragons-den",
@@ -1269,7 +1247,7 @@
     "ecruteak-city": {
      "zh": "缘朱市",
      "kind": "town",
-     "order": 240,
+     "order": 230,
      "tier": 4,
      "next": [
       "whirl-islands",
@@ -1280,7 +1258,7 @@
     "johto-route-29": {
      "zh": "29号道路(城都)",
      "kind": "route",
-     "order": 250,
+     "order": 240,
      "tier": 4,
      "next": [
       "new-bark-town",
@@ -1297,7 +1275,7 @@
     "johto-route-30": {
      "zh": "30号道路(城都)",
      "kind": "route",
-     "order": 260,
+     "order": 250,
      "tier": 4,
      "next": [
       "johto-route-29",
@@ -1308,7 +1286,7 @@
     "johto-route-31": {
      "zh": "31号道路(城都)",
      "kind": "route",
-     "order": 270,
+     "order": 260,
      "tier": 5,
      "next": [
       "johto-route-30",
@@ -1319,7 +1297,7 @@
     "johto-route-32": {
      "zh": "32号道路(城都)",
      "kind": "route",
-     "order": 280,
+     "order": 270,
      "tier": 5,
      "next": [
       "johto-route-31",
@@ -1332,7 +1310,7 @@
     "bell-tower": {
      "zh": "铃铛塔",
      "kind": "area",
-     "order": 290,
+     "order": 280,
      "tier": 5,
      "next": [
       "johto-route-32",
@@ -1343,7 +1321,7 @@
     "johto-safari-zone": {
      "zh": "狩猎地带(城都)",
      "kind": "town",
-     "order": 300,
+     "order": 290,
      "tier": 5,
      "next": [
       "johto-route-32",
@@ -1356,7 +1334,7 @@
     "olivine-city": {
      "zh": "浅葱市",
      "kind": "town",
-     "order": 310,
+     "order": 300,
      "tier": 5,
      "next": [
       "johto-route-32",
@@ -1368,7 +1346,7 @@
     "johto-route-33": {
      "zh": "33号道路(城都)",
      "kind": "route",
-     "order": 320,
+     "order": 310,
      "tier": 5,
      "next": [
       "johto-safari-zone",
@@ -1380,7 +1358,7 @@
     "johto-route-34": {
      "zh": "34号道路(城都)",
      "kind": "route",
-     "order": 330,
+     "order": 320,
      "tier": 6,
      "next": [
       "johto-route-33",
@@ -1391,7 +1369,7 @@
     "johto-route-35": {
      "zh": "35号道路(城都)",
      "kind": "route",
-     "order": 340,
+     "order": 330,
      "tier": 6,
      "next": [
       "johto-route-34",
@@ -1402,7 +1380,7 @@
     "johto-route-36": {
      "zh": "36号道路(城都)",
      "kind": "route",
-     "order": 350,
+     "order": 340,
      "tier": 6,
      "next": [
       "johto-route-35",
@@ -1413,7 +1391,7 @@
     "johto-route-37": {
      "zh": "37号道路(城都)",
      "kind": "route",
-     "order": 360,
+     "order": 350,
      "tier": 6,
      "next": [
       "johto-route-36",
@@ -1424,7 +1402,7 @@
     "johto-route-38": {
      "zh": "38号道路(城都)",
      "kind": "route",
-     "order": 370,
+     "order": 360,
      "tier": 6,
      "next": [
       "johto-route-37",
@@ -1435,7 +1413,7 @@
     "johto-route-39": {
      "zh": "39号道路(城都)",
      "kind": "route",
-     "order": 380,
+     "order": 370,
      "tier": 6,
      "next": [
       "johto-route-38",
@@ -1447,7 +1425,7 @@
     "mt-silver": {
      "zh": "白银山",
      "kind": "area",
-     "order": 390,
+     "order": 380,
      "tier": 6,
      "next": [
       "johto-route-39",
@@ -1458,7 +1436,7 @@
     "cianwood-city": {
      "zh": "湛蓝市",
      "kind": "town",
-     "order": 400,
+     "order": 390,
      "tier": 7,
      "next": [
       "johto-route-39",
@@ -1470,7 +1448,7 @@
     "johto-sea-route-40": {
      "zh": "40号水路(城都)",
      "kind": "route",
-     "order": 410,
+     "order": 400,
      "tier": 7,
      "next": [
       "cianwood-city",
@@ -1481,7 +1459,7 @@
     "johto-sea-route-41": {
      "zh": "41号水路(城都)",
      "kind": "route",
-     "order": 420,
+     "order": 410,
      "tier": 7,
      "next": [
       "johto-sea-route-40",
@@ -1492,7 +1470,7 @@
     "johto-route-42": {
      "zh": "42号道路(城都)",
      "kind": "route",
-     "order": 430,
+     "order": 420,
      "tier": 7,
      "next": [
       "johto-sea-route-41",
@@ -1503,7 +1481,7 @@
     "johto-route-43": {
      "zh": "43号道路(城都)",
      "kind": "route",
-     "order": 440,
+     "order": 430,
      "tier": 7,
      "next": [
       "johto-route-42",
@@ -1514,7 +1492,7 @@
     "johto-route-44": {
      "zh": "44号道路(城都)",
      "kind": "route",
-     "order": 450,
+     "order": 440,
      "tier": 7,
      "next": [
       "johto-route-43",
@@ -1525,7 +1503,7 @@
     "blackthorn-city": {
      "zh": "烟墨市",
      "kind": "town",
-     "order": 460,
+     "order": 450,
      "tier": 8,
      "next": [
       "johto-route-44",
@@ -1537,7 +1515,7 @@
     "johto-route-45": {
      "zh": "45号道路(城都)",
      "kind": "route",
-     "order": 470,
+     "order": 460,
      "tier": 8,
      "next": [
       "blackthorn-city",
@@ -1548,7 +1526,7 @@
     "johto-route-46": {
      "zh": "46号道路(城都)",
      "kind": "route",
-     "order": 480,
+     "order": 470,
      "tier": 8,
      "next": [
       "johto-route-45",
@@ -1559,7 +1537,7 @@
     "johto-route-47": {
      "zh": "47号道路(城都)",
      "kind": "route",
-     "order": 490,
+     "order": 480,
      "tier": 8,
      "next": [
       "johto-route-46",
@@ -1570,7 +1548,7 @@
     "johto-route-48": {
      "zh": "48号道路(城都)",
      "kind": "route",
-     "order": 500,
+     "order": 490,
      "tier": 8,
      "next": [
       "johto-route-47",
@@ -1581,7 +1559,7 @@
     "embedded-tower": {
      "zh": "埋藏之塔",
      "kind": "area",
-     "order": 510,
+     "order": 500,
      "tier": 8,
      "next": [
       "johto-route-48",
@@ -1592,7 +1570,7 @@
     "johto-pokemon-league": {
      "zh": "城都宝可梦联盟",
      "kind": "league",
-     "order": 520,
+     "order": 510,
      "tier": 8,
      "next": [
       "blackthorn-city",
@@ -1648,29 +1626,18 @@
      "tier": 1,
      "next": [
       "rusturf-tunnel",
-      "hoenn-pokecenter",
+      "granite-cave",
       "hoenn-route-101"
      ],
      "hub": true
     },
-    "hoenn-pokecenter": {
-     "zh": "hoenn-pokecenter",
+    "granite-cave": {
+     "zh": "石之洞窟",
      "kind": "area",
      "order": 50,
      "tier": 1,
      "next": [
       "petalburg-city",
-      "granite-cave"
-     ],
-     "hub": false
-    },
-    "granite-cave": {
-     "zh": "石之洞窟",
-     "kind": "area",
-     "order": 60,
-     "tier": 1,
-     "next": [
-      "hoenn-pokecenter",
       "hoenn-altering-cave"
      ],
      "hub": false
@@ -1678,7 +1645,7 @@
     "hoenn-altering-cave": {
      "zh": "变幻洞窟",
      "kind": "area",
-     "order": 70,
+     "order": 60,
      "tier": 1,
      "next": [
       "granite-cave",
@@ -1689,7 +1656,7 @@
     "rustboro-city": {
      "zh": "卡那兹市",
      "kind": "town",
-     "order": 80,
+     "order": 70,
      "tier": 1,
      "next": [
       "hoenn-altering-cave",
@@ -1701,7 +1668,7 @@
     "fiery-path": {
      "zh": "烈焰小径",
      "kind": "area",
-     "order": 90,
+     "order": 80,
      "tier": 1,
      "next": [
       "rustboro-city",
@@ -1712,7 +1679,7 @@
     "dewford-town": {
      "zh": "武斗镇",
      "kind": "town",
-     "order": 100,
+     "order": 90,
      "tier": 1,
      "next": [
       "fiery-path",
@@ -1724,7 +1691,7 @@
     "jagged-pass": {
      "zh": "凹凸山道",
      "kind": "area",
-     "order": 110,
+     "order": 100,
      "tier": 1,
      "next": [
       "dewford-town",
@@ -1735,7 +1702,7 @@
     "abandoned-ship": {
      "zh": "弃船",
      "kind": "area",
-     "order": 120,
+     "order": 110,
      "tier": 1,
      "next": [
       "jagged-pass",
@@ -1746,7 +1713,7 @@
     "slateport-city": {
      "zh": "凯那市",
      "kind": "town",
-     "order": 130,
+     "order": 120,
      "tier": 2,
      "next": [
       "abandoned-ship",
@@ -1758,7 +1725,7 @@
     "mirage-tower": {
      "zh": "幻影之塔",
      "kind": "area",
-     "order": 140,
+     "order": 130,
      "tier": 2,
      "next": [
       "slateport-city",
@@ -1769,7 +1736,7 @@
     "shoal-cave": {
      "zh": "浅滩洞穴",
      "kind": "area",
-     "order": 150,
+     "order": 140,
      "tier": 2,
      "next": [
       "mirage-tower",
@@ -1780,7 +1747,7 @@
     "seafloor-cavern": {
      "zh": "海底洞窟",
      "kind": "area",
-     "order": 160,
+     "order": 150,
      "tier": 2,
      "next": [
       "shoal-cave",
@@ -1791,7 +1758,7 @@
     "meteor-falls": {
      "zh": "流星瀑布",
      "kind": "area",
-     "order": 170,
+     "order": 160,
      "tier": 2,
      "next": [
       "seafloor-cavern",
@@ -1802,7 +1769,7 @@
     "new-mauville": {
      "zh": "新紫堇",
      "kind": "area",
-     "order": 180,
+     "order": 170,
      "tier": 2,
      "next": [
       "meteor-falls",
@@ -1813,7 +1780,7 @@
     "mt-pyre": {
      "zh": "送神山",
      "kind": "area",
-     "order": 190,
+     "order": 180,
      "tier": 2,
      "next": [
       "new-mauville",
@@ -1824,7 +1791,7 @@
     "verdanturf-town": {
      "zh": "绿茵镇",
      "kind": "town",
-     "order": 200,
+     "order": 190,
      "tier": 2,
      "next": [
       "mt-pyre",
@@ -1836,7 +1803,7 @@
     "mirage-island": {
      "zh": "mirage-island",
      "kind": "area",
-     "order": 210,
+     "order": 200,
      "tier": 2,
      "next": [
       "verdanturf-town",
@@ -1847,7 +1814,7 @@
     "hoenn-safari-zone": {
      "zh": "狩猎地带",
      "kind": "town",
-     "order": 220,
+     "order": 210,
      "tier": 2,
      "next": [
       "mirage-island",
@@ -1859,7 +1826,7 @@
     "magma-hideout": {
      "zh": "熔岩队本部",
      "kind": "area",
-     "order": 230,
+     "order": 220,
      "tier": 2,
      "next": [
       "hoenn-safari-zone",
@@ -1870,7 +1837,7 @@
     "faraway-island": {
      "zh": "边境的小岛",
      "kind": "area",
-     "order": 240,
+     "order": 230,
      "tier": 2,
      "next": [
       "magma-hideout",
@@ -1881,7 +1848,7 @@
     "hoenn-victory-road": {
      "zh": "冠军之路",
      "kind": "area",
-     "order": 250,
+     "order": 240,
      "tier": 3,
      "next": [
       "faraway-island",
@@ -1892,7 +1859,7 @@
     "scorched-slab": {
      "zh": "天旱石窟",
      "kind": "area",
-     "order": 260,
+     "order": 250,
      "tier": 3,
      "next": [
       "hoenn-victory-road",
@@ -1903,7 +1870,7 @@
     "fallarbor-town": {
      "zh": "秋叶镇",
      "kind": "town",
-     "order": 270,
+     "order": 260,
      "tier": 3,
      "next": [
       "scorched-slab",
@@ -1915,7 +1882,7 @@
     "team-aqua-hideout": {
      "zh": "海洋队基地",
      "kind": "area",
-     "order": 280,
+     "order": 270,
      "tier": 3,
      "next": [
       "fallarbor-town",
@@ -1926,7 +1893,7 @@
     "team-magma-hideout": {
      "zh": "熔岩队本部",
      "kind": "area",
-     "order": 290,
+     "order": 280,
      "tier": 3,
      "next": [
       "team-aqua-hideout",
@@ -1937,7 +1904,7 @@
     "cave-of-origin": {
      "zh": "觉醒神殿",
      "kind": "area",
-     "order": 300,
+     "order": 290,
      "tier": 3,
      "next": [
       "team-magma-hideout",
@@ -1948,7 +1915,7 @@
     "mirage-spot-cave": {
      "zh": "幻之洞窟",
      "kind": "area",
-     "order": 310,
+     "order": 300,
      "tier": 3,
      "next": [
       "cave-of-origin",
@@ -1959,7 +1926,7 @@
     "mirage-spot-mountain": {
      "zh": "幻之山脈",
      "kind": "area",
-     "order": 320,
+     "order": 310,
      "tier": 3,
      "next": [
       "mirage-spot-cave",
@@ -1970,7 +1937,7 @@
     "mirage-spot-forest": {
      "zh": "Mirage Forest",
      "kind": "area",
-     "order": 330,
+     "order": 320,
      "tier": 3,
      "next": [
       "mirage-spot-mountain",
@@ -1981,7 +1948,7 @@
     "mirage-spot-island": {
      "zh": "幻之岛",
      "kind": "area",
-     "order": 340,
+     "order": 330,
      "tier": 3,
      "next": [
       "mirage-spot-forest",
@@ -1992,7 +1959,7 @@
     "lavaridge-town": {
      "zh": "釜炎镇",
      "kind": "town",
-     "order": 350,
+     "order": 340,
      "tier": 3,
      "next": [
       "mirage-spot-island",
@@ -2004,7 +1971,7 @@
     "desert-underpass": {
      "zh": "沙漠的地下道",
      "kind": "area",
-     "order": 360,
+     "order": 350,
      "tier": 3,
      "next": [
       "lavaridge-town",
@@ -2015,7 +1982,7 @@
     "ancient-tomb": {
      "zh": "古代坟墓",
      "kind": "area",
-     "order": 370,
+     "order": 360,
      "tier": 4,
      "next": [
       "desert-underpass",
@@ -2026,7 +1993,7 @@
     "battle-resort": {
      "zh": "对战度假地",
      "kind": "town",
-     "order": 380,
+     "order": 370,
      "tier": 4,
      "next": [
       "ancient-tomb",
@@ -2038,7 +2005,7 @@
     "desert-ruins": {
      "zh": "沙漠遗迹",
      "kind": "area",
-     "order": 390,
+     "order": 380,
      "tier": 4,
      "next": [
       "battle-resort",
@@ -2049,7 +2016,7 @@
     "southern-island": {
      "zh": "南方孤岛",
      "kind": "area",
-     "order": 400,
+     "order": 390,
      "tier": 4,
      "next": [
       "desert-ruins",
@@ -2060,7 +2027,7 @@
     "fortree-city": {
      "zh": "茵郁市",
      "kind": "town",
-     "order": 410,
+     "order": 400,
      "tier": 4,
      "next": [
       "southern-island",
@@ -2072,7 +2039,7 @@
     "island-cave": {
      "zh": "小岛洞穴",
      "kind": "area",
-     "order": 420,
+     "order": 410,
      "tier": 4,
      "next": [
       "fortree-city",
@@ -2083,7 +2050,7 @@
     "artisan-cave": {
      "zh": "工匠之穴",
      "kind": "area",
-     "order": 430,
+     "order": 420,
      "tier": 4,
      "next": [
       "island-cave",
@@ -2094,7 +2061,7 @@
     "mossdeep-space-center": {
      "zh": "绿岭宇宙中心",
      "kind": "area",
-     "order": 440,
+     "order": 430,
      "tier": 4,
      "next": [
       "artisan-cave",
@@ -2105,7 +2072,7 @@
     "hoenn-battle-frontier": {
      "zh": "对战开拓区(第三世代)",
      "kind": "area",
-     "order": 450,
+     "order": 440,
      "tier": 4,
      "next": [
       "mossdeep-space-center",
@@ -2116,7 +2083,7 @@
     "lilycove-city": {
      "zh": "水静市",
      "kind": "town",
-     "order": 460,
+     "order": 450,
      "tier": 4,
      "next": [
       "hoenn-battle-frontier",
@@ -2128,7 +2095,7 @@
     "sky-pillar": {
      "zh": "天空之柱",
      "kind": "area",
-     "order": 470,
+     "order": 460,
      "tier": 4,
      "next": [
       "lilycove-city",
@@ -2139,7 +2106,7 @@
     "crescent-isle": {
      "zh": "弓形島",
      "kind": "area",
-     "order": 480,
+     "order": 470,
      "tier": 4,
      "next": [
       "sky-pillar",
@@ -2150,7 +2117,7 @@
     "fabled-cave": {
      "zh": "朦胧洞窟",
      "kind": "area",
-     "order": 490,
+     "order": 480,
      "tier": 5,
      "next": [
       "crescent-isle",
@@ -2161,7 +2128,7 @@
     "gnarled-den": {
      "zh": "歪曲洞穴",
      "kind": "area",
-     "order": 500,
+     "order": 490,
      "tier": 5,
      "next": [
       "fabled-cave",
@@ -2172,7 +2139,7 @@
     "nameless-cavern": {
      "zh": "未知洞窟",
      "kind": "area",
-     "order": 510,
+     "order": 500,
      "tier": 5,
      "next": [
       "gnarled-den",
@@ -2183,7 +2150,7 @@
     "pathless-plain": {
      "zh": "无名平原",
      "kind": "area",
-     "order": 520,
+     "order": 510,
      "tier": 5,
      "next": [
       "nameless-cavern",
@@ -2194,7 +2161,7 @@
     "sea-mauville": {
      "zh": "海紫堇",
      "kind": "area",
-     "order": 530,
+     "order": 520,
      "tier": 5,
      "next": [
       "pathless-plain",
@@ -2205,7 +2172,7 @@
     "soaring-in-the-sky": {
      "zh": "翱翔高空",
      "kind": "area",
-     "order": 540,
+     "order": 530,
      "tier": 5,
      "next": [
       "sea-mauville",
@@ -2216,7 +2183,7 @@
     "trackless-forest": {
      "zh": "原始森林",
      "kind": "area",
-     "order": 550,
+     "order": 540,
      "tier": 5,
      "next": [
       "soaring-in-the-sky",
@@ -2227,7 +2194,7 @@
     "mossdeep-city": {
      "zh": "绿岭市",
      "kind": "town",
-     "order": 560,
+     "order": 550,
      "tier": 5,
      "next": [
       "trackless-forest",
@@ -2238,7 +2205,7 @@
     "hoenn-route-101": {
      "zh": "101号道路(丰缘)",
      "kind": "route",
-     "order": 570,
+     "order": 560,
      "tier": 5,
      "next": [
       "littleroot-town",
@@ -2261,7 +2228,7 @@
     "hoenn-route-102": {
      "zh": "102号道路(丰缘)",
      "kind": "route",
-     "order": 580,
+     "order": 570,
      "tier": 5,
      "next": [
       "hoenn-route-101",
@@ -2272,7 +2239,7 @@
     "hoenn-route-103": {
      "zh": "103号道路(丰缘)",
      "kind": "route",
-     "order": 590,
+     "order": 580,
      "tier": 5,
      "next": [
       "hoenn-route-102",
@@ -2283,7 +2250,7 @@
     "hoenn-route-104": {
      "zh": "104号道路(丰缘)",
      "kind": "route",
-     "order": 600,
+     "order": 590,
      "tier": 5,
      "next": [
       "hoenn-route-103",
@@ -2294,7 +2261,7 @@
     "hoenn-route-105": {
      "zh": "105号水路(丰缘)",
      "kind": "route",
-     "order": 610,
+     "order": 600,
      "tier": 6,
      "next": [
       "hoenn-route-104",
@@ -2305,7 +2272,7 @@
     "hoenn-route-106": {
      "zh": "106号水路(丰缘)",
      "kind": "route",
-     "order": 620,
+     "order": 610,
      "tier": 6,
      "next": [
       "hoenn-route-105",
@@ -2316,7 +2283,7 @@
     "hoenn-route-107": {
      "zh": "107号水路(丰缘)",
      "kind": "route",
-     "order": 630,
+     "order": 620,
      "tier": 6,
      "next": [
       "hoenn-route-106",
@@ -2327,7 +2294,7 @@
     "hoenn-route-108": {
      "zh": "108号水路(丰缘)",
      "kind": "route",
-     "order": 640,
+     "order": 630,
      "tier": 6,
      "next": [
       "hoenn-route-107",
@@ -2338,7 +2305,7 @@
     "sootopolis-city": {
      "zh": "琉璃市",
      "kind": "town",
-     "order": 650,
+     "order": 640,
      "tier": 6,
      "next": [
       "hoenn-route-108",
@@ -2349,7 +2316,7 @@
     "hoenn-route-109": {
      "zh": "109号水路(丰缘)",
      "kind": "route",
-     "order": 660,
+     "order": 650,
      "tier": 6,
      "next": [
       "sootopolis-city",
@@ -2360,7 +2327,7 @@
     "hoenn-route-110": {
      "zh": "110号道路(丰缘)",
      "kind": "route",
-     "order": 670,
+     "order": 660,
      "tier": 6,
      "next": [
       "hoenn-route-109",
@@ -2371,7 +2338,7 @@
     "hoenn-route-111": {
      "zh": "111号道路(丰缘)",
      "kind": "route",
-     "order": 680,
+     "order": 670,
      "tier": 6,
      "next": [
       "hoenn-route-110",
@@ -2382,7 +2349,7 @@
     "hoenn-route-112": {
      "zh": "112号道路(丰缘)",
      "kind": "route",
-     "order": 690,
+     "order": 680,
      "tier": 6,
      "next": [
       "hoenn-route-111",
@@ -2393,7 +2360,7 @@
     "hoenn-route-113": {
      "zh": "113号道路(丰缘)",
      "kind": "route",
-     "order": 700,
+     "order": 690,
      "tier": 6,
      "next": [
       "hoenn-route-112",
@@ -2404,7 +2371,7 @@
     "hoenn-route-114": {
      "zh": "114号道路(丰缘)",
      "kind": "route",
-     "order": 710,
+     "order": 700,
      "tier": 6,
      "next": [
       "hoenn-route-113",
@@ -2415,7 +2382,7 @@
     "hoenn-route-115": {
      "zh": "115号道路(丰缘)",
      "kind": "route",
-     "order": 720,
+     "order": 710,
      "tier": 6,
      "next": [
       "hoenn-route-114",
@@ -2426,7 +2393,7 @@
     "hoenn-route-116": {
      "zh": "116号道路(丰缘)",
      "kind": "route",
-     "order": 730,
+     "order": 720,
      "tier": 7,
      "next": [
       "hoenn-route-115",
@@ -2437,7 +2404,7 @@
     "hoenn-route-117": {
      "zh": "117号道路(丰缘)",
      "kind": "route",
-     "order": 740,
+     "order": 730,
      "tier": 7,
      "next": [
       "hoenn-route-116",
@@ -2448,7 +2415,7 @@
     "hoenn-route-118": {
      "zh": "118号道路(丰缘)",
      "kind": "route",
-     "order": 750,
+     "order": 740,
      "tier": 7,
      "next": [
       "hoenn-route-117",
@@ -2459,7 +2426,7 @@
     "ever-grande-city": {
      "zh": "彩悠市",
      "kind": "town",
-     "order": 760,
+     "order": 750,
      "tier": 7,
      "next": [
       "hoenn-route-118",
@@ -2470,7 +2437,7 @@
     "hoenn-route-119": {
      "zh": "119号道路(丰缘)",
      "kind": "route",
-     "order": 770,
+     "order": 760,
      "tier": 7,
      "next": [
       "ever-grande-city",
@@ -2481,7 +2448,7 @@
     "hoenn-route-120": {
      "zh": "120号道路(丰缘)",
      "kind": "route",
-     "order": 780,
+     "order": 770,
      "tier": 7,
      "next": [
       "hoenn-route-119",
@@ -2492,7 +2459,7 @@
     "hoenn-route-121": {
      "zh": "121号道路(丰缘)",
      "kind": "route",
-     "order": 790,
+     "order": 780,
      "tier": 7,
      "next": [
       "hoenn-route-120",
@@ -2503,7 +2470,7 @@
     "hoenn-route-122": {
      "zh": "122号水路(丰缘)",
      "kind": "route",
-     "order": 800,
+     "order": 790,
      "tier": 7,
      "next": [
       "hoenn-route-121",
@@ -2514,7 +2481,7 @@
     "hoenn-route-123": {
      "zh": "123号道路(丰缘)",
      "kind": "route",
-     "order": 810,
+     "order": 800,
      "tier": 7,
      "next": [
       "hoenn-route-122",
@@ -2525,7 +2492,7 @@
     "hoenn-route-124": {
      "zh": "124号水路(丰缘)",
      "kind": "route",
-     "order": 820,
+     "order": 810,
      "tier": 7,
      "next": [
       "hoenn-route-123",
@@ -2536,7 +2503,7 @@
     "hoenn-route-125": {
      "zh": "125号水路(丰缘)",
      "kind": "route",
-     "order": 830,
+     "order": 820,
      "tier": 7,
      "next": [
       "hoenn-route-124",
@@ -2547,7 +2514,7 @@
     "hoenn-route-126": {
      "zh": "126号水路(丰缘)",
      "kind": "route",
-     "order": 840,
+     "order": 830,
      "tier": 7,
      "next": [
       "hoenn-route-125",
@@ -2558,7 +2525,7 @@
     "hoenn-route-127": {
      "zh": "127号水路(丰缘)",
      "kind": "route",
-     "order": 850,
+     "order": 840,
      "tier": 8,
      "next": [
       "hoenn-route-126",
@@ -2569,7 +2536,7 @@
     "hoenn-route-128": {
      "zh": "128号水路(丰缘)",
      "kind": "route",
-     "order": 860,
+     "order": 850,
      "tier": 8,
      "next": [
       "hoenn-route-127",
@@ -2580,7 +2547,7 @@
     "pacifidlog-town": {
      "zh": "暮水镇",
      "kind": "town",
-     "order": 870,
+     "order": 860,
      "tier": 8,
      "next": [
       "hoenn-route-128",
@@ -2592,7 +2559,7 @@
     "hoenn-route-129": {
      "zh": "129号水路(丰缘)",
      "kind": "route",
-     "order": 880,
+     "order": 870,
      "tier": 8,
      "next": [
       "pacifidlog-town",
@@ -2603,7 +2570,7 @@
     "hoenn-route-130": {
      "zh": "130号水路(丰缘)",
      "kind": "route",
-     "order": 890,
+     "order": 880,
      "tier": 8,
      "next": [
       "hoenn-route-129",
@@ -2614,7 +2581,7 @@
     "hoenn-route-131": {
      "zh": "131号水路(丰缘)",
      "kind": "route",
-     "order": 900,
+     "order": 890,
      "tier": 8,
      "next": [
       "hoenn-route-130",
@@ -2625,7 +2592,7 @@
     "hoenn-route-132": {
      "zh": "132号水路(丰缘)",
      "kind": "route",
-     "order": 910,
+     "order": 900,
      "tier": 8,
      "next": [
       "hoenn-route-131",
@@ -2636,7 +2603,7 @@
     "hoenn-route-133": {
      "zh": "133号水路(丰缘)",
      "kind": "route",
-     "order": 920,
+     "order": 910,
      "tier": 8,
      "next": [
       "hoenn-route-132",
@@ -2647,7 +2614,7 @@
     "hoenn-route-134": {
      "zh": "134号水路(丰缘)",
      "kind": "route",
-     "order": 930,
+     "order": 920,
      "tier": 8,
      "next": [
       "hoenn-route-133",
@@ -2658,7 +2625,7 @@
     "marine-cave": {
      "zh": "海之窟",
      "kind": "area",
-     "order": 940,
+     "order": 930,
      "tier": 8,
      "next": [
       "hoenn-route-134",
@@ -2669,7 +2636,7 @@
     "terra-cave": {
      "zh": "陆之窟",
      "kind": "area",
-     "order": 950,
+     "order": 940,
      "tier": 8,
      "next": [
       "marine-cave",
@@ -2680,7 +2647,7 @@
     "hoenn-pokemon-league": {
      "zh": "丰缘宝可梦联盟",
      "kind": "league",
-     "order": 960,
+     "order": 950,
      "tier": 8,
      "next": [
       "pacifidlog-town",
@@ -2702,29 +2669,18 @@
      "order": 10,
      "tier": 1,
      "next": [
-      "sinnoh-pokemart",
+      "oreburgh-city",
       "sinnoh-route-201"
      ],
      "hub": true
     },
-    "sinnoh-pokemart": {
-     "zh": "sinnoh-pokemart",
-     "kind": "area",
+    "oreburgh-city": {
+     "zh": "黑金市",
+     "kind": "town",
      "order": 20,
      "tier": 1,
      "next": [
       "twinleaf-town",
-      "oreburgh-city"
-     ],
-     "hub": false
-    },
-    "oreburgh-city": {
-     "zh": "黑金市",
-     "kind": "town",
-     "order": 30,
-     "tier": 1,
-     "next": [
-      "sinnoh-pokemart",
       "oreburgh-mine",
       "sinnoh-route-201"
      ],
@@ -2733,7 +2689,7 @@
     "oreburgh-mine": {
      "zh": "黑金炭坑",
      "kind": "area",
-     "order": 40,
+     "order": 30,
      "tier": 1,
      "next": [
       "oreburgh-city",
@@ -2744,7 +2700,7 @@
     "floaroma-meadow": {
      "zh": "花苑花田",
      "kind": "area",
-     "order": 50,
+     "order": 40,
      "tier": 1,
      "next": [
       "oreburgh-mine",
@@ -2755,7 +2711,7 @@
     "eterna-forest": {
      "zh": "百代森林",
      "kind": "area",
-     "order": 60,
+     "order": 50,
      "tier": 1,
      "next": [
       "floaroma-meadow",
@@ -2766,7 +2722,7 @@
     "hearthome-city": {
      "zh": "家缘市",
      "kind": "town",
-     "order": 70,
+     "order": 60,
      "tier": 1,
      "next": [
       "eterna-forest",
@@ -2778,7 +2734,7 @@
     "lake-verity": {
      "zh": "心齐湖",
      "kind": "area",
-     "order": 80,
+     "order": 70,
      "tier": 1,
      "next": [
       "hearthome-city",
@@ -2789,7 +2745,7 @@
     "old-chateau": {
      "zh": "森之洋馆",
      "kind": "area",
-     "order": 90,
+     "order": 80,
      "tier": 1,
      "next": [
       "lake-verity",
@@ -2800,8 +2756,8 @@
     "valley-windworks": {
      "zh": "山谷发电厂",
      "kind": "area",
-     "order": 100,
-     "tier": 2,
+     "order": 90,
+     "tier": 1,
      "next": [
       "old-chateau",
       "wayward-cave"
@@ -2811,7 +2767,7 @@
     "wayward-cave": {
      "zh": "迷幻洞窟",
      "kind": "area",
-     "order": 110,
+     "order": 100,
      "tier": 2,
      "next": [
       "valley-windworks",
@@ -2822,7 +2778,7 @@
     "trainers-school": {
      "zh": "Trainers’ School",
      "kind": "area",
-     "order": 120,
+     "order": 110,
      "tier": 2,
      "next": [
       "wayward-cave",
@@ -2833,7 +2789,7 @@
     "lost-tower": {
      "zh": "迷失塔",
      "kind": "area",
-     "order": 130,
+     "order": 120,
      "tier": 2,
      "next": [
       "trainers-school",
@@ -2844,33 +2800,21 @@
     "trophy-garden": {
      "zh": "自豪的後院",
      "kind": "area",
-     "order": 140,
+     "order": 130,
      "tier": 2,
      "next": [
       "lost-tower",
-      "eterna-city"
+      "oreburgh-gate"
      ],
      "hub": false
-    },
-    "eterna-city": {
-     "zh": "百代市",
-     "kind": "town",
-     "order": 150,
-     "tier": 2,
-     "next": [
-      "trophy-garden",
-      "oreburgh-gate",
-      "sinnoh-route-201"
-     ],
-     "hub": true
     },
     "oreburgh-gate": {
      "zh": "黑金闸口",
      "kind": "area",
-     "order": 160,
+     "order": 140,
      "tier": 2,
      "next": [
-      "eterna-city",
+      "trophy-garden",
       "ravaged-path"
      ],
      "hub": false
@@ -2878,21 +2822,33 @@
     "ravaged-path": {
      "zh": "荒芜小道",
      "kind": "area",
-     "order": 170,
+     "order": 150,
      "tier": 2,
      "next": [
       "oreburgh-gate",
-      "fuego-ironworks"
+      "eterna-city"
      ],
      "hub": false
+    },
+    "eterna-city": {
+     "zh": "百代市",
+     "kind": "town",
+     "order": 160,
+     "tier": 2,
+     "next": [
+      "ravaged-path",
+      "fuego-ironworks",
+      "sinnoh-route-201"
+     ],
+     "hub": true
     },
     "fuego-ironworks": {
      "zh": "多多罗钢铁厂",
      "kind": "area",
-     "order": 180,
+     "order": 170,
      "tier": 2,
      "next": [
-      "ravaged-path",
+      "eterna-city",
       "solaceon-ruins"
      ],
      "hub": false
@@ -2900,7 +2856,7 @@
     "solaceon-ruins": {
      "zh": "随意遗迹",
      "kind": "area",
-     "order": 190,
+     "order": 180,
      "tier": 2,
      "next": [
       "fuego-ironworks",
@@ -2911,7 +2867,7 @@
     "ruin-maniac-cave": {
      "zh": "遗迹迷隧道",
      "kind": "area",
-     "order": 200,
+     "order": 190,
      "tier": 3,
      "next": [
       "solaceon-ruins",
@@ -2922,7 +2878,7 @@
     "valor-lakefront": {
      "zh": "立志湖畔",
      "kind": "area",
-     "order": 210,
+     "order": 200,
      "tier": 3,
      "next": [
       "ruin-maniac-cave",
@@ -2933,7 +2889,7 @@
     "maniac-tunnel": {
      "zh": "遗迹迷隧道",
      "kind": "area",
-     "order": 220,
+     "order": 210,
      "tier": 3,
      "next": [
       "valor-lakefront",
@@ -2944,7 +2900,7 @@
     "great-marsh": {
      "zh": "大湿地",
      "kind": "area",
-     "order": 230,
+     "order": 220,
      "tier": 3,
      "next": [
       "maniac-tunnel",
@@ -2955,10 +2911,21 @@
     "iron-island": {
      "zh": "钢铁岛",
      "kind": "area",
-     "order": 240,
+     "order": 230,
      "tier": 3,
      "next": [
       "great-marsh",
+      "mt-coronet"
+     ],
+     "hub": false
+    },
+    "mt-coronet": {
+     "zh": "天冠山",
+     "kind": "area",
+     "order": 240,
+     "tier": 3,
+     "next": [
+      "iron-island",
       "veilstone-city"
      ],
      "hub": false
@@ -2969,30 +2936,19 @@
      "order": 250,
      "tier": 3,
      "next": [
-      "iron-island",
       "mt-coronet",
+      "flower-paradise",
       "sinnoh-route-201"
      ],
      "hub": true
     },
-    "mt-coronet": {
-     "zh": "天冠山",
+    "flower-paradise": {
+     "zh": "花之乐园",
      "kind": "area",
      "order": 260,
      "tier": 3,
      "next": [
       "veilstone-city",
-      "flower-paradise"
-     ],
-     "hub": false
-    },
-    "flower-paradise": {
-     "zh": "花之乐园",
-     "kind": "area",
-     "order": 270,
-     "tier": 3,
-     "next": [
-      "mt-coronet",
       "resort-area"
      ],
      "hub": false
@@ -3000,7 +2956,7 @@
     "resort-area": {
      "zh": "名胜区",
      "kind": "town",
-     "order": 280,
+     "order": 270,
      "tier": 3,
      "next": [
       "flower-paradise",
@@ -3012,8 +2968,8 @@
     "lake-valor": {
      "zh": "立志湖",
      "kind": "area",
-     "order": 290,
-     "tier": 4,
+     "order": 280,
+     "tier": 3,
      "next": [
       "resort-area",
       "lake-acuity"
@@ -3023,7 +2979,7 @@
     "lake-acuity": {
      "zh": "睿智湖",
      "kind": "area",
-     "order": 300,
+     "order": 290,
      "tier": 4,
      "next": [
       "lake-valor",
@@ -3034,10 +2990,21 @@
     "acuity-lakefront": {
      "zh": "睿智湖畔",
      "kind": "area",
-     "order": 310,
+     "order": 300,
      "tier": 4,
      "next": [
       "lake-acuity",
+      "sendoff-spring"
+     ],
+     "hub": false
+    },
+    "sendoff-spring": {
+     "zh": "送行之泉",
+     "kind": "area",
+     "order": 310,
+     "tier": 4,
+     "next": [
+      "acuity-lakefront",
       "pastoria-city"
      ],
      "hub": false
@@ -3048,30 +3015,19 @@
      "order": 320,
      "tier": 4,
      "next": [
-      "acuity-lakefront",
       "sendoff-spring",
+      "turnback-cave",
       "sinnoh-route-201"
      ],
      "hub": true
     },
-    "sendoff-spring": {
-     "zh": "送行之泉",
+    "turnback-cave": {
+     "zh": "归途洞窟",
      "kind": "area",
      "order": 330,
      "tier": 4,
      "next": [
       "pastoria-city",
-      "turnback-cave"
-     ],
-     "hub": false
-    },
-    "turnback-cave": {
-     "zh": "归途洞窟",
-     "kind": "area",
-     "order": 340,
-     "tier": 4,
-     "next": [
-      "sendoff-spring",
       "sinnoh-victory-road"
      ],
      "hub": false
@@ -3079,10 +3035,21 @@
     "sinnoh-victory-road": {
      "zh": "冠军之路",
      "kind": "area",
-     "order": 350,
+     "order": 340,
      "tier": 4,
      "next": [
       "turnback-cave",
+      "newmoon-island"
+     ],
+     "hub": false
+    },
+    "newmoon-island": {
+     "zh": "新月岛",
+     "kind": "area",
+     "order": 350,
+     "tier": 4,
+     "next": [
+      "sinnoh-victory-road",
       "celestic-town"
      ],
      "hub": false
@@ -3093,30 +3060,19 @@
      "order": 360,
      "tier": 4,
      "next": [
-      "sinnoh-victory-road",
       "newmoon-island",
+      "distortion-world",
       "sinnoh-route-201"
      ],
      "hub": true
     },
-    "newmoon-island": {
-     "zh": "新月岛",
+    "distortion-world": {
+     "zh": "毀壞的世界",
      "kind": "area",
      "order": 370,
      "tier": 4,
      "next": [
       "celestic-town",
-      "distortion-world"
-     ],
-     "hub": false
-    },
-    "distortion-world": {
-     "zh": "毀壞的世界",
-     "kind": "area",
-     "order": 380,
-     "tier": 4,
-     "next": [
-      "newmoon-island",
       "snowpoint-temple"
      ],
      "hub": false
@@ -3124,7 +3080,7 @@
     "snowpoint-temple": {
      "zh": "雪峰神殿",
      "kind": "area",
-     "order": 390,
+     "order": 380,
      "tier": 5,
      "next": [
       "distortion-world",
@@ -3135,7 +3091,7 @@
     "stark-mountain": {
      "zh": "严酷山",
      "kind": "area",
-     "order": 400,
+     "order": 390,
      "tier": 5,
      "next": [
       "snowpoint-temple",
@@ -3146,7 +3102,7 @@
     "canalave-city": {
      "zh": "水脉市",
      "kind": "town",
-     "order": 410,
+     "order": 400,
      "tier": 5,
      "next": [
       "stark-mountain",
@@ -3158,7 +3114,7 @@
     "spear-pillar": {
      "zh": "枪之柱",
      "kind": "area",
-     "order": 420,
+     "order": 410,
      "tier": 5,
      "next": [
       "canalave-city",
@@ -3169,7 +3125,7 @@
     "snowpoint-city": {
      "zh": "雪峰市",
      "kind": "town",
-     "order": 430,
+     "order": 420,
      "tier": 5,
      "next": [
       "spear-pillar",
@@ -3181,7 +3137,7 @@
     "sunyshore-city": {
      "zh": "滨海市",
      "kind": "town",
-     "order": 440,
+     "order": 430,
      "tier": 5,
      "next": [
       "snowpoint-city",
@@ -3192,7 +3148,7 @@
     "sinnoh-route-201": {
      "zh": "201号道路(神奥)",
      "kind": "route",
-     "order": 450,
+     "order": 440,
      "tier": 5,
      "next": [
       "twinleaf-town",
@@ -3213,7 +3169,7 @@
     "sinnoh-route-202": {
      "zh": "202号道路(神奥)",
      "kind": "route",
-     "order": 460,
+     "order": 450,
      "tier": 5,
      "next": [
       "sinnoh-route-201",
@@ -3224,7 +3180,7 @@
     "sinnoh-route-203": {
      "zh": "203号道路(神奥)",
      "kind": "route",
-     "order": 470,
+     "order": 460,
      "tier": 5,
      "next": [
       "sinnoh-route-202",
@@ -3235,7 +3191,7 @@
     "sinnoh-route-204": {
      "zh": "204号道路(神奥)",
      "kind": "route",
-     "order": 480,
+     "order": 470,
      "tier": 6,
      "next": [
       "sinnoh-route-203",
@@ -3246,7 +3202,7 @@
     "sinnoh-route-205": {
      "zh": "205号道路(神奥)",
      "kind": "route",
-     "order": 490,
+     "order": 480,
      "tier": 6,
      "next": [
       "sinnoh-route-204",
@@ -3257,7 +3213,7 @@
     "sinnoh-route-206": {
      "zh": "206号道路(神奥)",
      "kind": "route",
-     "order": 500,
+     "order": 490,
      "tier": 6,
      "next": [
       "sinnoh-route-205",
@@ -3268,7 +3224,7 @@
     "sinnoh-route-207": {
      "zh": "207号道路(神奥)",
      "kind": "route",
-     "order": 510,
+     "order": 500,
      "tier": 6,
      "next": [
       "sinnoh-route-206",
@@ -3279,7 +3235,7 @@
     "sinnoh-route-208": {
      "zh": "208号道路(神奥)",
      "kind": "route",
-     "order": 520,
+     "order": 510,
      "tier": 6,
      "next": [
       "sinnoh-route-207",
@@ -3290,7 +3246,7 @@
     "sinnoh-route-209": {
      "zh": "209号道路(神奥)",
      "kind": "route",
-     "order": 530,
+     "order": 520,
      "tier": 6,
      "next": [
       "sinnoh-route-208",
@@ -3301,7 +3257,7 @@
     "sinnoh-route-210": {
      "zh": "210号道路(神奥)",
      "kind": "route",
-     "order": 540,
+     "order": 530,
      "tier": 6,
      "next": [
       "sinnoh-route-209",
@@ -3312,7 +3268,7 @@
     "sinnoh-route-211": {
      "zh": "211号道路(神奥)",
      "kind": "route",
-     "order": 550,
+     "order": 540,
      "tier": 6,
      "next": [
       "sinnoh-route-210",
@@ -3323,7 +3279,7 @@
     "sinnoh-route-212": {
      "zh": "212号道路(神奥)",
      "kind": "route",
-     "order": 560,
+     "order": 550,
      "tier": 6,
      "next": [
       "sinnoh-route-211",
@@ -3334,7 +3290,7 @@
     "sinnoh-route-213": {
      "zh": "213号道路(神奥)",
      "kind": "route",
-     "order": 570,
+     "order": 560,
      "tier": 6,
      "next": [
       "sinnoh-route-212",
@@ -3345,7 +3301,7 @@
     "sinnoh-route-214": {
      "zh": "214号道路(神奥)",
      "kind": "route",
-     "order": 580,
+     "order": 570,
      "tier": 7,
      "next": [
       "sinnoh-route-213",
@@ -3356,7 +3312,7 @@
     "sinnoh-route-215": {
      "zh": "215号道路(神奥)",
      "kind": "route",
-     "order": 590,
+     "order": 580,
      "tier": 7,
      "next": [
       "sinnoh-route-214",
@@ -3367,7 +3323,7 @@
     "sinnoh-route-216": {
      "zh": "216号道路(神奥)",
      "kind": "route",
-     "order": 600,
+     "order": 590,
      "tier": 7,
      "next": [
       "sinnoh-route-215",
@@ -3378,7 +3334,7 @@
     "sinnoh-route-217": {
      "zh": "217号道路(神奥)",
      "kind": "route",
-     "order": 610,
+     "order": 600,
      "tier": 7,
      "next": [
       "sinnoh-route-216",
@@ -3389,7 +3345,7 @@
     "sinnoh-route-218": {
      "zh": "218号道路(神奥)",
      "kind": "route",
-     "order": 620,
+     "order": 610,
      "tier": 7,
      "next": [
       "sinnoh-route-217",
@@ -3400,7 +3356,7 @@
     "sinnoh-pokemon-league": {
      "zh": "宝可梦联盟",
      "kind": "town",
-     "order": 630,
+     "order": 620,
      "tier": 7,
      "next": [
       "sinnoh-route-218",
@@ -3411,7 +3367,7 @@
     "sinnoh-route-219": {
      "zh": "219号道路(神奥)",
      "kind": "route",
-     "order": 640,
+     "order": 630,
      "tier": 7,
      "next": [
       "sinnoh-pokemon-league",
@@ -3422,7 +3378,7 @@
     "sinnoh-sea-route-220": {
      "zh": "220号水路(神奥)",
      "kind": "route",
-     "order": 650,
+     "order": 640,
      "tier": 7,
      "next": [
       "sinnoh-route-219",
@@ -3433,7 +3389,7 @@
     "sinnoh-route-221": {
      "zh": "221号道路(神奥)",
      "kind": "route",
-     "order": 660,
+     "order": 650,
      "tier": 7,
      "next": [
       "sinnoh-sea-route-220",
@@ -3444,7 +3400,7 @@
     "sinnoh-route-222": {
      "zh": "222号道路(神奥)",
      "kind": "route",
-     "order": 670,
+     "order": 660,
      "tier": 8,
      "next": [
       "sinnoh-route-221",
@@ -3455,7 +3411,7 @@
     "sinnoh-sea-route-223": {
      "zh": "223号水路(神奥)",
      "kind": "route",
-     "order": 680,
+     "order": 670,
      "tier": 8,
      "next": [
       "sinnoh-route-222",
@@ -3466,7 +3422,7 @@
     "sinnoh-route-224": {
      "zh": "224号道路(神奥)",
      "kind": "route",
-     "order": 690,
+     "order": 680,
      "tier": 8,
      "next": [
       "sinnoh-sea-route-223",
@@ -3477,7 +3433,7 @@
     "sinnoh-route-225": {
      "zh": "225号道路(神奥)",
      "kind": "route",
-     "order": 700,
+     "order": 690,
      "tier": 8,
      "next": [
       "sinnoh-route-224",
@@ -3488,7 +3444,7 @@
     "sinnoh-sea-route-226": {
      "zh": "226号水路(神奥)",
      "kind": "route",
-     "order": 710,
+     "order": 700,
      "tier": 8,
      "next": [
       "sinnoh-route-225",
@@ -3499,7 +3455,7 @@
     "sinnoh-route-227": {
      "zh": "227号道路(神奥)",
      "kind": "route",
-     "order": 720,
+     "order": 710,
      "tier": 8,
      "next": [
       "sinnoh-sea-route-226",
@@ -3510,7 +3466,7 @@
     "sinnoh-route-228": {
      "zh": "228号道路(神奥)",
      "kind": "route",
-     "order": 730,
+     "order": 720,
      "tier": 8,
      "next": [
       "sinnoh-route-227",
@@ -3521,7 +3477,7 @@
     "sinnoh-route-229": {
      "zh": "229号道路(神奥)",
      "kind": "route",
-     "order": 740,
+     "order": 730,
      "tier": 8,
      "next": [
       "sinnoh-route-228",
@@ -3532,7 +3488,7 @@
     "sinnoh-sea-route-230": {
      "zh": "230号水路(神奥)",
      "kind": "route",
-     "order": 750,
+     "order": 740,
      "tier": 8,
      "next": [
       "sinnoh-route-229",
@@ -3543,7 +3499,7 @@
     "sinnoh-hall-of-origin-1": {
      "zh": "起始之殿",
      "kind": "area",
-     "order": 760,
+     "order": 750,
      "tier": 8,
      "next": [
       "sinnoh-sea-route-230"
