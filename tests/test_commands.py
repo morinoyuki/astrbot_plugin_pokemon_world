@@ -576,3 +576,116 @@ def test_clear_all_saves_requires_configured_admin():
     out, saved = _run("u1")               # 自己是管理员(-all 合法)
     assert "已清空" in out
     assert not saved
+
+
+def _fresh(tmp, starter="新叶喵"):
+    p = _Cmd(tmp)
+    p.config = {"ui_image": False, "quest_enable": False, "battle_image": False}
+    ev = _Event(f"/开始 小智 {starter}")
+    run_cmd(p, ev, p.cmd_start)
+    return p, ev
+
+
+def test_starter_must_come_from_the_pool():
+    """初始宝可梦必须在候选池内 —— 曾经可以直接 /开始 小智 超梦 开局。"""
+    for species in ("超梦", "阿尔宙斯", "烈空坐"):
+        with tempfile.TemporaryDirectory() as tmp:
+            p = _Cmd(tmp)
+            p.config = {"ui_image": False, "quest_enable": False}
+            ev = _Event(f"/开始 小智 {species}")
+            run_cmd(p, ev, p.cmd_start)
+            out = "".join(ev.outputs)
+            assert "不在初始宝可梦候选里" in out, out
+            assert not p.trainers.exists("g10086", "u1"), "越权初始宝可梦不能建号"
+
+    # 候选池内的正常可选
+    with tempfile.TemporaryDirectory() as tmp:
+        p, ev = _fresh(tmp, "皮卡丘")
+        assert p._load(ev).party[0]["species"] == "pikachu"
+
+
+def test_challenge_commands_survive_all_fainted_team():
+    """全队倒下后挑战道馆/训练家/神兽不能抛未捕获异常(玩家收不到任何回复)。"""
+    from pw import battle as B
+
+    for cmd, attr in (("/道馆 挑战", "cmd_gym"), ("/训练家战 1", "cmd_npc")):
+        with tempfile.TemporaryDirectory() as tmp:
+            p, ev = _fresh(tmp)
+            t = p._load(ev)
+            t.data["location"] = "pewter-city"
+            t.data["party"][0]["cur_hp"] = 0
+            p._save(t)
+            ev2 = _Event(cmd)
+            run_cmd(p, ev2, getattr(p, attr))          # 不能抛异常
+            out = "".join(ev2.outputs)
+            assert "失去战斗能力" in out, out
+            assert not B.in_battle(p._load(ev2))
+
+
+def test_shop_learn_evolve_blocked_in_battle():
+    """对战中买卖/学招/进化会被战斗快照回滚 → 必须直接拒绝。"""
+    from pw import battle as B
+
+    with tempfile.TemporaryDirectory() as tmp:
+        p, ev = _fresh(tmp, "小火龙")
+        t = p._load(ev)
+        t.data["location"] = "pewter-city"
+        p._save(t)
+        t = p._load(ev)
+        B.start(t, [{"species": "geodude", "level": 14}], kind="gym",
+                meta={"kind": "gym", "title": "道馆战"}, day=1)
+        p._save(t)
+        t = p._load(ev)
+        money0, potion0 = t.money, t.count("potion")
+        moves0 = list(t.party[0]["moves"])
+
+        for cmd, attr, hint in (
+            ("/商店 买 伤药 1", "cmd_shop", "不能买卖"),
+            ("/商店 卖 伤药 1", "cmd_shop", "不能买卖"),
+            ("/学招 1 喷射火焰", "cmd_learn", "不能学招式"),
+            ("/进化 1", "cmd_evolve", "不能进化"),
+        ):
+            ev2 = _Event(cmd)
+            run_cmd(p, ev2, getattr(p, attr))
+            assert hint in "".join(ev2.outputs), f"{cmd} 应被拒绝"
+
+        t2 = p._load(ev2)
+        assert t2.money == money0 and t2.count("potion") == potion0, "财产不能变"
+        assert list(t2.party[0]["moves"]) == moves0
+
+
+def test_learn_replace_reports_failure():
+    """新招已经会了时不能谎报"学会了"。"""
+    with tempfile.TemporaryDirectory() as tmp:
+        p, ev = _fresh(tmp, "小火龙")
+        t = p._load(ev)
+        mon = t.party[0]
+        mon["moves"] = ["ember", "scratch", "growl", "firefang"]
+        p._save(t)
+        ev2 = _Event("/学招 1 ember 替换 scratch")
+        run_cmd(p, ev2, p.cmd_learn)
+        t2 = p._load(ev2)
+        assert list(t2.party[0]["moves"]) == ["ember", "scratch", "growl", "firefang"]
+        assert "已经会了" in "".join(ev2.outputs), "".join(ev2.outputs)
+
+
+def test_trainer_card_day_count_increases():
+    """训练家卡的"第几天"要按创建当天算,不能恒为 1(旧代码读了不存在的字段)。"""
+    from pw.util import game_day
+
+    with tempfile.TemporaryDirectory() as tmp:
+        p, ev = _fresh(tmp)
+        t = p._load(ev)
+        assert t.data.get("play_day"), "new_trainer 应写入 play_day"
+        payload = p._card_payload(t)
+        assert payload["play_day"] >= 1
+        # 把创建日往前推 5 天 → 应当显示第 6 天
+        t.data["play_day"] = game_day() - 5
+        p._save(t)
+        assert p._card_payload(p._load(ev))["play_day"] == 6
+
+
+def test_help_lists_reset_world():
+    from prompts import HELP_TEXT
+
+    assert "重置世界" in HELP_TEXT

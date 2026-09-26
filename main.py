@@ -285,6 +285,20 @@ class PokemonWorldPlugin(Star):
                     name = tok
             starters = self._cfg("starter_choices", "") or ""
             pool = [s.strip() for s in str(starters).split(",") if s.strip()] or DEFAULT_STARTERS
+            # 初始宝可梦必须来自候选池,否则玩家能直接选超梦/阿尔宙斯开局
+            if starter:
+                pool_keys = set()
+                for key in pool:
+                    hit = get_dex().resolve_species(key)
+                    if hit:
+                        pool_keys.add(str(hit[0]))
+                hit0 = get_dex().resolve_species(starter)
+                if hit0 and str(hit0[0]) not in pool_keys:
+                    yield event.plain_result(
+                        f"❌ 「{starter}」不在初始宝可梦候选里。"
+                        "用 `/开始 <名字>` 不带宝可梦会弹出选择菜单。"
+                    )
+                    return
             if not starter:
                 yield event.plain_result(self._starter_menu(pool, name))
                 return
@@ -500,10 +514,10 @@ class PokemonWorldPlugin(Star):
             notice += QT.note(t, "steps", steps=40)
             # 0) 神兽定点:条件满足且就在此地时,优先遭遇
             site = (legendary.ready(t, world=world, day=state.day) or [None])[0]
+            if site and t.all_fainted():
+                yield event.plain_result("❌ 队伍全部失去战斗能力,先 `/治疗`。")
+                return
             if site:
-                if t.all_fainted():
-                    yield event.plain_result("❌ 队伍全部失去战斗能力,先 `/治疗`。")
-                    return
                 meta = legendary.legendary_meta(t, site)
                 log = B.start(
                     t, meta["team"], kind="legend", wild=True, meta=meta,
@@ -706,6 +720,10 @@ class PokemonWorldPlugin(Star):
                     + "\n".join(f"{i}. {n['name']}" for i, n in enumerate(npcs, 1))
                 )
                 return
+            err = _start_err(t)
+            if err:
+                yield event.plain_result(err)
+                return
             meta = npc.build_route_battle(t, npcs[idx - 1], day=state.day)
             log = B.start(
                 t,
@@ -751,6 +769,10 @@ class PokemonWorldPlugin(Star):
                 return
             async with self._lock(t.scope):
                 state = self._state(t.scope)
+                err = _start_err(t)
+                if err:
+                    yield event.plain_result(err)
+                    return
                 meta = npc.build_gym_battle(t, gym)
                 log = B.start(
                     t,
@@ -846,6 +868,10 @@ class PokemonWorldPlugin(Star):
         if B.in_battle(t):
             yield event.plain_result("⚠️ 先结束当前对战。")
             return
+        err = _start_err(t)
+        if err:
+            yield event.plain_result(err)
+            return
         async with self._lock(t.scope):
             state = self._state(t.scope)
             pending = [
@@ -875,6 +901,12 @@ class PokemonWorldPlugin(Star):
         t, err = self._require(event)
         if err:
             yield event.plain_result(err)
+            return
+        # 对战中禁止买卖:战斗每回合会把开战时的队伍/背包快照写回存档
+        # (_sync),战斗中的改动会被回滚 —— 买东西会"钱货两失",卖东西则是
+        # 空手套白狼。和 /治疗 /前往 一样,这里直接拒绝。
+        if B.in_battle(t):
+            yield event.plain_result("⚠️ 对战中不能买卖,先结束当前对战。")
             return
         world = WorldMap()
         if "mart" not in world.services(t.location):
@@ -974,6 +1006,9 @@ class PokemonWorldPlugin(Star):
         if err:
             yield event.plain_result(err)
             return
+        if B.in_battle(t):
+            yield event.plain_result("⚠️ 对战中不能学招式,先结束当前对战。")
+            return
         arg = self._args(event, ("学招", "learn", "学招式")).strip()
         tokens = arg.split()
         if len(tokens) < 2:
@@ -1007,7 +1042,11 @@ class PokemonWorldPlugin(Star):
             if not old:
                 yield event.plain_result(f"❌ 找不到要替换的招式「{replace}」。")
                 return
-            growth.replace_move(mon, old, mr[0])
+            if not growth.replace_move(mon, old, mr[0]):
+                yield event.plain_result(
+                    f"❌ 「{growth.move_zh(mr[0])}」已经会了,不用替换。"
+                )
+                return
         elif not growth.learn_move(mon, mr[0]):
             yield event.plain_result("❌ 学不会(招式已满或已会)。")
             return
@@ -1028,6 +1067,9 @@ class PokemonWorldPlugin(Star):
         t, err = self._require(event)
         if err:
             yield event.plain_result(err)
+            return
+        if B.in_battle(t):
+            yield event.plain_result("⚠️ 对战中不能进化,先结束当前对战。")
             return
         dex = get_dex()
         arg = self._args(event, ("进化", "evolve")).strip()
@@ -1734,6 +1776,7 @@ class PokemonWorldPlugin(Star):
             meta = story.tournament_meta(
                 t, rnd, world=world, rng=stable_rng("tour", t.uid, state.day, rnd)
             )
+            t.set_flag("tournament_last_foe", str(meta.get("title") or ""))
             log = B.start(
                 t, meta["team"], kind="tournament", meta=meta,
                 weather=_battle_weather(state, t.region), day=state.day,
@@ -1786,11 +1829,20 @@ class PokemonWorldPlugin(Star):
         """战斗结束后追加:捕获 / 成长 / 战报卡片。"""
         if not self._cfg_bool("ui_image", True) or not res.finished:
             return
+        _box_before = {str(m.get("id") or "") for m in (t.data.get("box") or [])}
         view = B.view(t)
         mon = view.get("my") or {}
         if res.outcome == "caught" and res.rewards:
             _ball_key = str(res.item_key or "poke-ball")
-            caught = B.dict_to_mon(t.party[-1]) if t.party else None
+            # 满 6 只时捕获物进电脑,party[-1] 是旧成员 → 卡片会显示错宝可梦。
+            # 用"战斗结算后的 box 增量"定位新捕获的那只。
+            box_now = t.data.get("box") or []
+            fresh = [m for m in box_now if str(m.get("id") or "") not in _box_before]
+            caught = (
+                B.dict_to_mon(fresh[-1])
+                if fresh
+                else (B.dict_to_mon(t.party[-1]) if t.party else None)
+            )
             if caught is not None:
                 view_c = B._mon_view(caught)  # 复用内部视图构造
                 async for r in self._emit_ui(
@@ -1943,7 +1995,9 @@ class PokemonWorldPlugin(Star):
             badges.append(("", False))
         cur = story.current_stage(t)
         prog = f"{cur['title']}:{cur['desc']}" if cur else "本地区主线已完成"
-        created = int(t.data.get("created_day") or 0)
+        # 注意:new_trainer 写的是 play_day(=创建那天的天数),从来没有 created_day 字段。
+        # 旧写法读 created_day 恒为 0 → 训练家卡的"第几天"永远是 1。
+        created = int(t.data.get("play_day") or 0)
         play_day = max(1, game_day() - created + 1) if created else 1
         return {
             "name": t.name,
@@ -2129,6 +2183,15 @@ def _prune_temp_images(tmp: str, keep_seconds: int = 1800) -> None:
                 continue
             with contextlib.suppress(OSError):
                 os.remove(name)
+
+
+def _start_err(t) -> str:
+    """开战前的通用检查:全队倒下时 B.start 会抛 BattleError,旧实现让它直接
+    冒出去,玩家点什么都没回复。写成模块级函数避免测试宿主对象重绑 staticmethod。
+    """
+    if t.all_fainted():
+        return "❌ 你的宝可梦全都失去战斗能力了,先去 `/治疗` 吧。"
+    return ""
 
 
 def _battle_weather(state, region: str) -> str:
