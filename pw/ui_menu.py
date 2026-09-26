@@ -26,7 +26,6 @@ from .ui_render import (
 
 # ── 本模块补充的少量配色 ─────────────────────────────────────────
 MAP_LAND = (234, 246, 226)
-MAP_SEA = (178, 216, 230)
 ROUTE_LINE = (198, 192, 152)
 DOT_VISITED = (72, 152, 72)
 DOT_EMPTY = (252, 251, 238)
@@ -45,6 +44,32 @@ def _to_int(v, default: int = 0) -> int:
         return int(v or 0)
     except (TypeError, ValueError):
         return default
+
+
+def _goal_lines(sc, text: str, width: float, size: float, limit: int = 2,
+                min_size: float = 6.4) -> tuple[list[str], float]:
+    """排版「下一目标」:优先略微缩小字号压成一行,否则折行且不留孤儿字。
+
+    例如「挑战枯叶市道馆:马志士」按 7.8 号字折成 2 行时,第 2 行只剩一个
+    「士」,看着很像排版事故。
+    """
+    t = str(text or "自由探索")
+    sz = float(size)
+    while sz > min_size and sc.tw(t, sz) > width:
+        sz -= 0.2
+    if sc.tw(t, sz) <= width:
+        return [t], sz
+    lines = sc.wrap(t, width, size=size, limit=99)
+    if len(lines) > limit:
+        out = lines[:limit]
+        last = out[-1]
+        out[-1] = (last[:-1] + "…") if len(last) > 1 else "…"
+        return out, size
+    if len(lines) > 1 and len(lines[-1]) <= 2:
+        # 末行只有一两个字 → 合并成一行并省略结尾,不单独占一行
+        head = lines[-2]
+        lines = lines[:-2] + [(head[:-1] + "…") if len(head) > 1 else "…"]
+    return lines, size
 
 
 def _fit(sc: Screen, s: str, max_w: float, size: float) -> str:
@@ -154,11 +179,11 @@ def render_map(
         sc.window(INFO, radius=2)
 
         mx0, my0, mx1, my1 = MAP
-        # 地图底色:陆地 + 两片海,做出"手绘地图"的观感
+        # 地图底色:陆地。早期版本还在这里随手画了两团淡蓝椭圆当"海",但它们
+        # 不对应任何真实地理(节点是网格排布,没有坐标可言),只会让人误以为是
+        # 某种标记,所以去掉。—— 地图上的图形必须承载信息。
         sc.d.rounded_rectangle([mx0 + 3, my0 + 3, mx1 - 3, my1 - 3], radius=2,
                                fill=MAP_LAND)
-        sc.d.ellipse([mx0 + 2, my0 + 2, mx0 + 34, my0 + 16], fill=MAP_SEA)
-        sc.d.ellipse([mx1 - 34, my0 + 2, mx1 - 2, my0 + 16], fill=MAP_SEA)
 
         order, nxt = _chain_keys(nodes)
         pos: dict[str, tuple[float, float]] = {}
@@ -258,8 +283,9 @@ def render_map(
                 cur_zh = str(n.get("zh") or cur_key)
         sc.text(158, 59, _fit(sc, cur_zh or "未知", 72, 8.8), size=8.8, fill=PIN_RED)
         sc.text(158, 72, "下一目标", size=7, fill=TEXT_DIM)
-        for i, ln in enumerate(sc.wrap(next_goal or "自由探索", 72, size=7.8, limit=2)):
-            sc.text(158, 81 + i * 9, ln, size=7.8, fill=TEXT)
+        goal_lines, goal_size = _goal_lines(sc, next_goal, 72, 7.8, 2)
+        for i, ln in enumerate(goal_lines):
+            sc.text(158, 81 + i * 9, ln, size=goal_size, fill=TEXT)
         sc.d.line([INFO[0] + 5, 100, INFO[2] - 5, 100], fill=BOX_HI)
         legend = [("current", "当前位置"), ("visited", "已到过"),
                   ("empty", "未到过"), ("gym", "道馆城镇")]

@@ -335,3 +335,23 @@ def test_battle_result_reward_box_is_adaptive():
     assert len(wrapped) == 2
     assert wrapped[-1].endswith("…"), wrapped
     assert "很长很长" not in wrapped[-1].replace(wrapped[-1][:2], "")[:0]
+
+
+def test_map_has_no_decorative_blobs_and_goal_fits_one_line():
+    """地图上不应再出现无信息的装饰色块,「下一目标」也不应留孤儿字。"""
+    from pw import ui_menu as M
+    from pw.ui_render import Screen
+
+    # 早期版本在面板角落画了两团淡蓝椭圆当"海",不对应任何地理信息,已移除
+    assert not hasattr(M, "MAP_SEA"), "装饰性海面色块又回来了"
+
+    sc = Screen(scale=SCALE)
+    lines, size = M._goal_lines(sc, "挑战枯叶市道馆:马志士", 72, 7.8, 2)
+    assert lines == ["挑战枯叶市道馆:马志士"], lines   # 略微缩小字号压成一行
+    assert size < 7.8
+    # 真正的长目标:折行但不能剩一个字单独占行
+    lines, _ = M._goal_lines(sc, "击败火箭队首领坂木并夺回被抢走的宝可梦", 72, 7.8, 2)
+    assert len(lines) == 2
+    assert len(lines[-1]) > 2
+    lines, _ = M._goal_lines(sc, "", 72, 7.8, 2)
+    assert lines == ["自由探索"]
