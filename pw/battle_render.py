@@ -381,9 +381,11 @@ def render_battle(
         d2 = ImageDraw.Draw(big)
 
         # 敌方信息
-        _box_text(d2, foe, FOE_BOX, ENEMY_HP_BAR, f_name, f_small, f_ball, S, mine=False)
+        _box_text(big, d2, foe, FOE_BOX, ENEMY_HP_BAR, f_name, f_small,
+                  f_ball, S, mine=False)
         # 我方信息
-        _box_text(d2, my, MY_BOX, PLAYER_HP_BAR, f_name, f_small, f_ball, S, mine=True)
+        _box_text(big, d2, my, MY_BOX, PLAYER_HP_BAR, f_name, f_small,
+                  f_ball, S, mine=True)
 
         # 地名 / 天气 / 场地标签:右上角纵向排布(左上角被敌方信息框占用)
         chip_x = (LOGICAL_W - 5) * S
@@ -404,8 +406,11 @@ def render_battle(
         tx = (mx0 + tx_pad) * S
         ty = (my0 + 4) * S
         for i, line in enumerate(shown_lines):
-            d2.text((tx, ty + i * int(MSG_LINE_H * S)), line, font=f_msg, fill=MSG_TEXT,
-                    stroke_width=max(1, S // 2), stroke_fill=MSG_SHADOW)
+            # 走 fonts.draw_text:主字体缺字形时回退 emoji/符号字体(昵称可能带 emoji)
+            fonts.draw_text(
+                big, (tx, ty + i * int(MSG_LINE_H * S)), line, f_msg.size, MSG_TEXT,
+                stroke_width=max(1, S // 2), stroke_fill=MSG_SHADOW,
+            )
 
         # 「HP」「EXP」标签文字(放大后画才清晰),在标签框内居中
         for tag, label, fg in (
@@ -506,28 +511,37 @@ def _paste_small(small, mon: dict, ground, *, factor: float, bounds, back: bool,
     small.paste(img, (px, py), img)
 
 
-def _box_text(d2, mon, box, hp_bar, f_name, f_small, f_ball, S, *, mine: bool) -> None:
-    """信息框里的文字(放大层绘制)。"""
+def _box_text(big, d2, mon, box, hp_bar, f_name, f_small, f_ball, S, *,
+              mine: bool) -> None:
+    """信息框里的文字(放大层绘制,走 fonts 以支持 emoji 昵称回退)。"""
     x0, y0, x1, _y1 = box
     name = str(mon.get("name") or mon.get("species") or "?")
     lv = mon.get("level")
     px = (x0 + 5) * S
     py = (y0 + 4) * S
-    d2.text((px, py), name, font=f_name, fill=TEXT)
-    w = int(f_name.getlength(name))
+    fonts.draw_text(big, (px, py), name, f_name.size, TEXT)
+    w = int(fonts.measure(name, f_name.size))
     gender = str(mon.get("gender") or "")
     if gender in ("M", "F"):
-        d2.text((px + w + 2 * S, py), "♂" if gender == "M" else "♀", font=f_name,
-                fill=MALE if gender == "M" else FEMALE)
-        w += int(f_name.getlength("♂")) + 2 * S
+        glyph = "♂" if gender == "M" else "♀"
+        fonts.draw_text(big, (px + w + 2 * S, py), glyph, f_name.size,
+                        MALE if gender == "M" else FEMALE)
+        w += int(fonts.measure(glyph, f_name.size)) + 2 * S
     if lv not in (None, ""):
         lvtext = f"No.{int(lv)}"
-        d2.text(((x1 - 5) * S - f_name.getlength(lvtext), py), lvtext, font=f_name, fill=TEXT)
+        fonts.draw_text(
+            big, ((x1 - 5) * S - fonts.measure(lvtext, f_name.size), py),
+            lvtext, f_name.size, TEXT,
+        )
     if mine:
         cur = mon.get("cur_hp", 0)
         mx = mon.get("max_hp", 0)
         hptext = f"{int(cur or 0)}/{int(mx or 0)}"
-        d2.text(((x1 - 5) * S - f_small.getlength(hptext), (hp_bar[1] + 7) * S), hptext,
-                font=f_small, fill=TEXT)
+        fonts.draw_text(
+            big,
+            ((x1 - 5) * S - fonts.measure(hptext, f_small.size),
+             (hp_bar[1] + 7) * S),
+            hptext, f_small.size, TEXT,
+        )
     else:
         _ = f_ball
