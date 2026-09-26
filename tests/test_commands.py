@@ -5,6 +5,7 @@
 """
 
 import asyncio
+import contextlib
 import importlib.util
 import os
 import sys
@@ -497,3 +498,53 @@ def test_battle_end_emits_result_card():
                 break
         # 至少:对战画面 + 结算卡(两张图片卡片)
         assert chains >= 2, f"战斗结束只输出了 {chains} 张图片"
+
+
+def test_temp_images_are_unique_and_pruned():
+    """临时图文件名必须唯一,且过期文件要被清理。
+
+    旧实现用 `hash(text)%100000` / 图片字节长度命名:AstrBot 是在指令返回之后
+    才去读图片文件,撞名会让先发的那张被覆盖(玩家看到别人的/上一回合的画面);
+    而且只写不删,长时间运行会攒出成千上万个文件。
+    """
+    import glob
+    import os
+    import time
+
+    import pw_plugin  # noqa: F401
+
+    main_mod = sys.modules["pw_plugin.main"]
+
+    with tempfile.TemporaryDirectory() as tmp:
+        p = _Cmd(tmp)
+        p.config = {"ui_image": False, "quest_enable": False}
+        ev = _Event("/开始 小智 新叶喵")
+        run_cmd(p, ev, p.cmd_start)
+
+        # 同样内容连续写 3 次 → 必须是 3 个不同文件(否则会互相覆盖)
+        paths = [p._temp_image(b"same-bytes", "pw_ui_probe") for _ in range(3)]
+        assert len(set(paths)) == 3
+        for path in paths:
+            assert os.path.exists(path)
+
+        # 过期文件会被清理,新鲜文件不会被误删
+        stale = os.path.join(tempfile.gettempdir(), "pw_ui_stale_probe.png")
+        with open(stale, "wb") as fh:
+            fh.write(b"x")
+        old = time.time() - 9999
+        os.utime(stale, (old, old))
+        main_mod._prune_temp_images(tempfile.gettempdir())
+        assert not os.path.exists(stale)
+        assert all(os.path.exists(x) for x in paths)
+        # 不碰别人的文件
+        other = os.path.join(tempfile.gettempdir(), "unrelated_probe.png")
+        with open(other, "wb") as fh:
+            fh.write(b"x")
+        os.utime(other, (old, old))
+        main_mod._prune_temp_images(tempfile.gettempdir())
+        assert os.path.exists(other)
+
+        for path in [*paths, other]:
+            with contextlib.suppress(OSError):
+                os.remove(path)
+        assert glob

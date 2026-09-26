@@ -14,9 +14,12 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import glob
 import os
 import tempfile
+import time
 from datetime import datetime
+from uuid import uuid4
 
 from astrbot.api import logger
 from astrbot.api.event import AstrMessageEvent, filter
@@ -1803,6 +1806,22 @@ class PokemonWorldPlugin(Star):
             ):
                 yield r
 
+    def _temp_image(self, data: bytes, prefix: str) -> str:
+        """把渲染好的图片落盘到临时文件并返回路径。
+
+        文件名必须**唯一**:AstrBot 是在指令返回之后才去读这个图片文件的,而旧实现
+        用 `hash(text)%100000` / 图片字节长度当文件名 —— 两个不同玩家(或同一玩家的
+        不同回合)撞上同一个名字时,先发出去的那张会被后写的覆盖,玩家就看到
+        别人的/上一回合的画面。
+        另外顺手清理过期临时图:旧实现只写不删,长时间运行会攒出成千上万个文件。
+        """
+        tmp = tempfile.gettempdir()
+        path = os.path.join(tmp, f"{prefix}_{uuid4().hex}.png")
+        with open(path, "wb") as f:
+            f.write(data)
+        _prune_temp_images(tmp)
+        return path
+
     def _img_scale(self) -> int:
         return int(coerce_int(self._cfg("battle_image_scale", 3), 3) or 3)
 
@@ -1813,12 +1832,7 @@ class PokemonWorldPlugin(Star):
             try:
                 data = builder()
                 if data:
-                    path = os.path.join(
-                        tempfile.gettempdir(),
-                        f"pw_ui_{label}_{abs(hash(text)) % 100000}.png",
-                    )
-                    with open(path, "wb") as f:  # noqa: ASYNC230 — 小文件同步写
-                        f.write(data)
+                    path = self._temp_image(data, f"pw_ui_{label}")
                     comps = [Image.fromFileSystem(path)]
                     comps.append(Plain(text) if text else Plain(" "))
                     yield event.chain_result(comps)
@@ -2028,11 +2042,7 @@ class PokemonWorldPlugin(Star):
                         scale=int(coerce_int(self._cfg("battle_image_scale", 3), 3) or 3),
                     )
                     if data:
-                        path = os.path.join(
-                            tempfile.gettempdir(), f"pw_battle_{t.uid}_{len(data)}.png"
-                        )
-                        with open(path, "wb") as f:  # noqa: ASYNC230
-                            f.write(data)
+                        path = self._temp_image(data, f"pw_battle_{t.uid}")
                         comps = [Image.fromFileSystem(path)]
                         if text:
                             comps.append(Plain(text))
@@ -2067,6 +2077,30 @@ def _service_zh(services: list[str]) -> list[str]:
         {"center": "宝可梦中心", "mart": "商店", "gym": "道馆", "league": "联盟"}.get(s, s)
         for s in services
     ]
+
+
+def _prune_temp_images(tmp: str, keep_seconds: int = 1800) -> None:
+    """删掉我方的过期临时图(只碰 pw_ui_/pw_battle_ 前缀,不动别人的文件)。
+
+    故意写成模块级函数而不是 `@staticmethod`:测试宿主对象 `_Cmd` 会用
+    `getattr(Plugin, name)` 把类属性拷到自己身上,`staticmethod` 拷过去会退化成
+    普通函数、多绑一个 self,导致调用签名错位。
+    """
+    now = time.time()
+    for pat in ("pw_ui_*.png", "pw_battle_*.png"):
+        for name in glob.glob(os.path.join(tmp, pat)):
+            if not _older_than(name, now, keep_seconds):
+                continue
+            with contextlib.suppress(OSError):
+                os.remove(name)
+
+
+def _older_than(path: str, now: float, seconds: float) -> bool:
+    """文件是否比 seconds 更旧(取不到 mtime 时视为"不旧",不删)。"""
+    try:
+        return now - os.path.getmtime(path) > seconds
+    except OSError:
+        return False
 
 
 def _primary_method(methods) -> str:
