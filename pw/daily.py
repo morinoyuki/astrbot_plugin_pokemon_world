@@ -66,7 +66,11 @@ async def roll_day(
         raw_list = data.get("events") if isinstance(data, dict) else None
         if isinstance(raw_list, list):
             for raw in raw_list[: EV.MAX_WORLD_EVENTS]:
-                ev = EV.sanitize_world_event(raw, state, day)
+                try:
+                    ev = EV.sanitize_world_event(raw, state, day)
+                except Exception:  # 单条脏数据只丢弃这一条(json 里的 Infinity 等)
+                    logger.debug("世界事件裁剪失败", exc_info=True)
+                    ev = None
                 if ev and ev.get("region") in regions:
                     world_events.append(ev)
     if not world_events:
@@ -82,7 +86,11 @@ async def roll_day(
             data = await narrator.json(
                 EV.PLAYER_SYSTEM_PROMPT, EV.build_player_prompt(t, day), fallback="{}"
             )
-            ev = EV.sanitize_player_event(data, t, day)
+            try:
+                ev = EV.sanitize_player_event(data, t, day)
+            except Exception:  # 同上:个人事件也逐条降级
+                logger.debug("个人事件裁剪失败", exc_info=True)
+                ev = None
         if not ev:
             ev = EV.fallback_player_event(t, day)
         if ev:

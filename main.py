@@ -209,13 +209,23 @@ class PokemonWorldPlugin(Star):
         state.data["umo"] = event.unified_msg_origin
         lines: list[str] = []
         day = game_day()
-        res = await D.roll_day(
-            scope=scope,
-            state=state,
-            players=self._players(scope, current=trainer),
-            day=day,
-            narrator=self._narrator() if self._cfg_bool("event_enable", True) else Narrator(None),
-        )
+        try:
+            res = await D.roll_day(
+                scope=scope,
+                state=state,
+                players=self._players(scope, current=trainer),
+                day=day,
+                narrator=self._narrator()
+                if self._cfg_bool("event_enable", True)
+                else Narrator(None),
+            )
+        except Exception:
+            # 每日滚动内部已按事件逐条降级,这里只兜住意外。
+            # 必须把当天标记为"已滚动":否则 last_roll_day 一直没写,
+            # 之后**每条指令**都会重试并再次抛异常(把一次故障放大成整体不可用)。
+            logger.exception("每日世界滚动失败")
+            state.data["last_roll_day"] = day
+            res = {"rolled": False, "world_events": [], "player_events": {}}
         if self._cfg_bool("quest_enable", True):
             try:
                 new_q = await QT.roll_daily_async(
@@ -497,7 +507,7 @@ class PokemonWorldPlugin(Star):
                 meta = legendary.legendary_meta(t, site)
                 log = B.start(
                     t, meta["team"], kind="legend", wild=True, meta=meta,
-                    weather=state.weather_for(t.region), day=state.day,
+                    weather=_battle_weather(state, t.region), day=state.day,
                 )
                 self._save(t)
                 notice.append(f"🐉 传说的宝可梦出现了:{site['zh']} Lv{site['level']}!")
@@ -532,7 +542,13 @@ class PokemonWorldPlugin(Star):
                         "\n".join([*notice, "这里似乎什么也没有发生……"])
                     )
                     return
-                if ev and ev.get("kind") == "rare" and rng.random() < 0.35:
+                if (
+                    ev
+                    and ev.get("kind") == "rare"
+                    # 罕见现身事件的 rare_mult 此前没人消费 → 事件写了也不生效
+                    and rng.random()
+                    < 0.35 * float(state.modifiers.get("rare_mult", 1.0))
+                ):
                     legend = npc.legendary_at(t, ev)
                     if legend:
                         hit = legend
@@ -557,7 +573,7 @@ class PokemonWorldPlugin(Star):
                     kind="wild",
                     wild=True,
                     meta=meta,
-                    weather=state.weather_for(t.region),
+                    weather=_battle_weather(state, t.region),
                     day=state.day,
                 )
                 self._save(t)
@@ -610,12 +626,21 @@ class PokemonWorldPlugin(Star):
                 arg,
                 daytime=B.daytime_of(),
                 money_mult=float(state.modifiers.get("money_mult", 1.0)),
-                weather=state.weather_for(t.region),
+                weather=_battle_weather(state, t.region),
                 day=state.day,
             )
             if not res.error and arg.strip().lower().startswith(("item", "道具")):
-                # 只有真的用出去了才算(换人失败/道具无效时 take_turn 会给 error)
-                _sess["used_item"] = True
+                # 只有真的用出去了才算(换人失败/道具无效时 take_turn 会给 error)。
+                # 必须记在 meta 上:战斗结束时 take_turn 会把 data["battle"] 置空,
+                # 记在会话里的话 _after_battle 再取就读不到了(导致"不用道具取胜"
+                # 委托用过道具也算完成)。
+                meta["used_item"] = True
+                # 会话里也留一份(跨回合有效)。注意要**重新取一次**会话:
+                # take_turn 结束时会用新字典替换 data["battle"],早先抓到的
+                # _sess 已经失效,写进去会被丢掉。
+                _cur_sess = B.session(t)
+                if isinstance(_cur_sess, dict):
+                    _cur_sess["meta"] = meta
             self._save(t)
             if res.error:
                 yield event.plain_result(res.error + "\n\n" + B.status_text(t))
@@ -687,7 +712,7 @@ class PokemonWorldPlugin(Star):
                 meta["team"],
                 kind="trainer",
                 meta=meta,
-                weather=state.weather_for(t.region),
+                weather=_battle_weather(state, t.region),
                 day=state.day,
             )
             self._save(t)
@@ -838,7 +863,7 @@ class PokemonWorldPlugin(Star):
                 meta["team"],
                 kind=meta["kind"],
                 meta=meta,
-                weather=state.weather_for(region),
+                weather=_battle_weather(state, region),
                 day=state.day,
             )
             self._save(t)
@@ -1568,7 +1593,7 @@ class PokemonWorldPlugin(Star):
             meta = story.boss_meta(t, cur)
             log = B.start(
                 t, meta["team"], kind="rocket", meta=meta,
-                weather=state.weather_for(t.region), day=state.day,
+                weather=_battle_weather(state, t.region), day=state.day,
             )
             self._save(t)
             async for r in self._emit_battle(
@@ -1619,7 +1644,7 @@ class PokemonWorldPlugin(Star):
                 meta = legendary.legendary_meta(t, site)
                 log = B.start(
                     t, meta["team"], kind="legend", wild=True, meta=meta,
-                    weather=state.weather_for(t.region), day=state.day,
+                    weather=_battle_weather(state, t.region), day=state.day,
                 )
                 self._save(t)
                 async for r in self._emit_battle(
@@ -1711,7 +1736,7 @@ class PokemonWorldPlugin(Star):
             )
             log = B.start(
                 t, meta["team"], kind="tournament", meta=meta,
-                weather=state.weather_for(t.region), day=state.day,
+                weather=_battle_weather(state, t.region), day=state.day,
             )
             self._save(t)
             async for r in self._emit_battle(
@@ -1998,8 +2023,7 @@ class PokemonWorldPlugin(Star):
                     species = str(team[0].get("species") or "")
                 entry = get_dex().species.get(species) or {}
                 types = [str(x) for x in (entry.get("types") or [])]
-            sess = B.session(t) or {}
-            used_item = bool(sess.get("used_item"))
+            used_item = bool(meta.get("used_item"))
             out: list[str] = []
             if res.outcome == "caught":
                 out += QT.note(
@@ -2013,9 +2037,12 @@ class PokemonWorldPlugin(Star):
                     t, "win", kind=kind, species=species, types=types,
                     is_trainer=kind in QT.TRAINER_KINDS, used_item=used_item,
                 )
-                levels = sum(1 for ln in res.growth if "升到了" in ln)
-                if levels:
-                    out += QT.note(t, "level_up", levels=levels)
+                # 用结构化字段,不要解析 growth 的展示文案 —— battle.py 输出的是
+                # "→ Lv6",而这里原来匹配的是"升到了",于是升级类委托永远推不动
+                if int(getattr(res, "levels_gained", 0) or 0):
+                    out += QT.note(t, "level_up", levels=int(res.levels_gained))
+                for sp_key in getattr(res, "evolved", []) or []:
+                    out += QT.note(t, "evolve", species=str(sp_key))
             return out
         except Exception:  # 任务推进失败绝不能影响战斗结算
             logger.exception("任务进度推进失败")
@@ -2102,6 +2129,17 @@ def _prune_temp_images(tmp: str, keep_seconds: int = 1800) -> None:
                 continue
             with contextlib.suppress(OSError):
                 os.remove(name)
+
+
+def _battle_weather(state, region: str) -> str:
+    """开战天气:世界事件里"天气异常"指定的天气优先于地区常规天气。
+
+    之前 battle_weather 只被写进 state.modifiers、全仓库没有任何读取点,
+    于是"天气异常"事件纯属装饰(界面文案说下雨,打起来还是晴天)。
+    写成模块级函数而不是 @staticmethod:测试宿主对象会把 staticmethod 拷成
+    普通函数、多绑一个 self,导致调用签名错位。
+    """
+    return str(state.modifiers.get("battle_weather") or "") or state.weather_for(region)
 
 
 def _older_than(path: str, now: float, seconds: float) -> bool:

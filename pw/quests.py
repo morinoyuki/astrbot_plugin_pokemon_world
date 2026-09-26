@@ -19,6 +19,7 @@
 from __future__ import annotations
 
 import logging
+from functools import lru_cache
 
 from .dex import get_dex
 from .util import stable_rng
@@ -228,8 +229,10 @@ def _item_zh(key: str) -> str:
 # ════════════════════════════════════════════════════════════════
 def _as_int(v, default: int) -> int:
     try:
+        # 注意要捕获 OverflowError:json.loads 默认接受 Infinity,
+        # int(float("inf")) 会抛 OverflowError,漏掉就会让整批委托丢失。
         return int(float(v))
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return default
 
 
@@ -271,7 +274,8 @@ def sanitize_quest(raw: object, trainer, day: int, *, idx: int = 0) -> dict | No
     if money and money < MONEY_MIN:
         money = MONEY_MIN
     items: dict[str, int] = {}
-    for key, n in (reward_raw.get("items") or {}).items():
+    raw_items = reward_raw.get("items")
+    for key, n in (raw_items if isinstance(raw_items, dict) else {}).items():
         pool = REWARD_ITEMS.get(str(key))
         if not pool or len(items) >= 2:
             continue
@@ -303,6 +307,18 @@ def _clean_text(v: object, pool: tuple[str, ...], limit: int) -> str:
     return s[:limit]
 
 
+@lru_cache(maxsize=1)
+def _total_locations() -> int:
+    """地图节点总数(用于判断玩家是否已经走遍全图)。"""
+    try:
+        from .world import REGION_ORDER, WorldMap
+
+        world = WorldMap()
+        return sum(len(world.nodes(r)) for r in REGION_ORDER)
+    except Exception:
+        return 10 ** 6
+
+
 def fallback_quest(trainer, day: int, *, idx: int = 0) -> dict:
     """本地生成器:不依赖 LLM,用 (玩家, 天, 序号) 派生确定性任务。"""
     rng = stable_rng("quest", trainer.uid, day, idx)
@@ -318,10 +334,20 @@ def fallback_quest(trainer, day: int, *, idx: int = 0) -> dict:
         for t in (entry.get("types") or [])[:1]:
             if t not in types_now:
                 types_now.append(t)
-    has_water = any(str(p.get("method") or "").lower().startswith("fish") for p in pools)
-    has_shop = "shop" in (world.services(loc) if loc else [])
+    # 注意:遭遇方式是 "old-rod/good-rod/super-rod/surf" 这种key,
+    # 商店服务名是 "mart"(不是 "shop")—— 写错就会永远刷不出这两类委托。
+    has_water = any(
+        any(t in str(p.get("method") or "").lower() for t in ("rod", "surf", "fish"))
+        for p in pools
+    )
+    has_shop = "mart" in (world.services(loc) if loc else [])
 
-    choices = ["catch", "defeat", "level_up", "travel", "steps", "dex"]
+    choices = ["catch", "defeat", "level_up", "steps"]
+    # 已把全图走完 / 图鉴见满的玩家不该再拿到做不完的委托
+    if len(trainer.data.get("visited") or []) < _total_locations():
+        choices.append("travel")
+    if len(trainer.data.get("dex_seen") or []) < len(get_dex().species):
+        choices.append("dex")
     if types_now:
         choices += ["catch_type", "catch_type", "defeat_type"]
     if has_water:
@@ -423,7 +449,11 @@ async def roll_daily_async(trainer, day: int, narrator, *, count: int = DAILY_CO
         raw_list = data.get("quests") if isinstance(data, dict) else None
         if isinstance(raw_list, list):
             for i, raw in enumerate(raw_list[:want]):
-                q = sanitize_quest(raw, trainer, day, idx=i)
+                try:
+                    q = sanitize_quest(raw, trainer, day, idx=i)
+                except Exception:  # 单条脏数据只降级这一条,不影响其它
+                    logging.getLogger("pw.quests").debug("委托条目裁剪失败", exc_info=True)
+                    q = None
                 if q:
                     box["active"].append(q)
                     added.append(q)

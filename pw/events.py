@@ -185,8 +185,9 @@ def _rocket_team(state, day: int, location: str, raw_team: object) -> list[dict]
 
 def _as_int(v, default: int) -> int:
     try:
+        # OverflowError 必须一起捕获:json.loads 默认接受 Infinity
         return int(v)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return default
 
 
@@ -267,6 +268,7 @@ def fallback_world_events(state, day: int, *, regions: list[str] | None = None) 
         if not towns:
             continue
         location = rng.choice(towns)
+        days = rng.randint(1, 2)   # days 与 until_day 必须自洽(否则"持续 2 天"当天就失效)
         ev = {
             "kind": kind,
             "title": title,
@@ -274,8 +276,8 @@ def fallback_world_events(state, day: int, *, regions: list[str] | None = None) 
             "region": region,
             "location": location,
             "effects": dict(eff),
-            "days": rng.randint(1, 2),
-            "until_day": day + rng.randint(0, 1),
+            "days": days,
+            "until_day": day + days - 1,
             "created_day": day,
             "source": "fallback",
         }

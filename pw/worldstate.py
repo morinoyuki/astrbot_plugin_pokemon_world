@@ -140,19 +140,27 @@ class WorldState:
         from .events import EFFECT_RANGES  # 延迟导入,避免模块循环依赖
 
         m = dict(DEFAULT_MODIFIERS)
+        touched: set[str] = set()
         for e in self.active_events():
             eff = e.get("effects") or {}
             for k in ("encounter_mult", "rare_mult", "money_mult"):
                 if k in eff:
                     m[k] = float(m.get(k, 1.0)) * float(eff[k])
+                    touched.add(k)
             if "shop_discount" in eff:
                 m["shop_discount"] = min(
                     float(m.get("shop_discount", 1.0)), float(eff["shop_discount"])
                 )
+                touched.add("shop_discount")
             if eff.get("battle_weather"):
                 m["battle_weather"] = str(eff["battle_weather"])
-        for k, rng in EFFECT_RANGES.items():
-            if rng and k in m:
+                touched.add("battle_weather")
+        # 只钳制**确实被事件改动过**的键。否则默认值也会被压进区间 ——
+        # shop_discount 的声明区间是"最多打到 0.95 折",把"不打折"的 1.0 压成
+        # 0.95 会让全服商店永久 5% 折扣(这是修复事件连乘时引入的回归)。
+        for k in touched:
+            rng = EFFECT_RANGES.get(k)
+            if rng:
                 m[k] = float(clamp(float(m[k]), rng[0], rng[1]))
         self.data["modifiers"] = m
 

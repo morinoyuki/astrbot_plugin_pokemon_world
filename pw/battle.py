@@ -42,6 +42,8 @@ class TurnResult:
     item_key: str = ""  # 本次投出的精灵球 key(捕获画面要显示实际用的球)
     awaiting_switch: bool = False
     growth: list[str] = field(default_factory=list)
+    levels_gained: int = 0          # 本次战斗累计升了几级(任务系统用)
+    evolved: list[str] = field(default_factory=list)  # 本次战斗发生进化的物种 key
     rewards: list[str] = field(default_factory=list)
     error: str = ""
 
@@ -386,7 +388,9 @@ def _finish_win(
             )
         if g.pending:
             trainer.party[i]["pending"] = list(g.pending)
+        res.levels_gained += int(g.levels_gained or 0)
         if g.evolved_to:
+            res.evolved.append(str(g.evolved_to))
             res.growth.append(
                 f"　└ ✨ 进化了!{growth.species_zh(g.evolved_from)} → "
                 f"{growth.species_zh(g.evolved_to)}"

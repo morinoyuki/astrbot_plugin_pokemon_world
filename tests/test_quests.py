@@ -366,21 +366,24 @@ def test_battle_hook_advances_catch_and_win_quests():
 
         # ② 以指定属性击败野生 → defeat_type 完成
         _seed("defeat_type", type="Bug")
-        res = TurnResult(outcome="win", growth=["新叶喵 升到了 Lv6!"])
+        res = TurnResult(outcome="win", growth=["新叶喵: +14 EXP → Lv6"], levels_gained=1)
         lines = p._quests_after_battle(
             t, {"kind": "wild", "species": "caterpie", "types": ["Bug"], "method": "walk"}, res,
         )
         assert lines
 
-        # ③ 不使用道具取胜:用过道具则不算
+        # ③ 不使用道具取胜:用过道具则不算。注意 used_item 记在 meta 上 ——
+        # 战斗结束时 data["battle"] 已被清空,记在会话里读不到(真实 bug)
         _seed("no_item_win")
-        t.data["battle"] = {"used_item": True}
         assert p._quests_after_battle(
-            t, {"kind": "wild", "species": "caterpie", "types": ["Bug"]}, TurnResult(outcome="win")
+            t,
+            {"kind": "wild", "species": "caterpie", "types": ["Bug"], "used_item": True},
+            TurnResult(outcome="win"),
         ) == []
-        t.data["battle"] = {"used_item": False}
         assert p._quests_after_battle(
-            t, {"kind": "wild", "species": "caterpie", "types": ["Bug"]}, TurnResult(outcome="win")
+            t,
+            {"kind": "wild", "species": "caterpie", "types": ["Bug"], "used_item": False},
+            TurnResult(outcome="win"),
         )
 
         # ④ 训练家战:对手物种从队伍首发取
@@ -427,3 +430,158 @@ def test_command_decorators_are_not_misplaced():
     assert names.get("重置世界") == "cmd_reset"
     assert names.get("任务") == "cmd_quest"
     assert names.get("开始") == "cmd_start"
+
+
+def test_sanitize_survives_json_dirty_values():
+    """LLM 返回的脏数据(Infinity / 非 dict)必须能降级,不能让整批委托丢失。
+
+    json.loads 默认接受 Infinity,int(float("inf")) 抛 OverflowError;
+    非 dict 的 items 会 AttributeError —— 两种都会让当天 0 委托且不再回退。
+    """
+    from pw import events as EV
+
+    with tempfile.TemporaryDirectory() as tmp:
+        t = _trainer(tmp)
+        inf = float("inf")
+        cases = [
+            {"objective": {"kind": "catch", "count": inf}},
+            {"objective": {"kind": "catch", "count": 1}, "reward": {"money": inf}},
+            {"objective": {"kind": "catch", "count": 1}, "reward": {"items": "abc"}},
+            {"objective": {"kind": "catch", "count": 1}, "reward": {"items": ["a"]}},
+            {"objective": {"kind": "catch", "count": 1}, "reward": 5},
+        ]
+        for raw in cases:
+            q = Q.sanitize_quest(raw, t, 1)      # 不能抛异常
+            assert q is None or isinstance(q, dict)
+            assert q is None or q["objective"]["count"] >= 1
+
+        from pw.worldstate import WorldState
+
+        state = WorldState({"day": 1, "events": []}, "g1")
+        ev = EV.sanitize_world_event({"kind": "rocket", "team": [{"level": inf}]}, state, 1)
+        assert ev is None or isinstance(ev, dict)
+
+
+def test_used_item_blocks_no_item_quest_end_to_end():
+    """真实指令流:用过道具后再取胜,「不使用道具取胜」委托不应完成。"""
+    with tempfile.TemporaryDirectory() as tmp:
+        p = _Cmd(tmp)
+        p.config = {"ui_image": False, "quest_enable": False, "battle_image": False}
+        ev = _Event("/开始 小智 新叶喵")
+        run_cmd(p, ev, p.cmd_start)
+        t = p._load(ev)
+        t.data["location"] = "kanto-route-1"
+        t.data["quests"] = {
+            "active": [{
+                "id": "ni1", "day": 1, "expire_day": 10 ** 9, "giver": "退休训练家",
+                "title": "硬实力的证明", "desc": "不用道具赢 1 场",
+                "objective": {"kind": "no_item_win", "count": 1},
+                "progress": 0, "reward": {"money": 500, "items": {}},
+                "region": "kanto", "state": "active",
+            }],
+            "done": [], "counter": 1, "day": 1,
+        }
+        t.add_item("potion", 3)
+        p._save(t)
+        from pw import battle as B
+        from pw.engine import create_pokemon
+
+        strong = create_pokemon("charizard", 80).to_dict()
+        strong["id"] = "m1"
+        t = p._load(ev)
+        t.data["party"] = [strong]
+        p._save(t)
+        B.start(t, [{"species": "rattata", "level": 3}], kind="wild", wild=True,
+                meta={"kind": "wild", "species": "rattata", "types": ["Normal"],
+                      "method": "walk", "title": "野生的 小拉达"}, day=1)
+        p._save(t)
+
+        used = False
+        for _ in range(12):
+            t = p._load(ev)
+            if t.data.get("battle") is None:
+                break
+            if not used:
+                ev2 = _Event("/对战 item 伤药")
+                run_cmd(p, ev2, p.cmd_battle)
+                used = True
+            else:
+                ev2 = _Event(f"/对战 move {t.party[0]['moves'][0]}")
+                run_cmd(p, ev2, p.cmd_battle)
+        t2 = p._load(ev2)
+        actives = [q["id"] for q in Q.active(t2)]
+        assert "ni1" in actives, "用过道具取胜不该完成该委托"
+
+
+def test_battle_exposes_structured_levels_and_evolutions():
+    """TurnResult 必须带结构化的升级/进化信息 —— 任务系统不该解析展示文案。"""
+    with tempfile.TemporaryDirectory() as tmp:
+        p = _Cmd(tmp)
+        p.config = {"ui_image": False, "quest_enable": False, "battle_image": False}
+        ev = _Event("/开始 小智 新叶喵")
+        run_cmd(p, ev, p.cmd_start)
+        t = p._load(ev)
+        t.data["location"] = "kanto-route-1"
+        from pw import battle as B
+        from pw.dex import get_dex
+        from pw.engine import create_pokemon
+
+        weak = create_pokemon("caterpie", 20).to_dict()
+        # 把经验压到刚好差一点点升级 → 赢下这一场必定升级
+        dex = get_dex()
+        rate = dex.growth_of("caterpie")
+        weak["exp"] = max(0, dex.exp_for_level(rate, 21) - 3)
+        weak["id"] = "m1"
+        t.data["party"] = [weak]
+        p._save(t)
+        B.start(t, [{"species": "magikarp", "level": 2}], kind="wild", wild=True,
+                meta={"kind": "wild", "species": "magikarp", "types": ["Water"],
+                      "title": "野生的 鲤鱼王"}, day=1)
+        p._save(t)
+        res = None
+        for _ in range(10):
+            t = p._load(ev)
+            if t.data.get("battle") is None:
+                break
+            res = B.take_turn(t, "move tackle", day=1)
+            if res.finished:
+                break
+        assert res is not None and res.finished
+        assert isinstance(res.levels_gained, int) and res.levels_gained >= 1, \
+            "打赢弱对手应当升级,且 levels_gained 要有值"
+        assert isinstance(res.evolved, list)
+
+
+def test_fallback_quest_pools_and_completion_guards():
+    """兜底生成器:有水域/商店时能刷出钓鱼/消费委托;走遍全图后不再刷旅行委托。"""
+    from pw.world import WorldMap
+
+    with tempfile.TemporaryDirectory() as tmp:
+        t = _trainer(tmp)
+        world = WorldMap()
+        water = next(
+            (loc for loc in world.nodes("kanto")
+             if any("rod" in str(p.get("method") or "").lower()
+                    for p in (world.wild_pools(loc) or []))),
+            "",
+        )
+        assert water, "关都应当有可钓鱼的地点"
+        t.data["location"] = water
+        kinds = {Q.fallback_quest(t, 5, idx=i)["objective"]["kind"] for i in range(200)}
+        assert "catch_fish" in kinds, f"有水域时应当能刷出钓鱼委托,实际 {kinds}"
+
+        shop = next((loc for loc in world.nodes("kanto")
+                     if "mart" in (world.services(loc) or [])), "")
+        if shop:
+            t.data["location"] = shop
+            kinds = {Q.fallback_quest(t, 6, idx=i)["objective"]["kind"] for i in range(200)}
+            assert "shop_spend" in kinds, f"有商店时应当能刷出消费委托,实际 {kinds}"
+
+        # 走遍全图 + 见满图鉴后,不应再生成 travel/dex 委托
+        from pw.dex import get_dex
+        from pw.world import REGION_ORDER
+
+        t.data["visited"] = [loc for r in REGION_ORDER for loc in world.nodes(r)]
+        t.data["dex_seen"] = list(get_dex().species.keys())
+        kinds = {Q.fallback_quest(t, 7, idx=i)["objective"]["kind"] for i in range(200)}
+        assert "travel" not in kinds and "dex" not in kinds, f"实际 {kinds}"
