@@ -611,8 +611,10 @@ class Battle:
         if self.finished:
             return ["战斗已经结束。"]
         self.log = []
-        # 等换人时只接受换人命令;无效行动不消耗回合(也不推进随机数流)
-        if self.awaiting_switch and player_action.get("type") != "switch":
+        # 等换人时只接受换人命令;无效行动不消耗回合(也不推进随机数流)。
+        # `forfeit` 也要放行:否则万一卡在"必须换人"状态,玩家连认输都做不到,
+        # 而其他行动又被对战锁定 → 彻底出不去(认输是玩家最后的逃生口)。
+        if self.awaiting_switch and player_action.get("type") not in ("switch", "forfeit"):
             return ["⚠️ 场上的宝可梦已经倒下,请先换人:用 `/对战 switch <队伍序号>`。"]
         self.turn += 1
         self._taken = {"player": 0, "enemy": 0}   # 本回合各自受到的伤害(反击类用)

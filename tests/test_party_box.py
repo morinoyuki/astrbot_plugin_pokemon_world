@@ -300,3 +300,33 @@ def test_status_reports_battle_state():
         assert "我方" in out, f"要显示我方出战:\n{out[:200]}"
         # 训练家卡末行也要能看出在对战
         assert "对战中" in p._card_battle_line(p._load(ev))
+
+
+def test_player_can_always_forfeit_out_of_battle():
+    """认输必须是玩家最后的逃生口 —— 包括"场上倒下、等着换人"的时候。
+
+    否则:其他行动被对战锁定 + 换人指令打错/队伍里没有可换的 → 玩家出不去。
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        p, ev = _start(tmp)
+        t = p._load(ev)
+        d = create_pokemon("pidgey", 40).to_dict()
+        d["id"] = "m2"
+        t.data["party"].append(d)
+        p._save(t)
+        _start_battle(p, ev, level=50)
+
+        # 打到场上那只倒下(必须换人),然后直接认输
+        for _ in range(12):
+            t = p._load(_Event())
+            if not t.data.get("battle"):
+                break
+            run_cmd(p, _Event("/对战 1"), p.cmd_battle)
+            t = p._load(_Event())
+            sess = (t.data.get("battle") or {}).get("battle") or {}
+            if sess.get("awaiting_switch") or not t.data.get("battle"):
+                break
+        out = _run(p, "/对战 forfeit", "cmd_battle")
+        assert not B.in_battle(p._load(_Event())), f"认输没能结束战斗:{out[:150]}"
+        # 结束后其他行动恢复
+        assert "锁定" not in _run(p, "/治疗", "cmd_heal")
