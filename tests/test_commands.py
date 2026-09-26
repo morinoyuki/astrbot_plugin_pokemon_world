@@ -936,3 +936,38 @@ def test_level_100_still_allows_condition_evolutions():
     growth.gain_exp(mon, 10 ** 7, party=["remoraid"])
     assert mon.species == "mantine"
     assert mon.level == 100
+
+
+def test_second_gym_at_same_location_becomes_reachable():
+    """P0 回归:同一地点的第二座道馆在拿到第一枚徽章后必须能挑战。
+
+    否则该地区永远集不齐徽章 → 联盟打不了 → 冠军拿不到 → 下一个地区永久锁死。
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        p, ev = _fresh(tmp)
+        t = p._load(ev)
+        t.data["location"] = "cianwood-city"
+        t.data["region"] = "johto"    # region 是只读 property,要改 data
+        p._save(t)
+
+        # 没拿任何徽章 → 显示第一座(阿四 order 5)
+        ev2 = _Event("/道馆")
+        run_cmd(p, ev2, p.cmd_gym)
+        assert "阿四" in "".join(ev2.outputs), "".join(ev2.outputs)
+
+        # 拿到 order 5 的徽章后 → 应显示第二座(柳伯 order 7)
+        t = p._load(ev2)
+        t.add_badge("johto", 5)
+        p._save(t)
+        ev3 = _Event("/道馆")
+        run_cmd(p, ev3, p.cmd_gym)
+        out = "".join(ev3.outputs)
+        assert "柳伯" in out, f"第二座道馆必须可达:{out}"
+
+        # 两枚都拿到后 → 不再显示本地道馆
+        t = p._load(ev3)
+        t.add_badge("johto", 7)
+        p._save(t)
+        ev4 = _Event("/道馆")
+        run_cmd(p, ev4, p.cmd_gym)
+        assert "柳伯" not in "".join(ev4.outputs)
