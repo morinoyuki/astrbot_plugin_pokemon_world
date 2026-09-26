@@ -1222,10 +1222,12 @@ class Screen:
         x0, y0, x1, _y1 = box
         self.d.rounded_rectangle(box, radius=3, fill=TITLE_BG, outline=BOX_EDGE)
         self.d.rectangle([x0 + 2, y0 + 1, x1 - 2, y0 + 2], fill=TITLE_HI)
-        self.text(x0 + 5, y0 + 3.2, text, size=size, fill=TITLE_FG, stroke=0.6,
+        # 文字基线要留出描边:条高 13(y0..y0+13),字号 9.5 从 y0+1.4 起
+        # 墨迹约到 y0+13.5 —— 原来的 y0+3.2 会穿出条底 1.7px
+        self.text(x0 + 5, y0 + 1.4, text, size=size, fill=TITLE_FG, stroke=0.6,
                   sfill=BOX_EDGE)
         if right:
-            self.text_right(x1 - 5, y0 + 3.2, right, size=size, fill=TITLE_FG,
+            self.text_right(x1 - 5, y0 + 1.4, right, size=size, fill=TITLE_FG,
                             stroke=0.6, sfill=BOX_EDGE)
 
     def footer(self, text: str, *, box=(4, 144, 236, 155), size: float = 7.8) -> None:
@@ -1334,6 +1336,16 @@ class Screen:
         if dim:
             img = ImageEnhance.Brightness(img).enhance(0.45)
         self.small.paste(img, (round(cx - img.width / 2), round(base_y - img.height)), img)
+
+
+def _fit(sc: Screen, text: str, width: float, size: float) -> str:
+    """把文字截断到给定宽度(超出时补省略号)。"""
+    s = str(text or "")
+    if sc.tw(s, size) <= width:
+        return s
+    while s and sc.tw(s + "…", size) > width:
+        s = s[:-1]
+    return s + "…"
 
 
 def _trimmed(path: str, factor: float, bounds: tuple[int, int], *, mirror: bool = False):
@@ -1520,7 +1532,9 @@ def render_trainer_card(
         sc.window((5, 19, 128, 143), radius=3)
         sc.window((132, 19, 235, 143), radius=3)
         sc.ball(14, 26, 7)
-        sc.text(38, 26, str(info.get("name") or "训练家"), size=11, fill=TEXT)
+        # 长名字必须截断:左框只到 x=128,否则会横穿到右侧徽章盒上
+        sc.text(38, 26, _fit(sc, str(info.get("name") or "训练家"), 84, 11),
+                size=11, fill=TEXT)
         sc.text(38, 40, f"ID No.{info.get('id_no') or '00000'}", size=8, fill=TEXT_DIM)
         rows = [
             ("金钱", f"{int(info.get('money') or 0):,}₽"),

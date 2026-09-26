@@ -592,7 +592,7 @@ class Battle:
         self.log = []
         # 等换人时只接受换人命令;无效行动不消耗回合(也不推进随机数流)
         if self.awaiting_switch and player_action.get("type") != "switch":
-            return ['⚠️ 必须先换人:{"type": "switch", "index": <序号>}']
+            return ["⚠️ 场上的宝可梦已经倒下,请先换人:用 `/对战 switch <队伍序号>`。"]
         self.turn += 1
         self._rng_calls = 0
         self.player_damaged = False
@@ -1996,12 +1996,18 @@ class Battle:
                     self.log.append(f"{tag} {mon.display} 倒下了!")
             if not round_faint:
                 break
-            for side in (self.player, self.enemy):
+            # 双方最后一只同时倒下时判**玩家胜**(正作规则):所以先检查对手,
+            # 旧顺序先处理玩家 → 反作用力同归于尽会被判失败。
+            for side in (self.enemy, self.player):
                 mon = side.mon
                 if mon and mon.fainted:
                     if not side.alive():
                         if not self.finished:
-                            self._finish(side)
+                            if side is self.enemy and not self.player.alive():
+                                # 同归于尽:算玩家赢
+                                self._finish(self.enemy)
+                            else:
+                                self._finish(side)
                     elif side is self.player:
                         self.awaiting_switch = True
                     else:

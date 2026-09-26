@@ -347,7 +347,11 @@ def render_battle(
         f_msg = _font(int(9 * S))
 
         mx0, mx1 = MSG_EDGE_X
-        tx_pad, tx_right = 28, 6
+        # 队伍球从 x=8 开始每只 +11,3 只就会压到正文(正文从 x=30 起)。
+        # 按队伍数量把正文起始位置右移,保证球与文字不重叠。
+        n_balls = min(6, max(1, len(my_party or [])))
+        tx_pad = max(28, int(8 + n_balls * 11 + 4))
+        tx_right = 6
         maxw = (mx1 - mx0 - tx_pad - tx_right) * S
         src_lines: list[str] = []
         if title:

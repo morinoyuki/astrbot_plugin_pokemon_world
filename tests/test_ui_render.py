@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import io
 import os
 import sys
 import tempfile
@@ -435,3 +436,96 @@ def test_sprite_enable_toggle_actually_works():
         ev2 = _Event("/队伍")
         run_cmd(p, ev2, p.cmd_team)
         assert "<chain:" in "".join(ev2.outputs)
+
+
+def test_title_bar_text_stays_inside_the_bar():
+    """标题文字(含描边)不能穿出标题条底边 —— 之前长标题会越界 1.7px。"""
+    from PIL import Image, ImageChops
+
+    mons = [{"species": "pikachu", "name": "皮卡丘", "level": 12, "cur_hp": 30,
+             "max_hp": 40, "gender": "M"}]
+    for title in ("队伍", "对抗火箭队(首领:坂木)"):
+        with_title = Image.open(io.BytesIO(
+            UI.render_party(mons, box_count=0, badges=0, title=title, scale=4)
+        )).convert("RGB")
+        empty = Image.open(io.BytesIO(
+            UI.render_party(mons, box_count=0, badges=0, title="", scale=4)
+        )).convert("RGB")
+        diff = ImageChops.difference(with_title, empty).convert("L")
+        rows = [y for y in range(diff.height)
+                if diff.crop((0, y, diff.width, y + 1)).getbbox()]
+        assert rows, f"标题「{title}」没有画出任何像素"
+        assert max(rows) / 4 <= 16, f"标题「{title}」墨迹到 y={max(rows)/4:.1f},穿出条底 16"
+
+
+def test_trainer_card_long_name_does_not_cross_the_box():
+    """超长训练家名必须截断,不能横穿左框压到徽章盒上。"""
+    info = {"name": "一个超级无敌长的训练家名字啊啊啊啊", "region_zh": "关都",
+            "location_zh": "真新镇", "money": 1000, "days": 1, "steps": 10,
+            "pokedex": {"seen": 1, "caught": 1}, "badges": [], "id": 1}
+    im = Image.open(io.BytesIO(UI.render_trainer_card(info, scale=4))).convert("RGB")
+    text_like = sum(
+        1
+        for x in range(129 * 4, 132 * 4)
+        for y in range(19 * 4, 143 * 4)
+        if all(abs(p - t) < 40 for p, t in zip(im.getpixel((x, y)), (52, 52, 44)))
+    )
+    assert text_like == 0, "左框右边界外不该有文字墨迹"
+
+
+def test_battle_party_balls_do_not_cover_message_text():
+    """队伍球指示器不能压住对话框正文(≥3 只时必现)。"""
+    from pw import battle_render as BR
+
+    my = {"species": "charizard", "name": "喷火龙", "level": 50, "cur_hp": 153,
+          "max_hp": 153}
+    foe = {"species": "blastoise", "name": "水箭龟", "level": 50, "cur_hp": 150,
+           "max_hp": 150}
+    party = [{"species": "pikachu", "name": "皮卡丘", "level": 10, "cur_hp": 1,
+              "max_hp": 20} for _ in range(3)]
+    with_party = BR.render_battle(my, foe, ["测试战报文本内容"], my_party=party, scale=3)
+    without = BR.render_battle(my, foe, ["测试战报文本内容"], my_party=None, scale=3)
+    assert with_party and without
+    from PIL import Image, ImageChops
+
+    a = Image.open(io.BytesIO(with_party)).convert("RGB")
+    b = Image.open(io.BytesIO(without)).convert("RGB")
+    diff = ImageChops.difference(a, b).convert("L")
+    # 差异(即"多画出来的球")只应出现在对话框左侧球区;正文区域的墨迹不应改变
+    # 用最简判定:两组图的正文首字区域像素必须相同
+    box = (30 * 3, 100 * 3, 200 * 3, 112 * 3)
+    assert a.crop(box).tobytes() == b.crop(box).tobytes(), "队伍球不该改变正文区域"
+
+
+def test_awaiting_switch_message_has_no_json():
+    from pw.engine import create_pokemon, start_battle
+
+    a = create_pokemon("pidgey", 5, moves=["tackle"])
+    a.pp = {"tackle": 20}
+    bt = start_battle([a, create_pokemon("rattata", 3, moves=["tackle"])],
+                      [create_pokemon("snorlax", 60, moves=["tackle"])], seed=9)
+    bt.start()
+    bt.step({"type": "move", "move": "tackle"})
+    lines = bt.step({"type": "move", "move": "tackle"})   # 待换人时又出招
+    text = " ".join(lines)
+    assert "{" not in text and "type" not in text, f"内部 JSON 泄漏给玩家:{text}"
+
+
+def test_simultaneous_faint_counts_as_player_win():
+    """双方最后一只同时倒下应判玩家胜(反作用力同归于尽)。"""
+    from pw.engine import create_pokemon, start_battle
+
+    a = create_pokemon("charizard", 50, moves=["doubleedge"])
+    a.pp = {"doubleedge": 20}
+    a.cur_hp = 1
+    b = create_pokemon("rattata", 1, moves=["tackle"])
+    b.pp = {"tackle": 20}
+    b.cur_hp = 1
+    bt = start_battle([a], [b], seed=11)
+    bt.start()
+    for _ in range(4):
+        bt.step({"type": "move", "move": "doubleedge"})
+        if bt.finished:
+            break
+    assert bt.finished
+    assert bt.winner == "player", f"同归于尽应判玩家胜,实际 {bt.winner}"
