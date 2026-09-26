@@ -114,8 +114,13 @@ EXP_BAR = (153, 100, 77, 3)
 
 FOE_PLATFORM = (114, 48, 240, 76)
 MY_PLATFORM = (0, 86, 112, 124)
-FOE_SPRITE = (148, 10, 212, 68)
-MY_SPRITE = (26, 38, 112, 128)
+# 精灵"落地线":(中心 x, 脚底 y)。取站台椭圆中部 —— 正作里宝可梦站在椭圆上。
+FOE_GROUND = (177, 64)
+MY_GROUND = (56, 120)
+# 两侧用**各自固定**的缩放(不是"撑满框"),这样同一侧相对体型得以保留:
+# 皮卡丘仍然比大岩蛇小,只是脚底都踩在同一条线上。
+FOE_SCALE = 0.62
+MY_SCALE = 1.05
 
 MSG_BOX = (2, 112, 238, 158)
 
@@ -150,7 +155,12 @@ def sprite_for(species: str, *, back: bool = False, base: str = "") -> str:
 
 
 # ── 绘制辅助 ─────────────────────────────────────────────────────
-def _load_sprite(path: str, size: tuple[int, int]):
+def _load_sprite(path: str, factor: float, bounds: tuple[int, int]):
+    """读图 → 裁掉透明边距 → 按固定倍率缩放。
+
+    裁边距是关键:官方 96×96 图的底部透明边距从 10px 到 32px 不等
+    (皮卡丘 26px、地鼠 32px、暴鲤龙 10px),若按画布底对齐,脚底会差出 20 多像素。
+    """
     from PIL import Image
 
     if not path or not os.path.exists(path):
@@ -160,9 +170,14 @@ def _load_sprite(path: str, size: tuple[int, int]):
             img = im.convert("RGBA")
     except (OSError, ValueError):
         return None
-    w, h = size
-    scale = min(w / img.width, h / img.height)
-    new = (max(1, int(img.width * scale)), max(1, int(img.height * scale)))
+    bbox = img.getbbox()
+    if bbox:
+        img = img.crop(bbox)
+    scale = factor
+    max_w, max_h = bounds
+    if img.width * scale > max_w or img.height * scale > max_h:
+        scale = min(max_w / img.width, max_h / img.height)
+    new = (max(1, round(img.width * scale)), max(1, round(img.height * scale)))
     return img.resize(new, Image.NEAREST)
 
 
@@ -303,9 +318,11 @@ def render_battle(
         # ── 背景:天气配色 + 地平线 + 竞技场椭圆 + 两个站台 ──
         _draw_scene(d, weather)
 
-        # ── 精灵(我方背面图)──
-        _paste_small(small, my, MY_SPRITE, back=True, dim=not _alive(my))
-        _paste_small(small, foe, FOE_SPRITE, back=False, dim=not _alive(foe))
+        # ── 精灵(我方背面图):脚底统一踩在各自站台的落地线上 ──
+        _paste_small(small, my, MY_GROUND, factor=MY_SCALE, bounds=(92, 96),
+                     back=True, dim=not _alive(my))
+        _paste_small(small, foe, FOE_GROUND, factor=FOE_SCALE, bounds=(64, 58),
+                     back=False, dim=not _alive(foe))
 
         # ── 信息框与血条(逻辑层)──
         _draw_box(d, FOE_BOX)
@@ -457,23 +474,24 @@ def _ratio(mon: dict) -> float:
     return 0.0 if mx <= 0 else max(0.0, min(1.0, cur / mx))
 
 
-def _paste_small(small, mon: dict, box, *, back: bool, dim: bool) -> None:
-    """把精灵图缩放后贴到逻辑画布(下方对齐、水平居中)。"""
+def _paste_small(small, mon: dict, ground, *, factor: float, bounds, back: bool,
+                 dim: bool) -> None:
+    """按"脚底对齐"把精灵贴到逻辑画布:水平居中于站台,底边压在落地线上。"""
     from PIL import ImageEnhance, ImageOps
 
-    x0, y0, x1, y1 = box
+    cx, base_y = ground
     species = str(mon.get("species") or "")
     path = sprite_for(species, back=back)
-    img = _load_sprite(path, (x1 - x0, y1 - y0))
+    img = _load_sprite(path, factor, bounds)
     if img is None:
-        img = _silhouette((x1 - x0, y1 - y0))
+        img = _silhouette((bounds[0], min(bounds[1], 48)))
     elif back and path and os.path.basename(os.path.dirname(path)) != "sprites_back":
         # 退回正面图时镜像,近似"从背后看"的观感
         img = ImageOps.mirror(img)
     if dim:
         img = ImageEnhance.Brightness(img).enhance(0.45)
-    px = x0 + (x1 - x0 - img.width) // 2
-    py = y1 - img.height
+    px = cx - img.width // 2
+    py = base_y - img.height
     small.paste(img, (px, py), img)
 
 

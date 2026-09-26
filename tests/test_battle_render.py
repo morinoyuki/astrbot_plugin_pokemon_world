@@ -145,3 +145,58 @@ def test_back_sprite_actually_drawn_for_player(monkeypatch):
     with_front = br.render_battle(my, foe, ["测试"], scale=SCALE)
     assert with_back.startswith(b"\x89PNG") and with_front.startswith(b"\x89PNG")
     assert with_back != with_front, "我方精灵图没有随背面/正面切换而变化"
+
+
+def test_sprites_are_bottom_aligned_on_ground_line():
+    """体型/透明边距不同的宝可梦必须**脚底对齐**到同一条落地线。
+
+    官方 96×96 图的底部透明边距从 10px(暴鲤龙)到 32px(地鼠)不等,
+    若按画布底对齐,脚底会差 20 多像素。这里直接验证:
+    贴图后最下面一行非透明像素必须落在 ground_y - 1。
+    """
+    from PIL import Image
+
+    from pw import battle_render as br
+
+    def lowest_row(species, ground, factor, bounds, back):
+        # 用 alpha 通道判断(精灵图边缘有 alpha=1 的抗锯齿像素,按 RGB 会漏判)
+        canvas = Image.new("RGBA", (br.LOGICAL_W, br.LOGICAL_H), (0, 0, 0, 0))
+        br._paste_small(canvas, {"species": species}, ground, factor=factor,
+                        bounds=bounds, back=back, dim=False)
+        rows = [
+            y
+            for y in range(br.LOGICAL_H)
+            if any(canvas.getpixel((x, y))[3] > 16 for x in range(br.LOGICAL_W))
+        ]
+        assert rows, f"{species} 没有画出任何像素"
+        return max(rows)
+
+    for species in ("pikachu", "onix", "diglett", "magikarp", "gyarados", "snorlax"):
+        row = lowest_row(species, br.MY_GROUND, br.MY_SCALE, (92, 96), back=True)
+        assert row == br.MY_GROUND[1] - 1, (
+            f"{species} 我方脚底在第 {row} 行,应为 {br.MY_GROUND[1] - 1}"
+        )
+        row = lowest_row(species, br.FOE_GROUND, br.FOE_SCALE, (64, 58), back=False)
+        assert row == br.FOE_GROUND[1] - 1, (
+            f"{species} 敌方脚底在第 {row} 行,应为 {br.FOE_GROUND[1] - 1}"
+        )
+
+
+def test_sprite_scale_differs_by_side_and_keeps_relative_size():
+    """两侧缩放不同(我方更近更大),但同一侧内相对体型要保留。"""
+    from pw import battle_render as br
+
+    def size(species, factor, bounds, back):
+        img = br._load_sprite(br.sprite_for(species, back=back), factor, bounds)
+        return (img.width, img.height)
+
+    my_big = size("gyarados", br.MY_SCALE, (92, 96), True)
+    my_small = size("diglett", br.MY_SCALE, (92, 96), True)
+    assert my_big[1] > my_small[1] * 1.5, f"相对体型丢了:{my_big} vs {my_small}"
+    foe_big = size("onix", br.FOE_SCALE, (64, 58), False)
+    foe_small = size("pikachu", br.FOE_SCALE, (64, 58), False)
+    assert foe_big[1] > foe_small[1], f"相对体型丢了:{foe_big} vs {foe_small}"
+    # 同一只:我方比敌方大(近景)
+    assert size("gyarados", br.MY_SCALE, (92, 96), True)[0] > size(
+        "gyarados", br.FOE_SCALE, (64, 58), False
+    )[0]
