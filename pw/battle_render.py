@@ -18,11 +18,11 @@
 from __future__ import annotations
 
 import os
-from functools import lru_cache
 from io import BytesIO
 
 from astrbot.api import logger
 
+from . import fonts
 from .sprites import back_sprite_path, sprite_path
 
 try:
@@ -134,28 +134,14 @@ MSG_LINE_H = 9.6          # 逻辑行高
 MSG_MAX_LINES = max(1, int((MSG_BOTTOM - 4 - MSG_TOP_MAX) // MSG_LINE_H))
 
 
-@lru_cache(maxsize=16)
 def _font(size: int):
-    if ImageFont is None:
-        return None
-    for path in (FONT_MAIN, FONT_SYMBOL):
-        if not os.path.exists(path):
-            continue
-        try:
-            return ImageFont.truetype(path, size)
-        except OSError:
-            continue
-    return None
+    """主字体(带完整回退链,见 pw/fonts.py)。"""
+    return fonts.load_font(int(size))
 
 
 def available() -> bool:
-    """Pillow 与内置字体是否可用。"""
-    try:
-        import PIL  # noqa: F401
-        from PIL import Image, ImageDraw  # noqa: F401
-    except ImportError:
-        return False
-    return _font(20) is not None
+    """Pillow 与至少一个可用字体。"""
+    return fonts.available()
 
 
 def sprite_for(species: str, *, back: bool = False, base: str = "") -> str:

@@ -211,12 +211,24 @@ def test_no_ink_touches_canvas_edge():
         assert edge == {UI.BG}, f"{name} 的边缘有非背景像素:{list(edge)[:4]}"
 
 
-def test_sanitize_drops_emoji_to_avoid_tofu():
-    """游戏文本里的 emoji 必须被剔除,否则界面上是豆腐块。"""
-    assert UI.sanitize("📨 【路边的小包裹】获得 伤药 ×2") == " 【路边的小包裹】获得 伤药 ×2"
-    assert UI.sanitize("💰 获得赏金 1020₽") == " 获得赏金 1020₽"
+def test_sanitize_keeps_emoji_now_that_fallback_fonts_exist():
+    """有 emoji 回退字体时 emoji 要**保留**(照搬 life_sim 的回退链)。
+
+    旧实现只看主字体(OPPOSans)的 cmap,把 emoji 一律丢掉;现在主字体缺字形
+    会回退到 Symbola / 系统彩色 emoji 字体,所以能画的就画,只有**任何字体都
+    没有**的字符才丢(否则才是豆腐块)。
+    """
+    from pw import fonts
+
+    if fonts.char_renderable("📨"):
+        assert "📨" in UI.sanitize("📨 【路边的小包裹】获得 伤药 ×2")
+    # 真正的"无人覆盖"字符必须丢掉
+    assert UI.sanitize("测试\uffff结束") == "测试结束"
+    # 常用符号(OFFOSans 自带)当然保留
+    assert UI.sanitize("◆ ★ ● —") == "◆ ★ ● —"
+    # emoji 现在能通过回退字体画出来 → 保留(画不出来的仍会丢)
+    assert "获得赏金 1020₽" in UI.sanitize("💰 获得赏金 1020₽")
     assert UI.sanitize("◆胜利! Lv105 345/353 暴鲤龙♂") == "◆胜利! Lv105 345/353 暴鲤龙♂"
-    assert "🏅" not in UI.sanitize("🏅 获得「灰色徽章」!")
 
 
 def test_battle_message_box_grows_with_lines():
@@ -283,7 +295,7 @@ def test_map_last_row_does_not_overflow_panel():
 
 def test_clamp_text_handles_stroke_and_overwide_text():
     """文字钳制必须算上描边宽度,并且超宽文字要截断而不是画到画布外。"""
-    from pw.ui_render import LOGICAL_W, Screen, sanitize
+    from pw.ui_render import LOGICAL_W, Screen
 
     sc = Screen(scale=SCALE)
     # 1) 超宽右对齐文字 + 描边:曾在最右一列留下墨迹
@@ -302,7 +314,12 @@ def test_clamp_text_handles_stroke_and_overwide_text():
         edges.add(im.getpixel((im.width - 1, y)))
     bg = {(246, 242, 214)}
     assert edges <= bg, f"钳制后仍有墨迹贴到画布边缘:{sorted(edges - bg)[:5]}"
-    assert sanitize("📨") == ""  # emoji 仍被过滤
+    # emoji 有没有被过滤取决于宿主有没有 emoji 回退字体;但要保证一件事:
+    # 过滤后的文本仍不含"任何字体都没有"的字符(不会出现豆腐块)
+    from pw import fonts as _f
+
+    assert _f.sanitize("📨\uffff") in ("📨", "")
+    assert not _f.char_renderable("\uffff")
     assert LOGICAL_W == 240
 
 

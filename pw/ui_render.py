@@ -11,11 +11,11 @@
 from __future__ import annotations
 
 import os
-from functools import lru_cache
 from io import BytesIO
 
 from astrbot.api import logger
 
+from . import fonts
 from .sprites import back_sprite_path, sprite_path
 
 LOGICAL_W = 240
@@ -243,74 +243,23 @@ TYPE_COLOR = {
 }
 
 
-@lru_cache(maxsize=24)
 def _font(size: int):
-    try:
-        from PIL import ImageFont
-    except ImportError:
-        return None
-    for path in (FONT_MAIN, FONT_SYMBOL):
-        if not os.path.exists(path):
-            continue
-        try:
-            return ImageFont.truetype(path, max(6, int(size)))
-        except OSError:
-            continue
-    return None
+    """主字体(带完整回退链,见 pw/fonts.py)。"""
+    return fonts.load_font(max(6, int(size)))
 
 
-@lru_cache(maxsize=4)
-def _cmap(path: str) -> frozenset[int]:
-    """字体覆盖的码点集合(用于剔除会渲染成豆腐块的字符)。"""
-    try:
-        from fontTools.ttLib import TTFont
-    except ImportError:
-        return frozenset()
-    if not os.path.exists(path):
-        return frozenset()
-    try:
-        with TTFont(path, fontNumber=0) as f:
-            return frozenset(f.getBestCmap())
-    except Exception:
-        return frozenset()
+def sanitize(text) -> str:
+    """去掉**任何字体都没有**的字符(避免豆腐块)。
 
-
-@lru_cache(maxsize=1)
-def _glyph_set() -> frozenset[int]:
-    """按**实际用来渲染的主字体**判定覆盖范围。
-
-    注意:Symbola 覆盖了大量 emoji(📨💰),但 `_font()` 优先返回 OPPOSans,
-    真正画字的是 OPPOSans —— 用两个字体的并集来判定会把 emoji 放行,
-    结果还是豆腐块。所以这里只看主字体(它缺失时才退化为 Symbola)。
+    注意与旧实现的区别:旧版只看主字体(OPPOSans)的 cmap,emoji 一律被丢掉;
+    现在主字体缺字形时会回退到符号/emoji 字体(Symbola、系统彩色 emoji),
+    只有所有字体都没有的字符才丢 —— 逻辑照搬 life_sim。
     """
-    main = _cmap(FONT_MAIN)
-    return main if main else _cmap(FONT_SYMBOL)
-
-
-def sanitize(text: str) -> str:
-    """去掉字体没有的字符(主要是 emoji),避免界面上出现豆腐块。
-
-    游戏内文本里大量出现 📨🎁💰🏅 这类 emoji,而 OPPOSans/Symbola 都没有;
-    直接画会变成空方框。这里统一过滤 —— 保留 ASCII 与字体覆盖的码点。
-    """
-    cm = _glyph_set()
-    if not cm:
-        return str(text)
-    out = []
-    for ch in str(text):
-        if ch in "\n\t" or ord(ch) < 128 or ord(ch) in cm:
-            out.append(ch)
-        elif ch == "\u3000":
-            out.append(" ")
-    return "".join(out)
+    return fonts.sanitize(text)
 
 
 def available() -> bool:
-    try:
-        from PIL import Image, ImageDraw  # noqa: F401
-    except ImportError:
-        return False
-    return _font(20) is not None
+    return fonts.available()
 
 
 def type_color(t: str) -> tuple[int, int, int]:
@@ -1211,22 +1160,25 @@ class Screen:
         )
         self.d2 = ImageDraw.Draw(self.big)
         for x, y, text, kw in self._ops:
-            font = self.f(kw.get("size", 9))
-            if font is None or not text:
+            size = round(kw.get("size", 9) * self.scale)
+            if not text or not self.f(kw.get("size", 9)):
                 continue
-            px, py, text = self._clamp_text(font, text, x, y,
-                                            kw.get("stroke", 0))
-            self.d2.text(
+            px, py, text = self._clamp_text(size, text, x, y, kw.get("stroke", 0))
+            if not text:
+                continue
+            # 走 fonts.draw_text:主字体 + emoji/符号回退 + 位图字体缩放
+            fonts.draw_text(
+                self.big,
                 (px, py),
-                str(text),
-                font=font,
-                fill=kw.get("fill", TEXT),
+                text,
+                size,
+                kw.get("fill", TEXT),
                 stroke_width=round(kw.get("stroke", 0) * self.scale),
                 stroke_fill=kw.get("sfill") or MSG_SHADOW,
             )
         return self.big
 
-    def _clamp_text(self, font, text: str, x: float, y: float,
+    def _clamp_text(self, size: int, text: str, x: float, y: float,
                     stroke: float = 0.0) -> tuple[int, int, str]:
         """把文字拉回画布内。
 
@@ -1241,10 +1193,7 @@ class Screen:
         px, py = round(x * self.scale), round(y * self.scale)
         if not s:
             return px, py, s
-        try:
-            bx0, by0, bx1, by1 = font.getbbox(s)
-        except (ValueError, OSError):
-            return px, py, s
+        bx0, by0, bx1, by1 = fonts.bbox(s, size)
         limit_x = self.w * self.scale - pad
         limit_y = self.h * self.scale - pad
         # 比画布还宽的文字无论怎么摆都会溢出 → 先截断保头留省略号
@@ -1252,14 +1201,11 @@ class Screen:
         if bx1 - bx0 > avail > 0:
             cur = ""
             for ch in s:
-                if font.getlength(cur + ch + "…") > avail:
+                if fonts.measure(cur + ch + "…", size) > avail:
                     break
                 cur += ch
             s = (cur or s[:1]) + "…"
-            try:
-                bx0, by0, bx1, by1 = font.getbbox(s)
-            except (ValueError, OSError):
-                return px, py, s
+            bx0, by0, bx1, by1 = fonts.bbox(s, size)
         if px + bx0 < pad:
             px = pad - bx0
         if px + bx1 > limit_x:
@@ -1284,6 +1230,10 @@ class Screen:
     def f(self, size: float):
         return _font(round(size * self.scale))
 
+    def fsize(self, size: float) -> int:
+        """逻辑字号 → 放大层像素字号。"""
+        return round(size * self.scale)
+
     def text(self, x: float, y: float, s: str, *, size: float = 9, fill=TEXT,
              stroke: float = 0, sfill=None, anchor_left: bool = True) -> float:
         """记录一条文字指令(在 `finish()` 时统一画到放大层)。返回逻辑宽度。"""
@@ -1291,30 +1241,29 @@ class Screen:
         s = sanitize(s)
         self._ops.append((x, y, s, {"size": size, "fill": fill,
                                     "stroke": stroke, "sfill": sfill}))
-        font = self.f(size)
-        return font.getlength(str(s)) / self.scale if font else 0.0
+        return self.tw(s, size)
 
     def text_right(self, x: float, y: float, s: str, **kw) -> None:
         kw.pop("anchor_left", None)
         size = kw.get("size", 9)
-        font = self.f(size)
-        if font is None:
+        if self.f(size) is None:
             return
-        w = font.getlength(str(s)) / self.scale
+        w = self.tw(s, size)
         self.text(x - w, y, s, **kw)
 
     def text_center(self, cx: float, y: float, s: str, **kw) -> None:
         kw.pop("anchor_left", None)
         size = kw.get("size", 9)
-        font = self.f(size)
-        if font is None:
+        if self.f(size) is None:
             return
-        w = font.getlength(str(s)) / self.scale
+        w = self.tw(s, size)
         self.text(cx - w / 2, y, s, **kw)
 
     def tw(self, s: str, size: float = 9) -> float:
-        font = self.f(size)
-        return font.getlength(sanitize(s)) / self.scale if font else 0.0
+        """逻辑宽度(逻辑坐标)。含 emoji 时按分段测量。"""
+        if self.f(size) is None:
+            return 0.0
+        return fonts.measure(sanitize(s), round(size * self.scale)) / self.scale
 
     def wrap(self, s: str, max_w: float, *, size: float = 9, limit: int = 6) -> list[str]:
         out, cur = [], ""
