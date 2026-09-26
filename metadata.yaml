@@ -1,0 +1,7 @@
+name: astrbot_plugin_pokemon_world
+display_name: 宝可梦世界
+desc: 强规则宝可梦文字冒险。内置 Gen9 全量图鉴、620 处真实地点野外分布与确定性对战引擎；可长期养成——探索地图、遭遇野生宝可梦与训练家、挑战道馆与四天王、捕获进化培养。每天凌晨 4 点由 LLM 生成世界事件（火箭队占据某地、宝可梦大量出现、天气异常等）与个人事件。
+author: morinoyuki
+version: 1.0.0
+short_desc: 强规则宝可梦文字冒险(地图/对战/养成/每日事件)
+repo: https://github.com/morinoyuki/astrbot_plugin_pokemon_world

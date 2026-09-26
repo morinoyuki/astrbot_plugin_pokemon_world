@@ -1,0 +1,57 @@
+{
+  "provider_id": {
+    "description": "LLM 提供商",
+    "type": "string",
+    "_special": "select_provider",
+    "hint": "用于「每日事件生成」与「叙事润色」。留空则关闭 LLM 功能(游戏仍可完整游玩,事件回退为本地生成)",
+    "default": ""
+  },
+  "narrate_enable": {
+    "description": "启用 LLM 叙事润色",
+    "type": "bool",
+    "hint": "把内核结算的事实交给 LLM 写成叙事(数值不可改动)。关闭则直接输出内核文本",
+    "default": true
+  },
+  "event_enable": {
+    "description": "启用每日事件(凌晨 4 点)",
+    "type": "bool",
+    "hint": "每天 04:00 生成世界事件与个人事件;由 LLM 选题+写文案,失败自动回退本地事件",
+    "default": true
+  },
+  "event_hour": {
+    "description": "每日刷新时刻(0-23 时)",
+    "type": "int",
+    "hint": "默认 4 点。玩家任意指令也会懒刷新,不会因为机器人离线而漏掉当天事件",
+    "default": 4
+  },
+  "announce_events": {
+    "description": "推送每日事件",
+    "type": "bool",
+    "hint": "到点后在对应会话里广播「第 N 天开始了」与世界事件",
+    "default": true
+  },
+  "narrate_every_turn": {
+    "description": "每个战斗回合都用 LLM 叙事",
+    "type": "bool",
+    "hint": "开启后每次出招都会调用一次 LLM(更沉浸但更贵);关闭则只在战斗结束时叙事",
+    "default": false
+  },
+  "sprite_enable": {
+    "description": "队伍显示宝可梦缩略图",
+    "type": "bool",
+    "hint": "内置 1379 张 96×96 缩略图,不联网",
+    "default": true
+  },
+  "starter_choices": {
+    "description": "可选御三家(逗号分隔)",
+    "type": "string",
+    "hint": "留空使用默认:小火龙,杰尼龟,妙蛙种子,皮卡丘,伊布,木守宫。可用中文名或英文标识",
+    "default": ""
+  },
+  "admin_uids": {
+    "description": "管理员 QQ(逗号分隔)",
+    "type": "string",
+    "hint": "管理员可执行 `/重置世界 all` 清空本会话全部存档",
+    "default": ""
+  }
+}

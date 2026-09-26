@@ -1,0 +1,2815 @@
+{
+ "meta": {
+  "source": "hand-curated (real game data)"
+ },
+ "regions": {
+  "kanto": {
+   "zh": "关都",
+   "version": "FRLG",
+   "gyms": [
+    {
+     "order": 1,
+     "location": "pewter-city",
+     "leader": "小刚",
+     "leader_en": "Brock",
+     "title": "深灰道馆",
+     "type": "Rock",
+     "badge": "灰色徽章",
+     "badge_en": "Boulder Badge",
+     "team": [
+      {
+       "species": "geodude",
+       "level": 12
+      },
+      {
+       "species": "onix",
+       "level": 14
+      }
+     ]
+    },
+    {
+     "order": 2,
+     "location": "cerulean-city",
+     "leader": "小霞",
+     "leader_en": "Misty",
+     "title": "华蓝道馆",
+     "type": "Water",
+     "badge": "蓝色徽章",
+     "badge_en": "Cascade Badge",
+     "team": [
+      {
+       "species": "staryu",
+       "level": 18
+      },
+      {
+       "species": "starmie",
+       "level": 21
+      }
+     ]
+    },
+    {
+     "order": 3,
+     "location": "vermilion-city",
+     "leader": "马志士",
+     "leader_en": "Lt. Surge",
+     "title": "枯叶道馆",
+     "type": "Electric",
+     "badge": "橙色徽章",
+     "badge_en": "Thunder Badge",
+     "team": [
+      {
+       "species": "voltorb",
+       "level": 21
+      },
+      {
+       "species": "pikachu",
+       "level": 18
+      },
+      {
+       "species": "raichu",
+       "level": 24
+      }
+     ]
+    },
+    {
+     "order": 4,
+     "location": "celadon-city",
+     "leader": "莉佳",
+     "leader_en": "Erika",
+     "title": "彩虹道馆",
+     "type": "Grass",
+     "badge": "彩虹徽章",
+     "badge_en": "Rainbow Badge",
+     "team": [
+      {
+       "species": "tangela",
+       "level": 24
+      },
+      {
+       "species": "victreebel",
+       "level": 29
+      },
+      {
+       "species": "vileplume",
+       "level": 29
+      }
+     ]
+    },
+    {
+     "order": 5,
+     "location": "fuchsia-city",
+     "leader": "阿桔",
+     "leader_en": "Koga",
+     "title": "浅红道馆",
+     "type": "Poison",
+     "badge": "粉红徽章",
+     "badge_en": "Soul Badge",
+     "team": [
+      {
+       "species": "koffing",
+       "level": 37
+      },
+      {
+       "species": "muk",
+       "level": 39
+      },
+      {
+       "species": "koffing",
+       "level": 37
+      },
+      {
+       "species": "weezing",
+       "level": 43
+      }
+     ]
+    },
+    {
+     "order": 6,
+     "location": "saffron-city",
+     "leader": "娜姿",
+     "leader_en": "Sabrina",
+     "title": "金黄道馆",
+     "type": "Psychic",
+     "badge": "金色徽章",
+     "badge_en": "Marsh Badge",
+     "team": [
+      {
+       "species": "kadabra",
+       "level": 38
+      },
+      {
+       "species": "mrmime",
+       "level": 37
+      },
+      {
+       "species": "venomoth",
+       "level": 38
+      },
+      {
+       "species": "alakazam",
+       "level": 43
+      }
+     ]
+    },
+    {
+     "order": 7,
+     "location": "cinnabar-island",
+     "leader": "夏伯",
+     "leader_en": "Blaine",
+     "title": "红莲道馆",
+     "type": "Fire",
+     "badge": "深红徽章",
+     "badge_en": "Volcano Badge",
+     "team": [
+      {
+       "species": "growlithe",
+       "level": 42
+      },
+      {
+       "species": "ponyta",
+       "level": 40
+      },
+      {
+       "species": "rapidash",
+       "level": 42
+      },
+      {
+       "species": "arcanine",
+       "level": 47
+      }
+     ]
+    },
+    {
+     "order": 8,
+     "location": "viridian-city",
+     "leader": "坂木",
+     "leader_en": "Giovanni",
+     "title": "常磐道馆",
+     "type": "Ground",
+     "badge": "绿色徽章",
+     "badge_en": "Earth Badge",
+     "team": [
+      {
+       "species": "rhyhorn",
+       "level": 45
+      },
+      {
+       "species": "dugtrio",
+       "level": 42
+      },
+      {
+       "species": "nidoqueen",
+       "level": 44
+      },
+      {
+       "species": "nidoking",
+       "level": 45
+      },
+      {
+       "species": "rhydon",
+       "level": 50
+      }
+     ]
+    }
+   ],
+   "elite4": [
+    {
+     "order": 1,
+     "name": "科拿",
+     "name_en": "Lorelei",
+     "title": "四天王",
+     "type": "Ice",
+     "team": [
+      {
+       "species": "dewgong",
+       "level": 52
+      },
+      {
+       "species": "cloyster",
+       "level": 51
+      },
+      {
+       "species": "slowbro",
+       "level": 52
+      },
+      {
+       "species": "jynx",
+       "level": 54
+      },
+      {
+       "species": "lapras",
+       "level": 54
+      }
+     ]
+    },
+    {
+     "order": 2,
+     "name": "希巴",
+     "name_en": "Bruno",
+     "title": "四天王",
+     "type": "Fighting",
+     "team": [
+      {
+       "species": "onix",
+       "level": 51
+      },
+      {
+       "species": "hitmonchan",
+       "level": 53
+      },
+      {
+       "species": "hitmonlee",
+       "level": 53
+      },
+      {
+       "species": "machamp",
+       "level": 56
+      }
+     ]
+    },
+    {
+     "order": 3,
+     "name": "菊子",
+     "name_en": "Agatha",
+     "title": "四天王",
+     "type": "Ghost",
+     "team": [
+      {
+       "species": "gengar",
+       "level": 54
+      },
+      {
+       "species": "golbat",
+       "level": 54
+      },
+      {
+       "species": "haunter",
+       "level": 53
+      },
+      {
+       "species": "arbok",
+       "level": 56
+      },
+      {
+       "species": "gengar",
+       "level": 58
+      }
+     ]
+    },
+    {
+     "order": 4,
+     "name": "阿渡",
+     "name_en": "Lance",
+     "title": "四天王",
+     "type": "Dragon",
+     "team": [
+      {
+       "species": "gyarados",
+       "level": 56
+      },
+      {
+       "species": "dragonair",
+       "level": 54
+      },
+      {
+       "species": "dragonair",
+       "level": 54
+      },
+      {
+       "species": "aerodactyl",
+       "level": 58
+      },
+      {
+       "species": "dragonite",
+       "level": 60
+      }
+     ]
+    }
+   ],
+   "champion": {
+    "name": "青绿",
+    "name_en": "Blue",
+    "title": "冠军",
+    "team": [
+     {
+      "species": "pidgeot",
+      "level": 59
+     },
+     {
+      "species": "alakazam",
+      "level": 57
+     },
+     {
+      "species": "rhydon",
+      "level": 59
+     },
+     {
+      "species": "exeggutor",
+      "level": 59
+     },
+     {
+      "species": "arcanine",
+      "level": 61
+     },
+     {
+      "species": "blastoise",
+      "level": 63
+     }
+    ]
+   }
+  },
+  "johto": {
+   "zh": "城都",
+   "version": "HGSS",
+   "gyms": [
+    {
+     "order": 1,
+     "location": "violet-city",
+     "leader": "阿速",
+     "leader_en": "Falkner",
+     "title": "桔梗道馆",
+     "type": "Flying",
+     "badge": "飞翼徽章",
+     "badge_en": "Zephyr Badge",
+     "team": [
+      {
+       "species": "pidgey",
+       "level": 9
+      },
+      {
+       "species": "pidgeotto",
+       "level": 13
+      }
+     ]
+    },
+    {
+     "order": 2,
+     "location": "azalea-town",
+     "leader": "阿笔",
+     "leader_en": "Bugsy",
+     "title": "桧皮道馆",
+     "type": "Bug",
+     "badge": "昆虫徽章",
+     "badge_en": "Hive Badge",
+     "team": [
+      {
+       "species": "metapod",
+       "level": 15
+      },
+      {
+       "species": "kakuna",
+       "level": 15
+      },
+      {
+       "species": "scyther",
+       "level": 17
+      }
+     ]
+    },
+    {
+     "order": 3,
+     "location": "goldenrod-city",
+     "leader": "小茜",
+     "leader_en": "Whitney",
+     "title": "满金道馆",
+     "type": "Normal",
+     "badge": "一般徽章",
+     "badge_en": "Plain Badge",
+     "team": [
+      {
+       "species": "clefairy",
+       "level": 17
+      },
+      {
+       "species": "miltank",
+       "level": 19
+      }
+     ]
+    },
+    {
+     "order": 4,
+     "location": "ecruteak-city",
+     "leader": "松叶",
+     "leader_en": "Morty",
+     "title": "圆朱道馆",
+     "type": "Ghost",
+     "badge": "魅影徽章",
+     "badge_en": "Fog Badge",
+     "team": [
+      {
+       "species": "gastly",
+       "level": 21
+      },
+      {
+       "species": "haunter",
+       "level": 21
+      },
+      {
+       "species": "haunter",
+       "level": 23
+      },
+      {
+       "species": "gengar",
+       "level": 25
+      }
+     ]
+    },
+    {
+     "order": 5,
+     "location": "cianwood-city",
+     "leader": "阿四",
+     "leader_en": "Chuck",
+     "title": "湛蓝道馆",
+     "type": "Fighting",
+     "badge": "打击徽章",
+     "badge_en": "Storm Badge",
+     "team": [
+      {
+       "species": "primeape",
+       "level": 29
+      },
+      {
+       "species": "poliwrath",
+       "level": 31
+      }
+     ]
+    },
+    {
+     "order": 6,
+     "location": "olivine-city",
+     "leader": "阿蜜",
+     "leader_en": "Jasmine",
+     "title": "浅葱道馆",
+     "type": "Steel",
+     "badge": "钢铁徽章",
+     "badge_en": "Mineral Badge",
+     "team": [
+      {
+       "species": "magnemite",
+       "level": 30
+      },
+      {
+       "species": "magnemite",
+       "level": 30
+      },
+      {
+       "species": "steelix",
+       "level": 35
+      }
+     ]
+    },
+    {
+     "order": 7,
+     "location": "cianwood-city",
+     "leader": "柳伯",
+     "leader_en": "Pryce",
+     "title": "卡吉道馆",
+     "type": "Ice",
+     "badge": "冰河徽章",
+     "badge_en": "Glacier Badge",
+     "team": [
+      {
+       "species": "seel",
+       "level": 30
+      },
+      {
+       "species": "dewgong",
+       "level": 32
+      },
+      {
+       "species": "piloswine",
+       "level": 36
+      }
+     ]
+    },
+    {
+     "order": 8,
+     "location": "blackthorn-city",
+     "leader": "小椿",
+     "leader_en": "Clair",
+     "title": "烟墨道馆",
+     "type": "Dragon",
+     "badge": "升龙徽章",
+     "badge_en": "Rising Badge",
+     "team": [
+      {
+       "species": "gyarados",
+       "level": 38
+      },
+      {
+       "species": "dragonair",
+       "level": 38
+      },
+      {
+       "species": "dragonair",
+       "level": 38
+      },
+      {
+       "species": "kingdra",
+       "level": 41
+      }
+     ]
+    }
+   ],
+   "elite4": [
+    {
+     "order": 1,
+     "name": "一树",
+     "name_en": "Will",
+     "title": "四天王",
+     "type": "Psychic",
+     "team": [
+      {
+       "species": "xatu",
+       "level": 40
+      },
+      {
+       "species": "jynx",
+       "level": 41
+      },
+      {
+       "species": "exeggutor",
+       "level": 41
+      },
+      {
+       "species": "slowbro",
+       "level": 41
+      },
+      {
+       "species": "xatu",
+       "level": 42
+      }
+     ]
+    },
+    {
+     "order": 2,
+     "name": "阿桔",
+     "name_en": "Koga",
+     "title": "四天王",
+     "type": "Poison",
+     "team": [
+      {
+       "species": "ariados",
+       "level": 40
+      },
+      {
+       "species": "venomoth",
+       "level": 41
+      },
+      {
+       "species": "forretress",
+       "level": 43
+      },
+      {
+       "species": "muk",
+       "level": 42
+      },
+      {
+       "species": "crobat",
+       "level": 44
+      }
+     ]
+    },
+    {
+     "order": 3,
+     "name": "希巴",
+     "name_en": "Bruno",
+     "title": "四天王",
+     "type": "Fighting",
+     "team": [
+      {
+       "species": "hitmontop",
+       "level": 42
+      },
+      {
+       "species": "hitmonlee",
+       "level": 42
+      },
+      {
+       "species": "hitmonchan",
+       "level": 42
+      },
+      {
+       "species": "onix",
+       "level": 43
+      },
+      {
+       "species": "machamp",
+       "level": 46
+      }
+     ]
+    },
+    {
+     "order": 4,
+     "name": "卡琳",
+     "name_en": "Karen",
+     "title": "四天王",
+     "type": "Dark",
+     "team": [
+      {
+       "species": "umbreon",
+       "level": 42
+      },
+      {
+       "species": "vileplume",
+       "level": 42
+      },
+      {
+       "species": "gengar",
+       "level": 45
+      },
+      {
+       "species": "murkrow",
+       "level": 44
+      },
+      {
+       "species": "houndoom",
+       "level": 47
+      }
+     ]
+    }
+   ],
+   "champion": {
+    "name": "阿渡",
+    "name_en": "Lance",
+    "title": "冠军",
+    "team": [
+     {
+      "species": "gyarados",
+      "level": 46
+     },
+     {
+      "species": "dragonite",
+      "level": 49
+     },
+     {
+      "species": "dragonite",
+      "level": 49
+     },
+     {
+      "species": "aerodactyl",
+      "level": 48
+     },
+     {
+      "species": "charizard",
+      "level": 50
+     },
+     {
+      "species": "dragonite",
+      "level": 50
+     }
+    ]
+   }
+  },
+  "hoenn": {
+   "zh": "丰缘",
+   "version": "ORAS",
+   "gyms": [
+    {
+     "order": 1,
+     "location": "rustboro-city",
+     "leader": "杜娟",
+     "leader_en": "Roxanne",
+     "title": "卡那兹道馆",
+     "type": "Rock",
+     "badge": "岩石徽章",
+     "badge_en": "Stone Badge",
+     "team": [
+      {
+       "species": "geodude",
+       "level": 14
+      },
+      {
+       "species": "nosepass",
+       "level": 15
+      }
+     ]
+    },
+    {
+     "order": 2,
+     "location": "dewford-town",
+     "leader": "藤树",
+     "leader_en": "Brawly",
+     "title": "武斗道馆",
+     "type": "Fighting",
+     "badge": "拳击徽章",
+     "badge_en": "Knuckle Badge",
+     "team": [
+      {
+       "species": "machop",
+       "level": 16
+      },
+      {
+       "species": "makuhita",
+       "level": 19
+      }
+     ]
+    },
+    {
+     "order": 3,
+     "location": "slateport-city",
+     "leader": "铁旋",
+     "leader_en": "Wattson",
+     "title": "紫堇道馆",
+     "type": "Electric",
+     "badge": "电力徽章",
+     "badge_en": "Dynamo Badge",
+     "team": [
+      {
+       "species": "magnemite",
+       "level": 21
+      },
+      {
+       "species": "voltorb",
+       "level": 21
+      },
+      {
+       "species": "magneton",
+       "level": 23
+      },
+      {
+       "species": "manectric",
+       "level": 24
+      }
+     ]
+    },
+    {
+     "order": 4,
+     "location": "lavaridge-town",
+     "leader": "亚莎",
+     "leader_en": "Flannery",
+     "title": "釜炎道馆",
+     "type": "Fire",
+     "badge": "烈焰徽章",
+     "badge_en": "Heat Badge",
+     "team": [
+      {
+       "species": "numel",
+       "level": 26
+      },
+      {
+       "species": "slugma",
+       "level": 26
+      },
+      {
+       "species": "camerupt",
+       "level": 28
+      },
+      {
+       "species": "torkoal",
+       "level": 30
+      }
+     ]
+    },
+    {
+     "order": 5,
+     "location": "petalburg-city",
+     "leader": "千里",
+     "leader_en": "Norman",
+     "title": "橙华道馆",
+     "type": "Normal",
+     "badge": "平衡徽章",
+     "badge_en": "Balance Badge",
+     "team": [
+      {
+       "species": "slaking",
+       "level": 28
+      },
+      {
+       "species": "vigoroth",
+       "level": 28
+      },
+      {
+       "species": "slaking",
+       "level": 30
+      }
+     ]
+    },
+    {
+     "order": 6,
+     "location": "fortree-city",
+     "leader": "娜琪",
+     "leader_en": "Winona",
+     "title": "茵郁道馆",
+     "type": "Flying",
+     "badge": "羽毛徽章",
+     "badge_en": "Feather Badge",
+     "team": [
+      {
+       "species": "swellow",
+       "level": 33
+      },
+      {
+       "species": "pelipper",
+       "level": 33
+      },
+      {
+       "species": "altaria",
+       "level": 35
+      },
+      {
+       "species": "skarmory",
+       "level": 36
+      }
+     ]
+    },
+    {
+     "order": 7,
+     "location": "mossdeep-city",
+     "leader": "枫与南",
+     "leader_en": "Tate & Liza",
+     "title": "绿岭道馆",
+     "type": "Psychic",
+     "badge": "心灵徽章",
+     "badge_en": "Mind Badge",
+     "team": [
+      {
+       "species": "claydol",
+       "level": 45
+      },
+      {
+       "species": "xatu",
+       "level": 45
+      },
+      {
+       "species": "solrock",
+       "level": 47
+      },
+      {
+       "species": "lunatone",
+       "level": 47
+      }
+     ]
+    },
+    {
+     "order": 8,
+     "location": "sootopolis-city",
+     "leader": "亚当",
+     "leader_en": "Juan",
+     "title": "琉璃道馆",
+     "type": "Water",
+     "badge": "雨滴徽章",
+     "badge_en": "Rain Badge",
+     "team": [
+      {
+       "species": "luvdisc",
+       "level": 44
+      },
+      {
+       "species": "whiscash",
+       "level": 44
+      },
+      {
+       "species": "sealeo",
+       "level": 44
+      },
+      {
+       "species": "crawdaunt",
+       "level": 46
+      },
+      {
+       "species": "kingdra",
+       "level": 48
+      }
+     ]
+    }
+   ],
+   "elite4": [
+    {
+     "order": 1,
+     "name": "花月",
+     "name_en": "Sidney",
+     "title": "四天王",
+     "type": "Dark",
+     "team": [
+      {
+       "species": "mightyena",
+       "level": 50
+      },
+      {
+       "species": "shiftry",
+       "level": 50
+      },
+      {
+       "species": "cacturne",
+       "level": 50
+      },
+      {
+       "species": "sharpedo",
+       "level": 50
+      },
+      {
+       "species": "absol",
+       "level": 52
+      }
+     ]
+    },
+    {
+     "order": 2,
+     "name": "芙蓉",
+     "name_en": "Phoebe",
+     "title": "四天王",
+     "type": "Ghost",
+     "team": [
+      {
+       "species": "dusclops",
+       "level": 51
+      },
+      {
+       "species": "banette",
+       "level": 51
+      },
+      {
+       "species": "sableye",
+       "level": 51
+      },
+      {
+       "species": "banette",
+       "level": 51
+      },
+      {
+       "species": "dusknoir",
+       "level": 53
+      }
+     ]
+    },
+    {
+     "order": 3,
+     "name": "波妮",
+     "name_en": "Glacia",
+     "title": "四天王",
+     "type": "Ice",
+     "team": [
+      {
+       "species": "glalie",
+       "level": 52
+      },
+      {
+       "species": "froslass",
+       "level": 52
+      },
+      {
+       "species": "glalie",
+       "level": 52
+      },
+      {
+       "species": "walrein",
+       "level": 54
+      }
+     ]
+    },
+    {
+     "order": 4,
+     "name": "源治",
+     "name_en": "Drake",
+     "title": "四天王",
+     "type": "Dragon",
+     "team": [
+      {
+       "species": "altaria",
+       "level": 53
+      },
+      {
+       "species": "flygon",
+       "level": 53
+      },
+      {
+       "species": "kingdra",
+       "level": 53
+      },
+      {
+       "species": "flygon",
+       "level": 53
+      },
+      {
+       "species": "salamence",
+       "level": 55
+      }
+     ]
+    }
+   ],
+   "champion": {
+    "name": "大吾",
+    "name_en": "Steven",
+    "title": "冠军",
+    "team": [
+     {
+      "species": "skarmory",
+      "level": 57
+     },
+     {
+      "species": "claydol",
+      "level": 57
+     },
+     {
+      "species": "aggron",
+      "level": 57
+     },
+     {
+      "species": "cradily",
+      "level": 57
+     },
+     {
+      "species": "armaldo",
+      "level": 57
+     },
+     {
+      "species": "metagross",
+      "level": 59
+     }
+    ]
+   }
+  },
+  "sinnoh": {
+   "zh": "神奥",
+   "version": "Platinum",
+   "gyms": [
+    {
+     "order": 1,
+     "location": "oreburgh-city",
+     "leader": "瓢太",
+     "leader_en": "Roark",
+     "title": "黑金道馆",
+     "type": "Rock",
+     "badge": "石炭徽章",
+     "badge_en": "Coal Badge",
+     "team": [
+      {
+       "species": "geodude",
+       "level": 12
+      },
+      {
+       "species": "onix",
+       "level": 12
+      },
+      {
+       "species": "cranidos",
+       "level": 14
+      }
+     ]
+    },
+    {
+     "order": 2,
+     "location": "eterna-city",
+     "leader": "菜种",
+     "leader_en": "Gardenia",
+     "title": "百代道馆",
+     "type": "Grass",
+     "badge": "森林徽章",
+     "badge_en": "Forest Badge",
+     "team": [
+      {
+       "species": "cherubi",
+       "level": 18
+      },
+      {
+       "species": "turtwig",
+       "level": 18
+      },
+      {
+       "species": "roserade",
+       "level": 22
+      }
+     ]
+    },
+    {
+     "order": 3,
+     "location": "veilstone-city",
+     "leader": "阿李",
+     "leader_en": "Maylene",
+     "title": "帷幕道馆",
+     "type": "Fighting",
+     "badge": "圆石徽章",
+     "badge_en": "Cobble Badge",
+     "team": [
+      {
+       "species": "meditite",
+       "level": 28
+      },
+      {
+       "species": "machoke",
+       "level": 29
+      },
+      {
+       "species": "lucario",
+       "level": 32
+      }
+     ]
+    },
+    {
+     "order": 4,
+     "location": "pastoria-city",
+     "leader": "吉宪",
+     "leader_en": "Crasher Wake",
+     "title": "湿原道馆",
+     "type": "Water",
+     "badge": "沼泽徽章",
+     "badge_en": "Fen Badge",
+     "team": [
+      {
+       "species": "gyarados",
+       "level": 33
+      },
+      {
+       "species": "quagsire",
+       "level": 34
+      },
+      {
+       "species": "floatzel",
+       "level": 37
+      }
+     ]
+    },
+    {
+     "order": 5,
+     "location": "hearthome-city",
+     "leader": "梅丽莎",
+     "leader_en": "Fantina",
+     "title": "缘之道馆",
+     "type": "Ghost",
+     "badge": "遗迹徽章",
+     "badge_en": "Relic Badge",
+     "team": [
+      {
+       "species": "duskull",
+       "level": 32
+      },
+      {
+       "species": "haunter",
+       "level": 34
+      },
+      {
+       "species": "mismagius",
+       "level": 38
+      }
+     ]
+    },
+    {
+     "order": 6,
+     "location": "canalave-city",
+     "leader": "东钢",
+     "leader_en": "Byron",
+     "title": "水脉道馆",
+     "type": "Steel",
+     "badge": "矿山洞徽章",
+     "badge_en": "Mine Badge",
+     "team": [
+      {
+       "species": "magnemite",
+       "level": 37
+      },
+      {
+       "species": "steelix",
+       "level": 38
+      },
+      {
+       "species": "bastiodon",
+       "level": 41
+      }
+     ]
+    },
+    {
+     "order": 7,
+     "location": "snowpoint-city",
+     "leader": "小菘",
+     "leader_en": "Candice",
+     "title": "切锋道馆",
+     "type": "Ice",
+     "badge": "冰河徽章",
+     "badge_en": "Icicle Badge",
+     "team": [
+      {
+       "species": "snover",
+       "level": 38
+      },
+      {
+       "species": "sneasel",
+       "level": 40
+      },
+      {
+       "species": "medicham",
+       "level": 40
+      },
+      {
+       "species": "abomasnow",
+       "level": 42
+      }
+     ]
+    },
+    {
+     "order": 8,
+     "location": "sunyshore-city",
+     "leader": "电次",
+     "leader_en": "Volkner",
+     "title": "滨海道馆",
+     "type": "Electric",
+     "badge": "灯塔徽章",
+     "badge_en": "Beacon Badge",
+     "team": [
+      {
+       "species": "raichu",
+       "level": 46
+      },
+      {
+       "species": "jolteon",
+       "level": 46
+      },
+      {
+       "species": "luxray",
+       "level": 48
+      },
+      {
+       "species": "electivire",
+       "level": 50
+      }
+     ]
+    }
+   ],
+   "elite4": [
+    {
+     "order": 1,
+     "name": "阿柳",
+     "name_en": "Aaron",
+     "title": "四天王",
+     "type": "Bug",
+     "team": [
+      {
+       "species": "yanmega",
+       "level": 49
+      },
+      {
+       "species": "scizor",
+       "level": 49
+      },
+      {
+       "species": "vespiquen",
+       "level": 50
+      },
+      {
+       "species": "heracross",
+       "level": 51
+      },
+      {
+       "species": "drapion",
+       "level": 53
+      }
+     ]
+    },
+    {
+     "order": 2,
+     "name": "菊野",
+     "name_en": "Bertha",
+     "title": "四天王",
+     "type": "Ground",
+     "team": [
+      {
+       "species": "whiscash",
+       "level": 50
+      },
+      {
+       "species": "gliscor",
+       "level": 50
+      },
+      {
+       "species": "golem",
+       "level": 53
+      },
+      {
+       "species": "hippowdon",
+       "level": 53
+      },
+      {
+       "species": "rhyperior",
+       "level": 53
+      }
+     ]
+    },
+    {
+     "order": 3,
+     "name": "大叶",
+     "name_en": "Flint",
+     "title": "四天王",
+     "type": "Fire",
+     "team": [
+      {
+       "species": "houndoom",
+       "level": 50
+      },
+      {
+       "species": "flareon",
+       "level": 50
+      },
+      {
+       "species": "rapidash",
+       "level": 52
+      },
+      {
+       "species": "magmortar",
+       "level": 52
+      },
+      {
+       "species": "infernape",
+       "level": 54
+      }
+     ]
+    },
+    {
+     "order": 4,
+     "name": "悟松",
+     "name_en": "Lucian",
+     "title": "四天王",
+     "type": "Psychic",
+     "team": [
+      {
+       "species": "mrmime",
+       "level": 51
+      },
+      {
+       "species": "espeon",
+       "level": 51
+      },
+      {
+       "species": "alakazam",
+       "level": 53
+      },
+      {
+       "species": "bronzong",
+       "level": 54
+      },
+      {
+       "species": "gallade",
+       "level": 55
+      }
+     ]
+    }
+   ],
+   "champion": {
+    "name": "竹兰",
+    "name_en": "Cynthia",
+    "title": "冠军",
+    "team": [
+     {
+      "species": "spiritomb",
+      "level": 56
+     },
+     {
+      "species": "roserade",
+      "level": 56
+     },
+     {
+      "species": "togekiss",
+      "level": 56
+     },
+     {
+      "species": "lucario",
+      "level": 56
+     },
+     {
+      "species": "milotic",
+      "level": 56
+     },
+     {
+      "species": "garchomp",
+      "level": 58
+     }
+    ]
+   }
+  },
+  "unova": {
+   "zh": "合众",
+   "version": "B2W2",
+   "gyms": [
+    {
+     "order": 1,
+     "location": "aspertia-city",
+     "leader": "黑连",
+     "leader_en": "Cheren",
+     "title": "桧扇道馆",
+     "type": "Normal",
+     "badge": "基础徽章",
+     "badge_en": "Basic Badge",
+     "team": [
+      {
+       "species": "patrat",
+       "level": 11
+      },
+      {
+       "species": "lillipup",
+       "level": 13
+      }
+     ]
+    },
+    {
+     "order": 2,
+     "location": "virbank-city",
+     "leader": "霍米加",
+     "leader_en": "Roxie",
+     "title": "立涌道馆",
+     "type": "Poison",
+     "badge": "毒性徽章",
+     "badge_en": "Toxic Badge",
+     "team": [
+      {
+       "species": "koffing",
+       "level": 16
+      },
+      {
+       "species": "whirlipede",
+       "level": 18
+      }
+     ]
+    },
+    {
+     "order": 3,
+     "location": "castelia-city",
+     "leader": "亚堤",
+     "leader_en": "Burgh",
+     "title": "飞云道馆",
+     "type": "Bug",
+     "badge": "甲虫徽章",
+     "badge_en": "Insect Badge",
+     "team": [
+      {
+       "species": "swadloon",
+       "level": 22
+      },
+      {
+       "species": "dwebble",
+       "level": 22
+      },
+      {
+       "species": "leavanny",
+       "level": 24
+      }
+     ]
+    },
+    {
+     "order": 4,
+     "location": "driftveil-city",
+     "leader": "小菊儿",
+     "leader_en": "Elesa",
+     "title": "雷文道馆",
+     "type": "Electric",
+     "badge": "伏特徽章",
+     "badge_en": "Bolt Badge",
+     "team": [
+      {
+       "species": "emolga",
+       "level": 28
+      },
+      {
+       "species": "flaaffy",
+       "level": 28
+      },
+      {
+       "species": "zebstrika",
+       "level": 30
+      }
+     ]
+    },
+    {
+     "order": 5,
+     "location": "driftveil-city",
+     "leader": "菊老大",
+     "leader_en": "Clay",
+     "title": "帆巴道馆",
+     "type": "Ground",
+     "badge": "震动徽章",
+     "badge_en": "Quake Badge",
+     "team": [
+      {
+       "species": "sandslash",
+       "level": 33
+      },
+      {
+       "species": "krokorok",
+       "level": 33
+      },
+      {
+       "species": "excadrill",
+       "level": 35
+      }
+     ]
+    },
+    {
+     "order": 6,
+     "location": "icirrus-city",
+     "leader": "风露",
+     "leader_en": "Skyla",
+     "title": "吹寄道馆",
+     "type": "Flying",
+     "badge": "喷射徽章",
+     "badge_en": "Jet Badge",
+     "team": [
+      {
+       "species": "swoobat",
+       "level": 37
+      },
+      {
+       "species": "skarmory",
+       "level": 37
+      },
+      {
+       "species": "sigilyph",
+       "level": 38
+      },
+      {
+       "species": "swanna",
+       "level": 40
+      }
+     ]
+    },
+    {
+     "order": 7,
+     "location": "undella-town",
+     "leader": "夏卡",
+     "leader_en": "Drayden",
+     "title": "双龙道馆",
+     "type": "Dragon",
+     "badge": "传说徽章",
+     "badge_en": "Legend Badge",
+     "team": [
+      {
+       "species": "druddigon",
+       "level": 46
+      },
+      {
+       "species": "flygon",
+       "level": 46
+      },
+      {
+       "species": "haxorus",
+       "level": 48
+      }
+     ]
+    },
+    {
+     "order": 8,
+     "location": "humilau-city",
+     "leader": "西子伊",
+     "leader_en": "Marlon",
+     "title": "青海波道馆",
+     "type": "Water",
+     "badge": "波浪徽章",
+     "badge_en": "Wave Badge",
+     "team": [
+      {
+       "species": "carracosta",
+       "level": 49
+      },
+      {
+       "species": "wailord",
+       "level": 49
+      },
+      {
+       "species": "jellicent",
+       "level": 51
+      }
+     ]
+    }
+   ],
+   "elite4": [
+    {
+     "order": 1,
+     "name": "婉龙",
+     "name_en": "Shauntal",
+     "title": "四天王",
+     "type": "Ghost",
+     "team": [
+      {
+       "species": "cofagrigus",
+       "level": 56
+      },
+      {
+       "species": "drifblim",
+       "level": 56
+      },
+      {
+       "species": "golurk",
+       "level": 56
+      },
+      {
+       "species": "chandelure",
+       "level": 58
+      }
+     ]
+    },
+    {
+     "order": 2,
+     "name": "越橘",
+     "name_en": "Grimsley",
+     "title": "四天王",
+     "type": "Dark",
+     "team": [
+      {
+       "species": "scrafty",
+       "level": 56
+      },
+      {
+       "species": "krookodile",
+       "level": 56
+      },
+      {
+       "species": "liepard",
+       "level": 56
+      },
+      {
+       "species": "bisharp",
+       "level": 58
+      }
+     ]
+    },
+    {
+     "order": 3,
+     "name": "嘉德丽雅",
+     "name_en": "Caitlin",
+     "title": "四天王",
+     "type": "Psychic",
+     "team": [
+      {
+       "species": "musharna",
+       "level": 56
+      },
+      {
+       "species": "sigilyph",
+       "level": 56
+      },
+      {
+       "species": "reuniclus",
+       "level": 56
+      },
+      {
+       "species": "gothitelle",
+       "level": 58
+      }
+     ]
+    },
+    {
+     "order": 4,
+     "name": "连武",
+     "name_en": "Marshal",
+     "title": "四天王",
+     "type": "Fighting",
+     "team": [
+      {
+       "species": "throh",
+       "level": 56
+      },
+      {
+       "species": "sawk",
+       "level": 56
+      },
+      {
+       "species": "mienshao",
+       "level": 56
+      },
+      {
+       "species": "conkeldurr",
+       "level": 58
+      }
+     ]
+    }
+   ],
+   "champion": {
+    "name": "艾莉丝",
+    "name_en": "Iris",
+    "title": "冠军",
+    "team": [
+     {
+      "species": "hydreigon",
+      "level": 60
+     },
+     {
+      "species": "druddigon",
+      "level": 59
+     },
+     {
+      "species": "aggron",
+      "level": 59
+     },
+     {
+      "species": "archeops",
+      "level": 59
+     },
+     {
+      "species": "lapras",
+      "level": 59
+     },
+     {
+      "species": "haxorus",
+      "level": 62
+     }
+    ]
+   }
+  },
+  "kalos": {
+   "zh": "卡洛斯",
+   "version": "XY",
+   "gyms": [
+    {
+     "order": 1,
+     "location": "aquacorde-town",
+     "leader": "紫罗兰",
+     "leader_en": "Viola",
+     "title": "白檀道馆",
+     "type": "Bug",
+     "badge": "虫虫徽章",
+     "badge_en": "Bug Badge",
+     "team": [
+      {
+       "species": "surskit",
+       "level": 10
+      },
+      {
+       "species": "vivillon",
+       "level": 12
+      }
+     ]
+    },
+    {
+     "order": 2,
+     "location": "cyllage-city",
+     "leader": "查克洛",
+     "leader_en": "Grant",
+     "title": "遥香道馆",
+     "type": "Rock",
+     "badge": "岩壁徽章",
+     "badge_en": "Cliff Badge",
+     "team": [
+      {
+       "species": "amaura",
+       "level": 25
+      },
+      {
+       "species": "tyrunt",
+       "level": 25
+      }
+     ]
+    },
+    {
+     "order": 3,
+     "location": "shalour-city",
+     "leader": "可尔妮",
+     "leader_en": "Korrina",
+     "title": "娑罗道馆",
+     "type": "Fighting",
+     "badge": "战斗徽章",
+     "badge_en": "Rumble Badge",
+     "team": [
+      {
+       "species": "mienfoo",
+       "level": 29
+      },
+      {
+       "species": "machoke",
+       "level": 28
+      },
+      {
+       "species": "hawlucha",
+       "level": 32
+      }
+     ]
+    },
+    {
+     "order": 4,
+     "location": "pokemon-village",
+     "leader": "福爷",
+     "leader_en": "Ramos",
+     "title": "香薰道馆",
+     "type": "Grass",
+     "badge": "植物徽章",
+     "badge_en": "Plant Badge",
+     "team": [
+      {
+       "species": "jumpluff",
+       "level": 30
+      },
+      {
+       "species": "weepinbell",
+       "level": 31
+      },
+      {
+       "species": "gogoat",
+       "level": 34
+      }
+     ]
+    },
+    {
+     "order": 5,
+     "location": "lumiose-city",
+     "leader": "希特隆",
+     "leader_en": "Clemont",
+     "title": "密阿雷道馆",
+     "type": "Electric",
+     "badge": "电压徽章",
+     "badge_en": "Voltage Badge",
+     "team": [
+      {
+       "species": "emolga",
+       "level": 35
+      },
+      {
+       "species": "magneton",
+       "level": 35
+      },
+      {
+       "species": "heliolisk",
+       "level": 37
+      }
+     ]
+    },
+    {
+     "order": 6,
+     "location": "laverre-city",
+     "leader": "玛绣",
+     "leader_en": "Valerie",
+     "title": "香薰道馆",
+     "type": "Fairy",
+     "badge": "妖精徽章",
+     "badge_en": "Fairy Badge",
+     "team": [
+      {
+       "species": "mawile",
+       "level": 38
+      },
+      {
+       "species": "mrmime",
+       "level": 39
+      },
+      {
+       "species": "sylveon",
+       "level": 42
+      }
+     ]
+    },
+    {
+     "order": 7,
+     "location": "couriway-town",
+     "leader": "葛吉花",
+     "leader_en": "Olympia",
+     "title": "映雪道馆",
+     "type": "Psychic",
+     "badge": "超能徽章",
+     "badge_en": "Psychic Badge",
+     "team": [
+      {
+       "species": "sigilyph",
+       "level": 44
+      },
+      {
+       "species": "slowking",
+       "level": 45
+      },
+      {
+       "species": "meowstic",
+       "level": 48
+      }
+     ]
+    },
+    {
+     "order": 8,
+     "location": "couriway-town",
+     "leader": "得抚",
+     "leader_en": "Wulfric",
+     "title": "映雪道馆",
+     "type": "Ice",
+     "badge": "冰山徽章",
+     "badge_en": "Iceberg Badge",
+     "team": [
+      {
+       "species": "cryogonal",
+       "level": 55
+      },
+      {
+       "species": "abomasnow",
+       "level": 56
+      },
+      {
+       "species": "avalugg",
+       "level": 59
+      }
+     ]
+    }
+   ],
+   "elite4": [
+    {
+     "order": 1,
+     "name": "帕琦拉",
+     "name_en": "Malva",
+     "title": "四天王",
+     "type": "Fire",
+     "team": [
+      {
+       "species": "pyroar",
+       "level": 63
+      },
+      {
+       "species": "torkoal",
+       "level": 63
+      },
+      {
+       "species": "chandelure",
+       "level": 63
+      },
+      {
+       "species": "talonflame",
+       "level": 65
+      }
+     ]
+    },
+    {
+     "order": 2,
+     "name": "志米",
+     "name_en": "Siebold",
+     "title": "四天王",
+     "type": "Water",
+     "team": [
+      {
+       "species": "clawitzer",
+       "level": 63
+      },
+      {
+       "species": "starmie",
+       "level": 63
+      },
+      {
+       "species": "gyarados",
+       "level": 63
+      },
+      {
+       "species": "barbaracle",
+       "level": 65
+      }
+     ]
+    },
+    {
+     "order": 3,
+     "name": "雁铠",
+     "name_en": "Wikstrom",
+     "title": "四天王",
+     "type": "Steel",
+     "team": [
+      {
+       "species": "klefki",
+       "level": 63
+      },
+      {
+       "species": "probopass",
+       "level": 63
+      },
+      {
+       "species": "scizor",
+       "level": 63
+      },
+      {
+       "species": "aegislash",
+       "level": 65
+      }
+     ]
+    },
+    {
+     "order": 4,
+     "name": "朵拉塞娜",
+     "name_en": "Drasna",
+     "title": "四天王",
+     "type": "Dragon",
+     "team": [
+      {
+       "species": "dragalge",
+       "level": 63
+      },
+      {
+       "species": "altaria",
+       "level": 63
+      },
+      {
+       "species": "druddigon",
+       "level": 63
+      },
+      {
+       "species": "noivern",
+       "level": 65
+      }
+     ]
+    }
+   ],
+   "champion": {
+    "name": "卡露妮",
+    "name_en": "Diantha",
+    "title": "冠军",
+    "team": [
+     {
+      "species": "hawlucha",
+      "level": 64
+     },
+     {
+      "species": "tyrantrum",
+      "level": 65
+     },
+     {
+      "species": "aurorus",
+      "level": 65
+     },
+     {
+      "species": "gourgeist",
+      "level": 65
+     },
+     {
+      "species": "goodra",
+      "level": 66
+     },
+     {
+      "species": "gardevoir",
+      "level": 68
+     }
+    ]
+   }
+  },
+  "galar": {
+   "zh": "伽勒尔",
+   "version": "SwSh",
+   "gyms": [
+    {
+     "order": 1,
+     "location": "turffield",
+     "leader": "亚洛",
+     "leader_en": "Milo",
+     "title": "草路道馆",
+     "type": "Grass",
+     "badge": "草之徽章",
+     "badge_en": "Grass Badge",
+     "team": [
+      {
+       "species": "gossifleur",
+       "level": 19
+      },
+      {
+       "species": "eldegoss",
+       "level": 20
+      }
+     ]
+    },
+    {
+     "order": 2,
+     "location": "hulbury",
+     "leader": "露璃娜",
+     "leader_en": "Nessa",
+     "title": "水舟道馆",
+     "type": "Water",
+     "badge": "水之徽章",
+     "badge_en": "Water Badge",
+     "team": [
+      {
+       "species": "goldeen",
+       "level": 22
+      },
+      {
+       "species": "arrokuda",
+       "level": 23
+      },
+      {
+       "species": "drednaw",
+       "level": 24
+      }
+     ]
+    },
+    {
+     "order": 3,
+     "location": "motostoke",
+     "leader": "卡芜",
+     "leader_en": "Kabu",
+     "title": "机擎道馆",
+     "type": "Fire",
+     "badge": "火之徽章",
+     "badge_en": "Fire Badge",
+     "team": [
+      {
+       "species": "ninetales",
+       "level": 25
+      },
+      {
+       "species": "arcanine",
+       "level": 25
+      },
+      {
+       "species": "centiskorch",
+       "level": 27
+      }
+     ]
+    },
+    {
+     "order": 4,
+     "location": "stow-on-side",
+     "leader": "彩豆",
+     "leader_en": "Bea",
+     "title": "溯传道馆",
+     "type": "Fighting",
+     "badge": "格斗徽章",
+     "badge_en": "Fighting Badge",
+     "team": [
+      {
+       "species": "hitmontop",
+       "level": 34
+      },
+      {
+       "species": "pangoro",
+       "level": 34
+      },
+      {
+       "species": "sirfetchd",
+       "level": 35
+      },
+      {
+       "species": "machamp",
+       "level": 36
+      }
+     ]
+    },
+    {
+     "order": 5,
+     "location": "ballonlea",
+     "leader": "波普菈",
+     "leader_en": "Opal",
+     "title": "舞姿道馆",
+     "type": "Fairy",
+     "badge": "妖精徽章",
+     "badge_en": "Fairy Badge",
+     "team": [
+      {
+       "species": "weezinggalar",
+       "level": 36
+      },
+      {
+       "species": "mawile",
+       "level": 36
+      },
+      {
+       "species": "togekiss",
+       "level": 37
+      },
+      {
+       "species": "alcremie",
+       "level": 38
+      }
+     ]
+    },
+    {
+     "order": 6,
+     "location": "circhester",
+     "leader": "玛瓜",
+     "leader_en": "Gordie",
+     "title": "战竞道馆",
+     "type": "Rock",
+     "badge": "岩石徽章",
+     "badge_en": "Rock Badge",
+     "team": [
+      {
+       "species": "barbaracle",
+       "level": 40
+      },
+      {
+       "species": "shuckle",
+       "level": 40
+      },
+      {
+       "species": "stonjourner",
+       "level": 41
+      },
+      {
+       "species": "coalossal",
+       "level": 42
+      }
+     ]
+    },
+    {
+     "order": 7,
+     "location": "spikemuth",
+     "leader": "聂梓",
+     "leader_en": "Piers",
+     "title": "尖钉道馆",
+     "type": "Dark",
+     "badge": "恶之徽章",
+     "badge_en": "Dark Badge",
+     "team": [
+      {
+       "species": "scrafty",
+       "level": 44
+      },
+      {
+       "species": "malamar",
+       "level": 44
+      },
+      {
+       "species": "skuntank",
+       "level": 44
+      },
+      {
+       "species": "obstagoon",
+       "level": 46
+      }
+     ]
+    },
+    {
+     "order": 8,
+     "location": "hammerlocke",
+     "leader": "奇巴纳",
+     "leader_en": "Raihan",
+     "title": "宫门道馆",
+     "type": "Dragon",
+     "badge": "龙之徽章",
+     "badge_en": "Dragon Badge",
+     "team": [
+      {
+       "species": "flygon",
+       "level": 46
+      },
+      {
+       "species": "sandaconda",
+       "level": 46
+      },
+      {
+       "species": "gigalith",
+       "level": 47
+      },
+      {
+       "species": "duraludon",
+       "level": 48
+      }
+     ]
+    }
+   ],
+   "elite4": [
+    {
+     "order": 1,
+     "name": "玛俐",
+     "name_en": "Marnie",
+     "title": "冠军杯",
+     "type": "Dark",
+     "team": [
+      {
+       "species": "morpeko",
+       "level": 50
+      },
+      {
+       "species": "liepard",
+       "level": 50
+      },
+      {
+       "species": "toxicroak",
+       "level": 51
+      },
+      {
+       "species": "scrafty",
+       "level": 51
+      },
+      {
+       "species": "grimmsnarl",
+       "level": 52
+      }
+     ]
+    },
+    {
+     "order": 2,
+     "name": "彼特",
+     "name_en": "Bede",
+     "title": "冠军杯",
+     "type": "Fairy",
+     "team": [
+      {
+       "species": "mawile",
+       "level": 51
+      },
+      {
+       "species": "rapidashgalar",
+       "level": 51
+      },
+      {
+       "species": "gardevoir",
+       "level": 52
+      },
+      {
+       "species": "hatterene",
+       "level": 53
+      }
+     ]
+    },
+    {
+     "order": 3,
+     "name": "赫普",
+     "name_en": "Hop",
+     "title": "冠军杯",
+     "type": "Normal",
+     "team": [
+      {
+       "species": "dubwool",
+       "level": 52
+      },
+      {
+       "species": "corviknight",
+       "level": 52
+      },
+      {
+       "species": "pincurchin",
+       "level": 52
+      },
+      {
+       "species": "snorlax",
+       "level": 53
+      }
+     ]
+    },
+    {
+     "order": 4,
+     "name": "奇巴纳",
+     "name_en": "Raihan",
+     "title": "冠军杯",
+     "type": "Dragon",
+     "team": [
+      {
+       "species": "flygon",
+       "level": 52
+      },
+      {
+       "species": "sandaconda",
+       "level": 52
+      },
+      {
+       "species": "gigalith",
+       "level": 53
+      },
+      {
+       "species": "duraludon",
+       "level": 54
+      }
+     ]
+    }
+   ],
+   "champion": {
+    "name": "丹帝",
+    "name_en": "Leon",
+    "title": "冠军",
+    "team": [
+     {
+      "species": "aegislash",
+      "level": 62
+     },
+     {
+      "species": "haxorus",
+      "level": 62
+     },
+     {
+      "species": "rhyperior",
+      "level": 62
+     },
+     {
+      "species": "dragapult",
+      "level": 62
+     },
+     {
+      "species": "rillaboom",
+      "level": 63
+     },
+     {
+      "species": "charizard",
+      "level": 64
+     }
+    ]
+   }
+  },
+  "alola": {
+   "zh": "阿罗拉",
+   "version": "USUM",
+   "gyms": [
+    {
+     "order": 1,
+     "location": "verdant-cavern",
+     "leader": "伊利马",
+     "leader_en": "Ilima",
+     "title": "考验",
+     "type": "Normal",
+     "badge": "一般Z",
+     "badge_en": "Normalium Z",
+     "team": [
+      {
+       "species": "yungoos",
+       "level": 10
+      },
+      {
+       "species": "gumshoos",
+       "level": 12
+      }
+     ]
+    },
+    {
+     "order": 2,
+     "location": "iki-town",
+     "leader": "哈拉",
+     "leader_en": "Hala",
+     "title": "大考验",
+     "type": "Fighting",
+     "badge": "格斗Z",
+     "badge_en": "Fightinium Z",
+     "team": [
+      {
+       "species": "mankey",
+       "level": 14
+      },
+      {
+       "species": "makuhita",
+       "level": 14
+      },
+      {
+       "species": "crabrawler",
+       "level": 16
+      }
+     ]
+    },
+    {
+     "order": 3,
+     "location": "brooklet-hill",
+     "leader": "水莲",
+     "leader_en": "Lana",
+     "title": "考验",
+     "type": "Water",
+     "badge": "水Z",
+     "badge_en": "Waterium Z",
+     "team": [
+      {
+       "species": "dewpider",
+       "level": 18
+      },
+      {
+       "species": "wishiwashi",
+       "level": 20
+      }
+     ]
+    },
+    {
+     "order": 4,
+     "location": "wela-volcano-park",
+     "leader": "卡奇",
+     "leader_en": "Kiawe",
+     "title": "考验",
+     "type": "Fire",
+     "badge": "火Z",
+     "badge_en": "Firium Z",
+     "team": [
+      {
+       "species": "salandit",
+       "level": 20
+      },
+      {
+       "species": "salazzle",
+       "level": 22
+      }
+     ]
+    },
+    {
+     "order": 5,
+     "location": "lush-jungle",
+     "leader": "玛奥",
+     "leader_en": "Mallow",
+     "title": "考验",
+     "type": "Grass",
+     "badge": "草Z",
+     "badge_en": "Grassium Z",
+     "team": [
+      {
+       "species": "fomantis",
+       "level": 22
+      },
+      {
+       "species": "lurantis",
+       "level": 24
+      }
+     ]
+    },
+    {
+     "order": 6,
+     "location": "konikoni-city",
+     "leader": "丽姿",
+     "leader_en": "Olivia",
+     "title": "大考验",
+     "type": "Rock",
+     "badge": "岩石Z",
+     "badge_en": "Rockium Z",
+     "team": [
+      {
+       "species": "nosepass",
+       "level": 26
+      },
+      {
+       "species": "boldore",
+       "level": 26
+      },
+      {
+       "species": "lycanroc",
+       "level": 28
+      }
+     ]
+    },
+    {
+     "order": 7,
+     "location": "mount-hokulani",
+     "leader": "马玛内",
+     "leader_en": "Sophocles",
+     "title": "考验",
+     "type": "Electric",
+     "badge": "电Z",
+     "badge_en": "Electrium Z",
+     "team": [
+      {
+       "species": "charjabug",
+       "level": 27
+      },
+      {
+       "species": "togedemaru",
+       "level": 28
+      },
+      {
+       "species": "vikavolt",
+       "level": 29
+      }
+     ]
+    },
+    {
+     "order": 8,
+     "location": "thrifty-megamart",
+     "leader": "阿塞萝拉",
+     "leader_en": "Acerola",
+     "title": "考验",
+     "type": "Ghost",
+     "badge": "幽灵Z",
+     "badge_en": "Ghostium Z",
+     "team": [
+      {
+       "species": "gengar",
+       "level": 32
+      },
+      {
+       "species": "mimikyu",
+       "level": 33
+      }
+     ]
+    },
+    {
+     "order": 9,
+     "location": "malie-city",
+     "leader": "默丹",
+     "leader_en": "Nanu",
+     "title": "大考验",
+     "type": "Dark",
+     "badge": "恶Z",
+     "badge_en": "Darkinium Z",
+     "team": [
+      {
+       "species": "sableye",
+       "level": 38
+      },
+      {
+       "species": "krokorok",
+       "level": 38
+      },
+      {
+       "species": "persian",
+       "level": 39
+      }
+     ]
+    },
+    {
+     "order": 10,
+     "location": "seafolk-village",
+     "leader": "哈普乌",
+     "leader_en": "Hapu",
+     "title": "大考验",
+     "type": "Ground",
+     "badge": "地面Z",
+     "badge_en": "Groundium Z",
+     "team": [
+      {
+       "species": "dugtrio",
+       "level": 47
+      },
+      {
+       "species": "gastrodon",
+       "level": 47
+      },
+      {
+       "species": "flygon",
+       "level": 47
+      },
+      {
+       "species": "mudsdale",
+       "level": 48
+      }
+     ]
+    },
+    {
+     "order": 11,
+     "location": "vast-poni-canyon",
+     "leader": "茉莉",
+     "leader_en": "Mina",
+     "title": "考验",
+     "type": "Fairy",
+     "badge": "妖精Z",
+     "badge_en": "Fairium Z",
+     "team": [
+      {
+       "species": "mawile",
+       "level": 49
+      },
+      {
+       "species": "ribombee",
+       "level": 51
+      }
+     ]
+    }
+   ],
+   "elite4": [
+    {
+     "order": 1,
+     "name": "哈拉",
+     "name_en": "Hala",
+     "title": "四天王",
+     "type": "Fighting",
+     "team": [
+      {
+       "species": "hariyama",
+       "level": 54
+      },
+      {
+       "species": "primeape",
+       "level": 54
+      },
+      {
+       "species": "bewear",
+       "level": 54
+      },
+      {
+       "species": "crabominable",
+       "level": 54
+      },
+      {
+       "species": "poliwrath",
+       "level": 55
+      }
+     ]
+    },
+    {
+     "order": 2,
+     "name": "丽姿",
+     "name_en": "Olivia",
+     "title": "四天王",
+     "type": "Rock",
+     "team": [
+      {
+       "species": "relicanth",
+       "level": 54
+      },
+      {
+       "species": "lycanroc",
+       "level": 54
+      },
+      {
+       "species": "golem",
+       "level": 54
+      },
+      {
+       "species": "probopass",
+       "level": 54
+      },
+      {
+       "species": "cradily",
+       "level": 55
+      }
+     ]
+    },
+    {
+     "order": 3,
+     "name": "阿塞萝拉",
+     "name_en": "Acerola",
+     "title": "四天王",
+     "type": "Ghost",
+     "team": [
+      {
+       "species": "sableye",
+       "level": 54
+      },
+      {
+       "species": "dhelmise",
+       "level": 54
+      },
+      {
+       "species": "froslass",
+       "level": 54
+      },
+      {
+       "species": "drifblim",
+       "level": 54
+      },
+      {
+       "species": "palossand",
+       "level": 55
+      }
+     ]
+    },
+    {
+     "order": 4,
+     "name": "卡希丽",
+     "name_en": "Kahili",
+     "title": "四天王",
+     "type": "Flying",
+     "team": [
+      {
+       "species": "skarmory",
+       "level": 54
+      },
+      {
+       "species": "crobat",
+       "level": 54
+      },
+      {
+       "species": "oricorio",
+       "level": 54
+      },
+      {
+       "species": "mandibuzz",
+       "level": 54
+      },
+      {
+       "species": "toucannon",
+       "level": 55
+      }
+     ]
+    }
+   ],
+   "champion": {
+    "name": "库库伊",
+    "name_en": "Kukui",
+    "title": "冠军",
+    "team": [
+     {
+      "species": "lycanroc",
+      "level": 57
+     },
+     {
+      "species": "magnezone",
+      "level": 57
+     },
+     {
+      "species": "braviary",
+      "level": 57
+     },
+     {
+      "species": "ninetales",
+      "level": 57
+     },
+     {
+      "species": "snorlax",
+      "level": 58
+     }
+    ]
+   }
+  }
+ }
+}

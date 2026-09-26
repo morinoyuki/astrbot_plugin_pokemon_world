@@ -1,0 +1,388 @@
+"""训练家档案:队伍 / 电脑 / 背包 / 金钱 / 徽章 / 图鉴 / 位置。"""
+
+from __future__ import annotations
+
+import os
+from typing import Any
+
+from .dex import get_dex
+from .engine import Pokemon, create_pokemon
+from .items import BAG_ITEMS, resolve_bag_item
+from .util import ensure_dir, read_json, safe_name, write_json_atomic
+
+MAX_PARTY = 6
+START_MONEY = 3000
+START_BAG = {"poke-ball": 5, "potion": 3, "antidote": 1}
+
+# 队伍字典里由本层维护、`Pokemon.to_dict()` 不认识的附加字段
+EXTRA_KEYS = ("id", "pending", "met_at", "met_level", "box_at")
+
+
+def dict_to_mon(d: dict) -> Pokemon:
+    return Pokemon.from_dict(d)
+
+
+def mon_to_dict(mon: Pokemon, prev: dict | None = None) -> dict:
+    """序列化并把附加字段(背包格的 id / 待学招式)带回来。"""
+    d = mon.to_dict()
+    if prev:
+        for k in EXTRA_KEYS:
+            if prev.get(k):
+                d[k] = prev[k]
+    return d
+
+
+class Trainer:
+    """单个玩家的存档(可变 dict 包装)。"""
+
+    def __init__(self, data: dict, uid: str = "", scope: str = ""):
+        self.data = data
+        self.uid = uid
+        self.scope = scope
+        self._fixup()
+
+    # ── 生命周期 ──
+    def _fixup(self) -> None:
+        d = self.data
+        d.setdefault("uid", self.uid)
+        d.setdefault("scope", self.scope)
+        d.setdefault("name", "训练家")
+        d.setdefault("money", START_MONEY)
+        d.setdefault("party", [])
+        d.setdefault("box", [])
+        d.setdefault("bag", {})
+        d.setdefault("badges", [])
+        d.setdefault("dex_seen", [])
+        d.setdefault("dex_caught", [])
+        d.setdefault("region", "kanto")
+        d.setdefault("location", "")
+        d.setdefault("visited", [])
+        d.setdefault("unlocked_regions", ["kanto"])
+        d.setdefault("flags", {})
+        d.setdefault("stats", {})
+        d.setdefault("created_at", 0)
+        d.setdefault("play_day", 0)
+        self._reindex()
+
+    def _reindex(self) -> None:
+        """确保每只都有稳定 id(离线/老存档补齐)。"""
+        used = set()
+        for p in self.party + self.box:
+            pid = str(p.get("id") or "")
+            if not pid or pid in used:
+                pid = f"m{len(used) + 1}"
+                while pid in used:
+                    pid += "x"
+                p["id"] = pid
+            used.add(pid)
+
+    # ── 基础属性 ──
+    @property
+    def name(self) -> str:
+        return str(self.data.get("name") or "训练家")
+
+    @property
+    def money(self) -> int:
+        return int(self.data.get("money", 0) or 0)
+
+    @property
+    def party(self) -> list[dict]:
+        return self.data["party"]
+
+    @property
+    def box(self) -> list[dict]:
+        return self.data["box"]
+
+    @property
+    def bag(self) -> dict[str, int]:
+        return self.data["bag"]
+
+    @property
+    def badges(self) -> list[str]:
+        return self.data["badges"]
+
+    @property
+    def region(self) -> str:
+        return str(self.data.get("region") or "kanto")
+
+    @property
+    def location(self) -> str:
+        return str(self.data.get("location") or "")
+
+    def flag(self, key: str, default: Any = False) -> Any:
+        return (self.data.get("flags") or {}).get(key, default)
+
+    def set_flag(self, key: str, value: Any = True) -> None:
+        self.data.setdefault("flags", {})[key] = value
+
+    def badge_count(self, region: str | None = None) -> int:
+        region = region or self.region
+        return sum(1 for b in self.badges if str(b).startswith(f"{region}:"))
+
+    def add_badge(self, region: str, order: int) -> bool:
+        key = f"{region}:{int(order)}"
+        if key in self.badges:
+            return False
+        self.badges.append(key)
+        return True
+
+    # ── 队伍 ──
+    def mon(self, index: int) -> Pokemon | None:
+        if 0 <= index < len(self.party):
+            return dict_to_mon(self.party[index])
+        return None
+
+    def commit(self, index: int, mon: Pokemon) -> None:
+        if 0 <= index < len(self.party):
+            self.party[index] = mon_to_dict(mon, self.party[index])
+
+    def party_mon(self) -> list[Pokemon]:
+        return [dict_to_mon(p) for p in self.party]
+
+    def first_healthy(self) -> int | None:
+        for i, p in enumerate(self.party):
+            if int(p.get("cur_hp", 0) or 0) > 0:
+                return i
+        return None
+
+    def all_fainted(self) -> bool:
+        return self.first_healthy() is None
+
+    def find(self, query: str) -> tuple[int, Pokemon] | None:
+        """按序号(从 1 开始)、昵称、物种中英文、id 找队伍成员。"""
+        dex = get_dex()
+        q = str(query or "").strip()
+        if not q:
+            return None
+        if q.isdigit():
+            i = int(q) - 1
+            if 0 <= i < len(self.party):
+                return i, dict_to_mon(self.party[i])
+            return None
+        nq = q.lower()
+        for i, p in enumerate(self.party):
+            pid = str(p.get("id") or "")
+            nick = str(p.get("nickname") or "")
+            if pid and pid.lower() == nq:
+                return i, dict_to_mon(p)
+            if nick and nick.lower() == nq:
+                return i, dict_to_mon(p)
+        resolved = dex.resolve_species(q)
+        if resolved:
+            for i, p in enumerate(self.party):
+                if p.get("species") == resolved[0]:
+                    return i, dict_to_mon(p)
+        for i, p in enumerate(self.party):
+            if nq and nq in str(p.get("nickname") or "").lower():
+                return i, dict_to_mon(p)
+        return None
+
+    def add_pokemon(self, mon: Pokemon, *, to_box: bool = False, day: int = 0) -> dict:
+        """入队(满 6 自动进电脑)。返回附加了 id 的字典。"""
+        d = mon.to_dict()
+        used = {str(p.get("id")) for p in self.party + self.box}
+        n = 1
+        while f"m{n}" in used:
+            n += 1
+        d["id"] = f"m{n}"
+        d["met_level"] = mon.level
+        d["met_at"] = int(day or 0)
+        if not to_box and len(self.party) < MAX_PARTY:
+            self.party.append(d)
+        else:
+            d["box_at"] = int(day or 0)
+            self.box.append(d)
+        self.mark_caught(mon.species)
+        return d
+
+    def remove_pokemon(self, index: int) -> Pokemon | None:
+        if not 0 <= index < len(self.party):
+            return None
+        d = self.party.pop(index)
+        if len(self.party) == 0 and self.box:
+            back = self.box.pop(0)
+            self.party.append(back)
+        return dict_to_mon(d)
+
+    def deposit(self, index: int) -> bool:
+        if len(self.party) <= 1 or not 0 <= index < len(self.party):
+            return False
+        d = self.party.pop(index)
+        self.box.append(d)
+        return True
+
+    def withdraw(self, ident: str) -> bool:
+        if len(self.party) >= MAX_PARTY:
+            return False
+        for i, p in enumerate(self.box):
+            if str(p.get("id")) == ident or str(p.get("nickname")) == ident:
+                self.party.append(self.box.pop(i))
+                return True
+        return False
+
+    # ── 背包 / 金钱 ──
+    def add_item(self, key: str, n: int = 1) -> int:
+        r = resolve_bag_item(key)
+        k = r[0] if r else key
+        self.bag[k] = int(self.bag.get(k, 0)) + max(0, int(n))
+        if self.bag[k] <= 0:
+            self.bag.pop(k, None)
+        return int(self.bag.get(k, 0))
+
+    def count(self, key: str) -> int:
+        r = resolve_bag_item(key)
+        return int(self.bag.get(r[0] if r else key, 0) or 0)
+
+    def take_item(self, key: str, n: int = 1) -> bool:
+        r = resolve_bag_item(key)
+        k = r[0] if r else key
+        have = int(self.bag.get(k, 0) or 0)
+        if have < n:
+            return False
+        left = have - n
+        if left:
+            self.bag[k] = left
+        else:
+            self.bag.pop(k, None)
+        return True
+
+    def bag_items(self) -> list[tuple[str, dict, int]]:
+        out = []
+        for k, n in sorted(self.bag.items()):
+            entry = BAG_ITEMS.get(k)
+            if entry and n:
+                out.append((k, entry, int(n)))
+        return out
+
+    def add_money(self, n: int) -> int:
+        self.data["money"] = max(0, self.money + int(n))
+        return self.data["money"]
+
+    def spend_money(self, n: int) -> bool:
+        if self.money < n:
+            return False
+        self.data["money"] = self.money - int(n)
+        return True
+
+    # ── 图鉴 ──
+    def mark_seen(self, species: str) -> None:
+        if species and species not in self.data["dex_seen"]:
+            self.data["dex_seen"].append(species)
+
+    def mark_caught(self, species: str) -> None:
+        self.mark_seen(species)
+        if species and species not in self.data["dex_caught"]:
+            self.data["dex_caught"].append(species)
+
+    def seen(self, species: str) -> bool:
+        return species in self.data["dex_seen"]
+
+    def caught(self, species: str) -> bool:
+        return species in self.data["dex_caught"]
+
+    # ── 治疗 ──
+    def heal_party(self) -> int:
+        n = 0
+        for i, p in enumerate(self.party):
+            mon = dict_to_mon(p)
+            mon.full_heal()
+            self.party[i] = mon_to_dict(mon, p)
+            n += 1
+        return n
+
+    def party_summary_count(self) -> dict:
+        return {
+            "party": len(self.party),
+            "box": len(self.box),
+            "alive": sum(1 for p in self.party if int(p.get("cur_hp", 0) or 0) > 0),
+            "caught": len(self.data["dex_caught"]),
+            "seen": len(self.data["dex_seen"]),
+        }
+
+
+def new_trainer(
+    uid: str,
+    scope: str,
+    name: str,
+    *,
+    region: str = "kanto",
+    starter: str = "",
+    day: int = 0,
+    now: int = 0,
+) -> Trainer:
+    """创建新训练家:位置为地区起始城镇,初始金钱/背包/御三家。"""
+    from .world import WorldMap
+
+    world = WorldMap()
+    start = world.start_location(region)
+    data = {
+        "uid": uid,
+        "scope": scope,
+        "name": (name or "训练家").strip()[:16],
+        "money": START_MONEY,
+        "party": [],
+        "box": [],
+        "bag": dict(START_BAG),
+        "badges": [],
+        "dex_seen": [],
+        "dex_caught": [],
+        "region": region,
+        "location": start,
+        "visited": [start] if start else [],
+        "unlocked_regions": [region],
+        "flags": {},
+        "created_at": int(now or 0),
+        "play_day": int(day or 0),
+    }
+    t = Trainer(data, uid=uid, scope=scope)
+    if starter:
+        mon = create_pokemon(starter, level=5)
+        # 初始伙伴亲密度更高、性别/性格随机已由 create_pokemon 决定
+        mon.friendship = 120
+        t.add_pokemon(mon, day=day)
+    return t
+
+
+class TrainerStore:
+    """按 scope(群/私聊)分目录、uid 分文件的训练家存档。"""
+
+    def __init__(self, data_dir: str):
+        self._root = ensure_dir(os.path.join(data_dir, "pokemon_world"))
+
+    def _scope_dir(self, scope: str) -> str:
+        return ensure_dir(os.path.join(self._root, safe_name(scope)))
+
+    def _path(self, scope: str, uid: str) -> str:
+        return os.path.join(self._scope_dir(scope), f"{safe_name(uid)}.json")
+
+    def load(self, scope: str, uid: str) -> dict:
+        return read_json(self._path(scope, uid)) or {}
+
+    def save(self, scope: str, uid: str, data: dict) -> None:
+        write_json_atomic(self._path(scope, uid), data)
+
+    def exists(self, scope: str, uid: str) -> bool:
+        return os.path.exists(self._path(scope, uid))
+
+    def delete(self, scope: str, uid: str) -> bool:
+        p = self._path(scope, uid)
+        if os.path.exists(p):
+            os.remove(p)
+            return True
+        return False
+
+    def list_players(self, scope: str) -> list[str]:
+        d = self._scope_dir(scope)
+        return sorted(
+            f[:-5] for f in os.listdir(d) if f.endswith(".json") and not f.startswith("_")
+        )
+
+    def delete_scope(self, scope: str) -> int:
+        import shutil
+
+        d = os.path.join(self._root, safe_name(scope))
+        if not os.path.isdir(d):
+            return 0
+        n = len([f for f in os.listdir(d) if f.endswith(".json")])
+        shutil.rmtree(d, ignore_errors=True)
+        return n
