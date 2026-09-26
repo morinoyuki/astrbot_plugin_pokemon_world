@@ -1695,7 +1695,8 @@ def render_trainer_card(
             ("金钱", f"{int(info.get('money') or 0):,}₽"),
             ("地区", str(info.get("region") or "?")),
             ("当前", str(info.get("location") or "?")),
-            ("第几天", f"{info.get('play_day') or 0} 天"),
+            ("旅程", f"{info.get('play_day') or 0} 天"),   # 玩家自己的旅程天数
+
             ("步数", f"{int(info.get('steps') or 0):,}"),
         ]
         for i, (k, v) in enumerate(rows):

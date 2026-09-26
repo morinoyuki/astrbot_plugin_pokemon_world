@@ -639,7 +639,7 @@ def build_prompt(trainer, day: int, want: int) -> str:
         for m in trainer.party[:6]
     )
     return (
-        f"游戏日:第 {day} 天\n"
+        f"世界日:第 {trainer.day_no(day)} 天\n"
         f"玩家:{trainer.name}\n"
         f"所在地区:{world.region_zh(trainer.region)}"
         f"(第 {int(world.regions.get(trainer.region, {}).get('order') or 1)} 地区)\n"

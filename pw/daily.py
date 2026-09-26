@@ -179,6 +179,9 @@ def today_brief(state: WorldState, *, region: str = "", location: str = "") -> s
         lines.append("🌍 世界动态:风平浪静。")
     locks = state.data.get("locks") or {}
     if locks:
-        names = [f"{world.node_zh(k)}(第{v}天解除)" for k, v in list(locks.items())[:5]]
+        names = [
+            f"{world.node_zh(k)}(还有 {max(1, int(v) - int(state.day))} 天)"
+            for k, v in list(locks.items())[:5]
+        ]
         lines.append("🚧 封锁中:" + "、".join(names))
     return "\n".join(lines)

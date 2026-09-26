@@ -18,7 +18,7 @@ from astrbot.api import logger
 
 from .dex import _norm, get_dex
 from .items import resolve_item
-from .util import clamp
+from .util import clamp, game_day
 
 _STATIC = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
 
@@ -756,7 +756,8 @@ class WorldMap:
         # 事件封锁
         lock = (locked_until or {}).get(target)
         if lock is not None and not by_fly:
-            return False, f"🚫 这里暂时无法进入(事件封锁中,第 {lock} 天解除)。"
+            left = max(1, int(lock) - game_day())
+            return False, f"🚫 这里暂时无法进入(事件封锁中,还有 {left} 天解除)。"
         # 徽章门槛(危险度)。
         # 关键:must 保证玩家永远能走到"下一个道馆"。maps.json 的 tier 是按路线
         # 名次启发式生成的,道馆城镇的 tier 并不等于"第几枚徽章"(关都:深灰2 /

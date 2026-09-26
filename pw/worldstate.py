@@ -48,6 +48,9 @@ class WorldState:
         d = self.data
         d.setdefault("scope", self.scope)
         d.setdefault("day", game_day())
+        # 世界开服那天(绝对天数序号)。`game_day()` 是 **ordinal**(0001-01-01 起算),
+        # 直接给玩家看就是"第 739885 天"这种鬼数字 —— 展示一律用 day_no(相对天数)。
+        d.setdefault("started_day", int(d.get("day") or game_day()))
         d.setdefault("last_roll_day", 0)
         d.setdefault("weather", {})
         d.setdefault("events", [])
@@ -63,6 +66,16 @@ class WorldState:
     @property
     def day(self) -> int:
         return int(self.data.get("day") or game_day())
+
+    def day_no(self, day: int | None = None) -> int:
+        """把绝对天数序号换成**面向玩家的第 N 天**(世界开服那天 = 第 1 天)。
+
+        内部逻辑(比对 last_roll_day、事件 until_day、天气)全部继续用绝对序号,
+        只有展示走这里。
+        """
+        target = int(self.day if day is None else day)
+        started = int(self.data.get("started_day") or target)
+        return max(1, target - started + 1)
 
     @property
     def modifiers(self) -> dict:
@@ -198,7 +211,11 @@ class WorldState:
     # ── 记录 ──
     def add_day_log(self, text: str, *, day: int | None = None) -> None:
         logs = self.data.setdefault("day_log", [])
-        logs.append({"day": int(day or self.day), "text": str(text)})
+        logs.append({
+            "day": int(day or self.day),
+            "day_no": self.day_no(day),   # 展示/喂给 LLM 都用相对天数
+            "text": str(text),
+        })
         del logs[:-14]
 
     def recent_log(self, n: int = 5) -> list[dict]:

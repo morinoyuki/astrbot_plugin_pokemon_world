@@ -1310,3 +1310,98 @@ def test_loss_without_any_visited_hub_falls_back_to_start():
         if res.finished:
             break
     assert t.data["location"] == world.start_location("kanto")
+
+
+def test_day_number_display_is_relative_not_ordinal():
+    """展示一律用"第 N 天",不能把内部 ordinal 直接给玩家看。
+
+    `game_day()` 返回的是 `date.toordinal()`(0001-01-01 起算),
+    所以 2026-09-26 是 **739885** —— 直接显示就是"第 739885 天"。
+    """
+    from pw.util import game_day
+    from pw.worldstate import WorldState
+
+    today = game_day()
+    assert today > 700000, "内部序号确实是大数字(逻辑依赖它,不能改)"
+
+    st = WorldState({"day": today}, "g1")
+    assert st.day_no() == 1, "世界开服当天应当是第 1 天"
+    assert st.data["started_day"] == today
+    assert st.day_no(today + 9) == 10
+    assert st.day_no(today - 5) == 1, "回拨也不会出现 0 或负数"
+
+    # 旧存档没有 started_day 时也要能算(Fixup 会补上)
+    st2 = WorldState({"day": today - 3}, "g2")
+    assert st2.day_no(today) == 4
+
+
+def test_trainer_day_number_counts_from_creation():
+    from pw.player import new_trainer
+    from pw.util import game_day
+
+    # 注意要传 day:真实调用点(main.py)传的是 game_day()
+    t = new_trainer("u1", "g1", "小智", starter="新叶喵", day=game_day())
+    assert t.day_no() == 1
+    assert t.day_no(game_day() + 6) == 7
+    # 没有 play_day 的老存档 → 退回 1,不崩
+    t.data.pop("play_day", None)
+    assert t.day_no() == 1
+
+
+def test_no_command_leaks_ordinal_day_number():
+    """指令输出里不能出现"第 739885 天"这种 6 位数的"第 N 天"。"""
+    import re
+
+    import tests.test_commands as tc
+    from pw.util import game_day
+
+    with tempfile.TemporaryDirectory() as tmp:
+        p = tc._Cmd(tmp)
+        p.config = {"ui_image": False, "quest_enable": False, "announce_events": True}
+        ev = tc._Event("/开始 小智 新叶喵")
+        tc.run_cmd(p, ev, p.cmd_start)
+        t = p._load(ev)
+        st = p._state(t.scope)
+        st.data["started_day"] = game_day() - 9
+        st.data["last_roll_day"] = game_day() - 1
+        p._save_state(st)
+        p._save(t)
+
+        pat = re.compile(r"第\s*(\d{4,})\s*天")
+        for cmd, name in (
+            ("/状态", "cmd_status"),
+            ("/今日", "cmd_today"),
+            ("/队伍", "cmd_team"),
+            ("/地图", "cmd_map"),
+            ("/任务", "cmd_quest"),
+        ):
+            ev2 = tc._Event(cmd)
+            tc.run_cmd(p, ev2, getattr(p, name))
+            out = "".join(ev2.outputs)
+            hits = pat.findall(out)
+            assert not hits, f"{cmd} 泄漏了绝对天数:{hits}"
+
+
+def test_lock_message_shows_remaining_days():
+    """封锁提示要给"还有几天",而不是绝对天数序号。"""
+    from pw.player import new_trainer
+    from pw.util import game_day
+    from pw.world import WorldMap
+
+    world = WorldMap()
+    t = new_trainer("u1", "g1", "小智", starter="新叶喵")
+    t.data["region"] = "kanto"
+    t.data["location"] = "pewter-city"
+    t.data["visited"] = ["pallet-town", "viridian-city", "pewter-city"]
+    t.data["unlocked_regions"] = ["kanto"]
+    # 把深灰市封到 3 天后
+    target = "pallet-town"
+    t.data["location"] = "viridian-city"
+    t.data["locks"] = {}  # 世界锁由 state 管,这里直接验证 world.travel_check 的文案
+    from pw.worldstate import WorldState
+
+    st = WorldState({"day": game_day(), "locks": {target: game_day() + 2}}, "g1")
+    ok, msg = world.travel_check(t, target, locked_until=st.data.get("locks"))
+    assert not ok
+    assert "还有" in msg and "天" in msg, msg
+    assert str(game_day() + 2) not in msg, f"不该出现绝对天数:{msg}"

@@ -115,6 +115,18 @@ class Trainer:
     def set_flag(self, key: str, value: Any = True) -> None:
         self.data.setdefault("flags", {})[key] = value
 
+    def day_no(self, day: int | None = None) -> int:
+        """玩家自己的第 N 天(创建那天 = 第 1 天)。
+
+        `play_day` 存的是**绝对天数序号**(ordinal),直接显示就是"第 739885 天"。
+        """
+        from .util import game_day
+
+        start = int(self.data.get("play_day") or 0)
+        if not start:
+            return 1
+        return max(1, int(day if day is not None else game_day()) - start + 1)
+
     def badge_count(self, region: str | None = None) -> int:
         region = region or self.region
         return sum(1 for b in self.badges if str(b).startswith(f"{region}:"))

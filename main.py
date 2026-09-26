@@ -255,7 +255,11 @@ class PokemonWorldPlugin(Star):
                 for e in res["world_events"]
             ]
             if wl and self._cfg_bool("announce_events", True):
-                lines.append(f"📅 第 {day} 天({game_day_str(day)})开始了。")
+                # 展示用**相对天数**:game_day() 是 ordinal,直接显示会出现
+                # "第 739885 天"这种鬼数字(用户报告)。内部逻辑仍用绝对序号。
+                lines.append(
+                    f"📅 世界第 {state.day_no(day)} 天({game_day_str(day)})开始了。"
+                )
                 lines += wl
         pe = D.deliver_player_events(trainer, state)
         if pe:
@@ -1407,14 +1411,16 @@ class PokemonWorldPlugin(Star):
             facts = [EV.event_text(e) for e in state.active_events()]
             rep = await nar.say(
                 NARRATE_EVENT_SYSTEM,
-                narration_facts("今日世界速报", facts, extra=f"第 {state.day} 天"),
+                narration_facts(
+                    "今日世界速报", facts, extra=f"第 {state.day_no()} 天"
+                ),
                 fallback="",
             )
             if rep.text and not rep.used_fallback:
                 text += "\n\n📰 " + rep.text
         state2 = self._state(t.scope)
         locks = [
-            f"{WorldMap().node_zh(k)}(第{int(v)}天解除)"
+            f"{WorldMap().node_zh(k)}(还有 {max(1, int(v) - state2.day)} 天解除)"
             for k, v in (state2.data.get("locks") or {}).items()
         ]
         pe_lines = [
@@ -1426,7 +1432,7 @@ class PokemonWorldPlugin(Star):
         async for r in self._emit_ui(
             event, "news",
             lambda: UII.render_news(
-                state2.day,
+                state2.day_no(),
                 world_events=[EV.event_text(e) for e in state2.active_events()],
                 player_events=pe_lines,
                 weather_zh=state2.weather_for(t.region),
@@ -1469,7 +1475,7 @@ class PokemonWorldPlugin(Star):
                      max(1, int((q.get("objective") or {}).get("count") or 1)))
                     for q in acts
                 ],
-                day=self._state(t.scope).day,
+                day=t.day_no(self._state(t.scope).day),   # 展示用相对天数
                 region_zh=WorldMap().region_zh(t.region),
                 done_count=len(QT.completed_ids(t)),
                 max_active=QT.MAX_ACTIVE,
@@ -1567,7 +1573,8 @@ class PokemonWorldPlugin(Star):
             f" · 🎒 {sum(t.bag.values())} 件道具",
             f"📖 图鉴:见到 {len(t.data['dex_seen'])} / 捕获 {len(t.data['dex_caught'])}"
             f" · 电脑 {len(t.box)} 只",
-            f"👟 步数 {t.data.get('steps', 0)} · 第 {game_day()} 天({game_day_str()})",
+            f"👟 步数 {t.data.get('steps', 0)}"
+            f" · 旅程第 {t.day_no()} 天({game_day_str()})",
         ]
         cur = story.current_stage(t)
         if cur:
@@ -1736,7 +1743,9 @@ class PokemonWorldPlugin(Star):
         send = getattr(self.context, "send_message", None)
         if send is None:
             return
-        head = f"🌅 第 {state.day} 天开始了({game_day_str(state.day)})"
+        head = (
+            f"🌅 世界第 {state.day_no()} 天开始了({game_day_str(state.day)})"
+        )
         body = "\n".join(f"· {EV.event_text(e)}" for e in res["world_events"])
         try:
             await send(umo, [Plain(f"{head}\n{body}\n\n输入 `/今日` 查看详情。")])
@@ -1873,7 +1882,8 @@ class PokemonWorldPlugin(Star):
                     world.region_zh(t.region), sites,
                     caught=caught_keys, ready=ready_keys, locked=locked_keys,
                     badges=t.badge_count(), total_gyms=len(world.gyms(t.region)) or 8,
-                    champion=bool(t.flag(f"champion:{t.region}")), day=state.day,
+                    champion=bool(t.flag(f"champion:{t.region}")),
+                    day=t.day_no(state.day),
                     scale=self._img_scale(),
                 ),
                 text=legendary.panel_text(t, world=world, day=state.day),

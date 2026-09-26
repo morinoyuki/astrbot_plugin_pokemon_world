@@ -423,7 +423,7 @@ def build_world_prompt(state, day: int, players: list[dict]) -> str:
         "effects 可用键与范围:encounter_mult 0.5~3.0, rare_mult 1.0~5.0, "
         "money_mult 0.5~3.0, shop_discount 0.5~0.95, battle_weather(sun/rain/sand/snow)",
         f"最近 {len(history)} 天记录:"
-        + ("; ".join(f"第{h['day']}天 {h['text']}" for h in history) or "无"),
+        + ("; ".join(f"第{h.get('day_no', h['day'])}天 {h['text']}" for h in history) or "无"),
         "仍在生效的事件:"
         + ("; ".join(event_text(e) for e in active) or "无"),
         "玩家概况:",
