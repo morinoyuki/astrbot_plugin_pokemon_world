@@ -126,9 +126,12 @@ MY_SCALE = 1.05
 # 之前固定 4 行 + 每行 10px = 40px,而框内只有 38px,长文本会顶破边框。
 MSG_EDGE_X = (2, 238)
 MSG_BOTTOM = 158
-MSG_TOP_MAX = 88          # 再往上长就会压住精灵/血条
+# 上限必须在我方信息框(MY_BOX)底边**之下** —— 旧值 88 在 68~110 的框里,
+# 于是长战报把对话框一路顶到我方血条/经验条上面(实测 6 行时完全盖住)。
+# 取 MY_BOX 底边 +2 作为硬上限:放得下 4 行(审计代理实测真实对局最多 4 行)。
+MSG_TOP_MAX = MY_BOX[3] + 2       # = 112
 MSG_LINE_H = 9.6          # 逻辑行高
-MSG_MAX_LINES = int((MSG_BOTTOM - 4 - MSG_TOP_MAX) // MSG_LINE_H)
+MSG_MAX_LINES = max(1, int((MSG_BOTTOM - 4 - MSG_TOP_MAX) // MSG_LINE_H))
 
 
 @lru_cache(maxsize=16)
@@ -363,7 +366,8 @@ def render_battle(
         shown_lines = wrapped[-MSG_MAX_LINES:] or [""]
         box_h = 7 + len(shown_lines) * MSG_LINE_H + 2
         my1 = MSG_BOTTOM
-        my0 = int(my1 - box_h)
+        # 双保险:即使行数算多了也不许长到我方信息框上面
+        my0 = max(int(my1 - box_h), MSG_TOP_MAX)
 
         # ── 对话框(暗红框 + 青绿底)──
         d.rounded_rectangle([mx0, my0, mx1, my1], radius=4, fill=MSG_FRAME)

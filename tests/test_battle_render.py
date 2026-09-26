@@ -9,6 +9,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+import io
 from io import BytesIO
 
 from PIL import Image, ImageStat
@@ -200,3 +201,33 @@ def test_sprite_scale_differs_by_side_and_keeps_relative_size():
     assert size("gyarados", br.MY_SCALE, (92, 96), True)[0] > size(
         "gyarados", br.FOE_SCALE, (64, 58), False
     )[0]
+
+
+def test_message_box_never_covers_player_panel():
+    """长战报不能让对话框长到我方信息框(血条/经验条)上面。
+
+    对话框高度自适应之后,6 行的上限一度设在 y=88 —— 那已经在我方框(68~110)内部,
+    实测长战报会把 HP/EXP 条整块盖住。上限必须是 MY_BOX 底边之下。
+    """
+    from PIL import Image
+
+    from pw import battle_render as BR
+
+    assert BR.MY_BOX[3] < BR.MSG_TOP_MAX, "对话框上限必须低于我方信息框底边"
+
+    my = {"species": "gyarados", "name": "暴鲤龙", "level": 50, "cur_hp": 150,
+          "max_hp": 170}
+    foe = {"species": "mewtwo", "name": "超梦", "level": 70, "cur_hp": 200,
+           "max_hp": 253}
+    long_line = "暴鲤龙 使用了 水流喷射!效果绝佳!对手的 超梦 倒下了!这行刻意写得很长"
+    for count in (1, 2, 3, 4, 5, 6, 8):
+        data = BR.render_battle(my, foe, [long_line] * count, scale=3)
+        im = Image.open(io.BytesIO(data)).convert("RGB")
+        # 我方信息框区域内不得出现对话框边框色
+        inside = sum(
+            1
+            for y in range(BR.MY_BOX[1] * 3, BR.MY_BOX[3] * 3)
+            for x in range(BR.MY_BOX[0] * 3, BR.MY_BOX[2] * 3)
+            if im.getpixel((x, y)) == BR.MSG_FRAME
+        )
+        assert inside == 0, f"{count} 行时对话框压住了我方信息框({inside} 像素)"
