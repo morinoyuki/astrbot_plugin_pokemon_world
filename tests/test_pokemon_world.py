@@ -1181,3 +1181,38 @@ def test_sprite_lookup_does_not_break_normal_forms():
         ("zygardecomplete", "zygardecomplete.png"),
     ):
         assert sprite_path(key).endswith(expect), key
+
+
+def test_cross_region_travel_requires_championship():
+    """跨地区的唯一条件是该地区冠军旗标 —— 不能有"读了永远为假"的死条件。
+
+    原实现写成 `champion:{region} or port:{region}`,而 `port:` 全仓库没有赋值点,
+    提示文字却承诺"可以从港口乘船"。现在提示与实现一致。
+    """
+    import subprocess
+
+    from pw.player import new_trainer
+    from pw.world import WorldMap
+
+    world = WorldMap()
+    t = new_trainer("u1", "g1", "小智", starter="新叶喵")
+    t.data["location"] = "pallet-town"
+    t.data["region"] = "kanto"
+    t.data["visited"] = ["pallet-town"]
+    # 未通关 → 不能跨地区
+    ok, msg = world.travel_check(t, "goldenrod-city")
+    assert not ok
+    assert "冠军" in msg and "港口" not in msg, msg
+    # 通关 + 该地区已开放 → 不再被"通行证"规则拦下
+    t.set_flag("champion:kanto", True)
+    t.data["unlocked_regions"] = ["kanto", "johto"]
+    _ok2, msg2 = world.travel_check(t, "goldenrod-city")
+    assert "跨地区需要" not in msg2, msg2
+
+    # 代码里不应当再出现"读取但从不设置"的 port 旗标
+    # 只看代码里的旗标读取(带引号的字面量),注释不算
+    src = subprocess.run(
+        ["grep", "-rn", '"port:', "--include=*.py", "pw", "main.py"],
+        capture_output=True, text=True, cwd=".",
+    ).stdout
+    assert not src.strip(), f"port: 仍是死条件:{src}"

@@ -740,13 +740,16 @@ class WorldMap:
                     f" —— 先拿下{self.region_zh(region)}更多徽章"
                     f"(当前 {trainer.badge_count(region)} 枚)。",
                 )
-        # 跨地区:只能从枢纽(联赛/港口)出发,且需要冠军旗标
+        # 跨地区:只能从枢纽(联赛)出发,且需要该地区的冠军旗标。
+        # 这里原来还有一个 `port:{region}` 备选条件,但全仓库**没有任何地方设置它**
+        # (只有这一处读取)→ 死分支:玩家永远看不到"从港口乘船"这条路,
+        # 提示文字却在承诺它。已删除,改为与实现一致的说法。
         cur_region = self.region_of(cur)
-        has_pass = trainer.flag(f"champion:{cur_region}") or trainer.flag(
-            f"port:{cur_region}"
-        )
-        if region != cur_region and not has_pass:
-            return False, "🚢 跨地区需要先通关当前地区(或从港口乘船)。"
+        if region != cur_region and not trainer.flag(f"champion:{cur_region}"):
+            return False, (
+                f"🚢 跨地区需要先成为{self.region_zh(cur_region)}冠军"
+                "(通关当地联盟)。"
+            )
         if by_fly:
             if not self.can_fly(trainer):
                 return False, "🚁 你还没有飞行许可(同一地区集齐 3 枚徽章后开放)。"
