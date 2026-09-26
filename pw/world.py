@@ -808,6 +808,22 @@ class WorldMap:
         for k in sorted(pool, key=len):
             if nq == _norm(k) or nq == _norm(self.node_zh(k)):
                 return k
+        # 道路/水路必须**按编号精确匹配**:上游中文名是"31号道路",
+        # 子串匹配会把用户输入的"1号道路"当成它的子串 → 把人送到 31 号道路。
+        num = self.ROUTE_NUM_RE.search(str(q))
+        if not num:
+            num = re.search(r"^\s*(\d+)\s*号(?:道路|水路)$", str(q))
+        if num:
+            want = int(num.group(1))
+            water = "水路" in str(q) or "sea-route" in str(q)
+            for k in sorted(pool):
+                m2 = self.ROUTE_NUM_RE.search(str(k))
+                if not m2 or int(m2.group(1)) != want:
+                    continue
+                is_water = "-sea-route-" in str(k) or "水路" in self.node_zh(k)
+                if is_water == water:
+                    return k
+            return ""   # 该地区没有这条道路/水路,不要退化成子串匹配
         for k in sorted(pool, key=len):
             if nq in _norm(k) or nq in _norm(self.node_zh(k)):
                 return k

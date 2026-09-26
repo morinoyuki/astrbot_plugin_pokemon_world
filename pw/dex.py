@@ -743,6 +743,21 @@ class Dex:
         if key and self._loc_in_region(key, region):
             return key, self.locations[key]
         norm = _norm(raw)
+        # 「N号道路 / N号水路」必须按编号精确匹配。子串匹配会双向出错:
+        # "1号道路" 命中 "31号道路"(输入被当成子串),而 "21号道路" 又会命中
+        # "1号道路"(地点名是输入的子串),把人送到完全不相干的路上。
+        m = re.search(r"(\d+)\s*号\s*(道路|水路)", raw)
+        if m:
+            want, water = int(m.group(1)), m.group(2) == "水路"
+            for k, v in sorted(self.locations.items()):
+                if region and v.get("region") != region:
+                    continue
+                mm = re.search(r"(?:^|-)(?:sea-)?route-(\d+)$", k)
+                if not mm or int(mm.group(1)) != want:
+                    continue
+                if ("-sea-route-" in k) == water:
+                    return k, v
+            return None     # 说了地区又说清编号 → 没有就是没有,不要瞎猜
         cands: list[str] = []
         for k, v in self.locations.items():
             if region and v.get("region") != region:
@@ -751,8 +766,8 @@ class Dex:
             names += [_norm(a) for a in (v.get("aliases") or [])]
             if any(norm and n and (norm in n or n in norm) for n in names):
                 cands.append(k)
-        if not cands and region:
-            return self.resolve_location(raw, "")
+        # 指定了地区就不再回退到其它地区搜索:否则 `/前往 20号道路` 在城都会
+        # 被解析到合众的同名道路,给出"跨地区"这种莫名其妙的提示。
         if not cands:
             return None
         for k in cands:

@@ -355,14 +355,37 @@ class TrainerStore:
     def _path(self, scope: str, uid: str) -> str:
         return os.path.join(self._scope_dir(scope), f"{safe_name(uid)}.json")
 
-    def load(self, scope: str, uid: str) -> dict:
-        return read_json(self._path(scope, uid)) or {}
+    def load(self, scope: str, uid: str) -> dict | None:
+        """读存档;文件缺失或内容损坏/为空时返回 None(调用方据此判断"没存档")。
+
+        注意语义:损坏与"不存在"都返回 None —— 因此判断"是否已开始旅程"要看
+        `exists()`(文件在不在),只看 load() 会把损坏存档误判成"还没开始"。
+        """
+        data = read_json(self._path(scope, uid))
+        return data if isinstance(data, dict) and data else None
 
     def save(self, scope: str, uid: str, data: dict) -> None:
         write_json_atomic(self._path(scope, uid), data)
 
     def exists(self, scope: str, uid: str) -> bool:
         return os.path.exists(self._path(scope, uid))
+
+    def backup_corrupt(self, scope: str, uid: str) -> str:
+        """把读不出来的存档改名备份,返回备份文件名。
+
+        存档文件存在但内容损坏时,`/状态` 会走 load() 说"还没开始"(load 返回 None),
+        而 `/开始` 看到文件存在又说"已经开始了" —— 玩家被两句话夹住、一脸茫然。
+        改名备份后允许重新开始,旧文件也不丢。
+        """
+        path = self._path(scope, uid)
+        bak = path + ".bak"
+        try:
+            if os.path.exists(bak):
+                os.remove(bak)
+            os.rename(path, bak)
+        except OSError:
+            return ""
+        return os.path.basename(bak)
 
     def delete(self, scope: str, uid: str) -> bool:
         p = self._path(scope, uid)

@@ -1034,3 +1034,46 @@ def test_delete_scope_does_not_count_world_file():
         assert n == 2, f"应只统计 2 份玩家存档,实际 {n}"
         assert not os.path.isdir(os.path.join(tmp, "pokemon_world", "g1"))
         assert json
+
+
+def test_route_lookup_matches_exact_number():
+    """「N号道路/水路」必须按编号精确匹配,不能子串乱撞、也不能跨地区。"""
+    from pw.world import WorldMap
+
+    world = WorldMap()
+    # 城都没有 1/2/20 号道路 → 应当"找不到",而不是解析到 31 号道路/合众 20 号道路
+    for query in ("1号道路", "2号道路", "20号道路"):
+        got = world.find_location(query, "johto")
+        assert got == "", f"城都 {query} 不该解析到 {got}({world.node_zh(got) if got else ''})"
+
+    # 精确命中
+    assert world.find_location("31号道路", "johto") == "johto-route-31"
+    assert world.find_location("1号道路", "kanto") == "kanto-route-1"
+    assert world.find_location("21号水路", "kanto") == "kanto-sea-route-21"
+    # 水路与道路不能互相顶替
+    assert world.find_location("21号道路", "kanto") != "kanto-sea-route-21"
+    # 指定地区时不得回退到别的地区
+    for region in ("johto", "galar", "kanto"):
+        got = world.find_location("20号道路", region)
+        if got:
+            assert world.region_of(got) == region, f"{region} 解析到了 {got}"
+
+
+def test_corrupt_save_is_recoverable():
+    """存档损坏时不能让玩家被"没开始/已开始"两句话夹住。"""
+    import os
+
+    from pw.player import TrainerStore, new_trainer
+
+    with tempfile.TemporaryDirectory() as tmp:
+        store = TrainerStore(tmp)
+        store.save("g1", "u1", new_trainer("u1", "g1", "小智", starter="新叶喵").data)
+        path = store._path("g1", "u1")
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write("{ 这不是合法 JSON")
+        assert store.exists("g1", "u1"), "文件仍在"
+        assert store.load("g1", "u1") is None, "损坏的存档必须返回 None"
+        bak = store.backup_corrupt("g1", "u1")
+        assert bak.endswith(".bak")
+        assert os.path.exists(os.path.join(os.path.dirname(path), bak))
+        assert not store.exists("g1", "u1"), "备份后应允许重新开始"

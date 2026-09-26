@@ -271,10 +271,17 @@ class PokemonWorldPlugin(Star):
         scope, uid = self._scope(event), self._uid(event)
         async with self._lock(scope):
             if self.trainers.exists(scope, uid):
+                if self.trainers.load(scope, uid):
+                    yield event.plain_result(
+                        "你已经开始过旅程了。查看 `/状态`,或管理员用 `/重置世界` 重新开始。"
+                    )
+                    return
+                # 文件在但读不出来 → 备份后允许重开(否则玩家被"卡死")
+                bak = self.trainers.backup_corrupt(scope, uid)
+                logger.warning("宝可梦世界: %s/%s 存档损坏,已备份为 %s", scope, uid, bak)
                 yield event.plain_result(
-                    "你已经开始过旅程了。查看 `/状态`,或管理员用 `/重置世界` 重新开始。"
+                    f"⚠️ 你的存档已损坏(备份为 `{bak or '未知'}`),现在重新开始一段旅程。"
                 )
-                return
             tokens = [t for t in args.split() if t]
             name = ""
             starter = ""
