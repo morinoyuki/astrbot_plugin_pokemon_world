@@ -468,7 +468,10 @@ def test_trainer_card_long_name_does_not_cross_the_box():
         1
         for x in range(129 * 4, 132 * 4)
         for y in range(19 * 4, 143 * 4)
-        if all(abs(p - t) < 40 for p, t in zip(im.getpixel((x, y)), (52, 52, 44)))
+        if all(
+            abs(p - t) < 40
+            for p, t in zip(im.getpixel((x, y)), (52, 52, 44), strict=False)
+        )
     )
     assert text_like == 0, "左框右边界外不该有文字墨迹"
 
@@ -486,13 +489,11 @@ def test_battle_party_balls_do_not_cover_message_text():
     with_party = BR.render_battle(my, foe, ["测试战报文本内容"], my_party=party, scale=3)
     without = BR.render_battle(my, foe, ["测试战报文本内容"], my_party=None, scale=3)
     assert with_party and without
-    from PIL import Image, ImageChops
+    from PIL import Image
 
     a = Image.open(io.BytesIO(with_party)).convert("RGB")
     b = Image.open(io.BytesIO(without)).convert("RGB")
-    diff = ImageChops.difference(a, b).convert("L")
-    # 差异(即"多画出来的球")只应出现在对话框左侧球区;正文区域的墨迹不应改变
-    # 用最简判定:两组图的正文首字区域像素必须相同
+    # 判定:两组图的正文区域像素必须完全相同(球队列在正文左侧,不影响正文)
     box = (30 * 3, 100 * 3, 200 * 3, 112 * 3)
     assert a.crop(box).tobytes() == b.crop(box).tobytes(), "队伍球不该改变正文区域"
 
