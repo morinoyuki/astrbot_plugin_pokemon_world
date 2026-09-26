@@ -234,7 +234,8 @@ class Screen:
             font = self.f(kw.get("size", 9))
             if font is None or not text:
                 continue
-            px, py = self._clamp_text(font, text, x, y)
+            px, py, text = self._clamp_text(font, text, x, y,
+                                            kw.get("stroke", 0))
             self.d2.text(
                 (px, py),
                 str(text),
@@ -245,27 +246,49 @@ class Screen:
             )
         return self.big
 
-    def _clamp_text(self, font, text: str, x: float, y: float) -> tuple[int, int]:
+    def _clamp_text(self, font, text: str, x: float, y: float,
+                    stroke: float = 0.0) -> tuple[int, int, str]:
         """把文字拉回画布内。
 
         底部那一行最容易出问题:字号 8 的逻辑文字从 y 起画,墨迹会到 y+9 左右,
         若框底贴着画布下边(160)就会溢出、看起来"越过背景边界"。
         这里按真实墨迹范围统一钳制,任何界面都不会画出背景之外。
         """
-        pad = 2
+        # 描边会额外向外涂 stroke_width 像素,getbbox 并不包含它,必须一起算进来,
+        # 否则带描边的文字仍会溢出 1~2 像素(实测能顶到画布最外一列)。
+        pad = 2 + round(max(0.0, float(stroke)) * self.scale)
+        s = str(sanitize(text))
         px, py = round(x * self.scale), round(y * self.scale)
+        if not s:
+            return px, py, s
         try:
-            bx0, by0, bx1, by1 = font.getbbox(str(text))
+            bx0, by0, bx1, by1 = font.getbbox(s)
         except (ValueError, OSError):
-            return px, py
+            return px, py, s
         limit_x = self.w * self.scale - pad
         limit_y = self.h * self.scale - pad
+        # 比画布还宽的文字无论怎么摆都会溢出 → 先截断保头留省略号
+        avail = limit_x - pad
+        if bx1 - bx0 > avail > 0:
+            cur = ""
+            for ch in s:
+                if font.getlength(cur + ch + "…") > avail:
+                    break
+                cur += ch
+            s = (cur or s[:1]) + "…"
+            try:
+                bx0, by0, bx1, by1 = font.getbbox(s)
+            except (ValueError, OSError):
+                return px, py, s
+        if px + bx0 < pad:
+            px = pad - bx0
         if px + bx1 > limit_x:
             px = max(0, limit_x - bx1)
+        if py + by0 < pad:
+            py = pad - by0
         if py + by1 > limit_y:
             py = max(0, limit_y - by1)
-        _ = bx0, by0
-        return px, py
+        return px, py, s
 
     def finish(self) -> bytes:
         try:
@@ -682,8 +705,11 @@ def render_trainer_card(
         badges = list(info.get("badges") or [])
         for i in range(8):
             gx, gy = 140 + (i % 4) * 23, 34 + (i // 4) * 22
-            on = bool(badges[i][1]) if i < len(badges) else False
-            name = str(badges[i][0]) if i < len(badges) and badges[i][0] else ""
+            # 容错:徽章项约定为 (名称, 是否获得);数据异常时降级为"未获得",
+            # 而不是整个界面渲染失败返回空图。
+            b = badges[i] if i < len(badges) else None
+            on = bool(b[1]) if isinstance(b, (list, tuple)) and len(b) >= 2 else False
+            name = str(b[0]) if isinstance(b, (list, tuple)) and len(b) >= 2 and b[0] else ""
             sc.badge(gx, gy, 13, on=on)
             if name and on:
                 sc.text_center(gx + 6.5, gy + 14, name[:4], size=6, fill=TEXT_DIM)

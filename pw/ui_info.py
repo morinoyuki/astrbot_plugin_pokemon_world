@@ -121,10 +121,16 @@ def _dialog_text(sc: Screen, box, title: str, lines: list[str], *,
         body = ["—"]
     maxw = x1 - x0 - 18
     wrapped: list[str] = []
-    for ln in body:
-        wrapped.extend(sc.wrap(ln, maxw, size=size, limit=limit))
+    is_last = False
+    for idx, ln in enumerate(body):
+        is_last = idx == len(body) - 1
+        wrapped.extend(_wrap_fit(sc, ln, maxw, size, max(1, limit - len(wrapped))))
         if len(wrapped) >= limit:
             break
+    if len(wrapped) >= limit and not is_last:
+        # 还有后续条目没画出来 → 末行提示省略
+        last = wrapped[-1]
+        wrapped[-1] = (last[:-1] + "…") if len(last) > 1 else "…"
     for row, ln in enumerate(wrapped[:limit]):
         sc.text(x0 + 7, y0 + 16.5 + row * 9.8, ln, size=size, fill=MSG_TEXT)
 
@@ -363,6 +369,39 @@ def render_tournament(rounds: list[str], *, best: int = 0, current: int = 0,
 # ══════════════════════════════════════════════════════════════════
 # 4. 战斗结算
 # ══════════════════════════════════════════════════════════════════
+def _wrap_fit(sc, text: str, width: float, size: float, limit: int) -> list[str]:
+    """折行;内容被截断时在末行补省略号。
+
+    直接 `wrap(..., limit=n)` 会把超出的字符默默丢掉,行尾常留下半个词
+    (例如「…获得 神奇糖果 ×3」被切成「…获」),看起来很脏。
+    """
+    full = sc.wrap(text, width, size=size, limit=99)
+    if len(full) <= limit:
+        return full
+    out = full[:limit]
+    last = out[-1]
+    out[-1] = (last[:-1] + "…") if len(last) > 1 else "…"
+    return out
+
+
+def _inline_block(sc, top: float, rx0: int, label: str, lcolor, text: str, tcolor,
+                  bottom: float, limit: int = 2) -> float:
+    """「◆ 标签 正文」单块:框高随折行数自适应,顶部内联标签(省掉一整行标题)。"""
+    size, line_h = 7.6, 8.8
+    lw = sc.tw(label + " ", size)
+    avail_w = 235 - rx0 - 12 - lw
+    lines = _wrap_fit(sc, text, avail_w, size, max(1, limit)) or [""]
+    h = min(4.5 + len(lines) * line_h, max(line_h, bottom - top))
+    sc.window((rx0, top, 235, top + h), radius=2, shadow=False)
+    sc.text(rx0 + 5, top + 2.5, label, size=size, fill=lcolor)
+    for i, ln in enumerate(lines):
+        ty = top + 2.5 + i * line_h
+        if ty + 8 > bottom:
+            break
+        sc.text(rx0 + 5 + lw, ty, ln, size=size, fill=tcolor)
+    return top + h + 2
+
+
 def render_battle_result(*, outcome: str, title: str = "", lines: list[str] = (),
                          rewards: list[str] = (), growth: list[str] = (),
                          mon: dict | None = None, scale: int = SCALE_DEFAULT) -> bytes:
@@ -409,23 +448,29 @@ def render_battle_result(*, outcome: str, title: str = "", lines: list[str] = ()
         body = _lines(lines, limit=3) or [label]
         _dialog_text(sc, talk, "◆ 战报", body)
 
-        # 奖励
-        rbox = (rx0, 99, 235, 121)
-        sc.window(rbox, radius=2, shadow=False)
-        sc.text(rx0 + 5, 101.5, "◆ 奖励", size=7.8, fill=(56, 96, 60))
+        # 奖励 / 成长:框高随文本自适应。
+        # 原来的框是写死高度的(奖励 99~121 却按 110 起画 2 行 → 第 2 行到 126,
+        # 直接压进下面的成长框),奖励文本一长就越界。
         rtext = " · ".join(_lines(rewards, limit=4)) or "没有获得奖励。"
-        for i, ln in enumerate(sc.wrap(rtext, 235 - rx0 - 12, size=7.6, limit=2)):
-            sc.text(rx0 + 5, 110 + i * 8.6, ln, size=7.6,
-                    fill=TEXT if rewards else TEXT_DIM)
-
-        # 成长
-        gbox = (rx0, 123, 235, 144)
-        sc.window(gbox, radius=2, shadow=False)
-        sc.text(rx0 + 5, 125.5, "◆ 成长", size=7.8, fill=(120, 84, 48))
         gtext = " · ".join(_lines(growth, limit=4)) or "这次没有新的感悟。"
-        for i, ln in enumerate(sc.wrap(gtext, 235 - rx0 - 12, size=7.6, limit=2)):
-            sc.text(rx0 + 5, 134 + i * 8.6, ln, size=7.6,
-                    fill=TEXT if growth else TEXT_DIM)
+        lw = sc.tw("◆ 奖励 ", 7.6)
+        bw = 235 - rx0 - 12 - lw
+        lim_r = lim_g = 2
+        n_r = len(sc.wrap(rtext, bw, size=7.6, limit=lim_r))
+        n_g = len(sc.wrap(gtext, bw, size=7.6, limit=lim_g))
+        while n_r + n_g > 3:  # 44+43 的可用高度只放得下 3 行正文
+            if n_r >= n_g and lim_r > 1:
+                lim_r -= 1
+                n_r = len(sc.wrap(rtext, bw, size=7.6, limit=lim_r))
+            elif lim_g > 1:
+                lim_g -= 1
+                n_g = len(sc.wrap(gtext, bw, size=7.6, limit=lim_g))
+            else:
+                break
+        y = _inline_block(sc, 99, rx0, "◆ 奖励", (56, 96, 60), rtext,
+                          TEXT if rewards else TEXT_DIM, 140, limit=lim_r)
+        _inline_block(sc, y, rx0, "◆ 成长", (120, 84, 48), gtext,
+                      TEXT if growth else TEXT_DIM, 142, limit=lim_g)
 
         sc.footer(OUTCOME_FOOT.get(key, "◆ 继续冒险吧!"))
         return sc.finish()

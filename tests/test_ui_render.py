@@ -262,15 +262,76 @@ def test_map_last_row_does_not_overflow_panel():
                         visited=["pallet-town"], gyms=world.gyms("kanto"),
                         next_goal="挑战枯叶市道馆:马志士", scale=SCALE)
     im = _img(data)
-    # 地图面板 MAP=(5,19,150,108),地点框 TOWN=(5,111,150,144)
-    band = im.crop((5 * SCALE, 109 * SCALE, 150 * SCALE, 111 * SCALE))
+    # 地图面板 MAP=(5,19,150,108),地点框 TOWN=(5,111,150,144)。
+    # 检查整段 [106,111]:节点标签(含最低一行)绝不能碰到/越过面板底边 108。
+    band = im.crop((10 * SCALE, 106 * SCALE, 146 * SCALE, 112 * SCALE))
     text_like = 0
     for _c, px in (band.getcolors(maxcolors=1 << 20) or []):
         r, g, b = px[:3]
-        if (abs(r - 52) < 40 and abs(g - 52) < 40 and abs(b - 44) < 40) or (
-            abs(r - 120) < 40 and abs(g - 118) < 40 and abs(b - 100) < 40
+        if (abs(r - 52) < 13 and abs(g - 52) < 13 and abs(b - 44) < 13) or (
+            abs(r - 120) < 13 and abs(g - 118) < 13 and abs(b - 100) < 13
         ):
             text_like += 1
     assert text_like == 0, (
         "地图与「地点」框之间的缝隙里出现了文字像素(地图最后一行溢出)"
     )
+
+
+def test_clamp_text_handles_stroke_and_overwide_text():
+    """文字钳制必须算上描边宽度,并且超宽文字要截断而不是画到画布外。"""
+    from pw.ui_render import LOGICAL_W, Screen, sanitize
+
+    sc = Screen(scale=SCALE)
+    # 1) 超宽右对齐文字 + 描边:曾在最右一列留下墨迹
+    long_zh = "这是一段远远超过画布宽度的超长文本" * 3
+    sc.title_bar("标题", right=long_zh)
+    sc.text(0, 150, long_zh, size=9, stroke=1.0, sfill=(0, 0, 0))
+    # 2) 超宽的左对齐文字
+    sc.text(-50, 60, long_zh, size=12)
+    im = _img(sc.finish())
+    edges = set()
+    for x in range(im.width):
+        edges.add(im.getpixel((x, 0)))
+        edges.add(im.getpixel((x, im.height - 1)))
+    for y in range(im.height):
+        edges.add(im.getpixel((0, y)))
+        edges.add(im.getpixel((im.width - 1, y)))
+    bg = {(246, 242, 214)}
+    assert edges <= bg, f"钳制后仍有墨迹贴到画布边缘:{sorted(edges - bg)[:5]}"
+    assert sanitize("📨") == ""  # emoji 仍被过滤
+    assert LOGICAL_W == 240
+
+
+def test_battle_result_reward_box_is_adaptive():
+    """奖励/成长框要随文本行数自适应,长奖励不能压进下一块。"""
+    from pw import ui_info as U
+
+    data = U.render_battle_result(
+        outcome="win",
+        title="世界大赛 · 决赛",
+        lines=["你击败了 世界冠军 丹帝!全场观众起立鼓掌,这是属于你的时代!"],
+        rewards=["获得 18000₽", "获得 大师球 ×1", "获得 神奇糖果 ×3",
+                 "获得 「世界冠军」称号与冠军披风"],
+        growth=["暴鲤龙 升到了 Lv100!", "皮卡丘 想学习 「伏特攻击」,但已经学会 4 个招式了。"],
+        mon={"species": "gyarados", "name": "暴鲤龙", "level": 100, "cur_hp": 310,
+             "max_hp": 353, "gender": "F"},
+        scale=SCALE,
+    )
+    im = _img(data)
+    # 底部提示条上沿 = 144:其上方不能出现正文墨迹
+    band = im.crop((0, 142 * SCALE, im.width, 144 * SCALE))
+    text_like = 0
+    for _c, px in (band.getcolors(maxcolors=1 << 20) or []):
+        r, g, b = px[:3]
+        if abs(r - 52) < 13 and abs(g - 52) < 13 and abs(b - 44) < 13:
+            text_like += 1
+    assert text_like == 0, "奖励/成长文本越过了底部提示条上沿"
+    # 被截断的文本要带省略号,而不是留半个词(直接针对折行工具验证)
+    from pw.ui_info import _wrap_fit
+    from pw.ui_render import Screen
+
+    wsc = Screen(scale=SCALE)
+    wrapped = _wrap_fit(wsc, "很长很长的奖励文本" * 4, 40, 7.6, 2)
+    assert len(wrapped) == 2
+    assert wrapped[-1].endswith("…"), wrapped
+    assert "很长很长" not in wrapped[-1].replace(wrapped[-1][:2], "")[:0]

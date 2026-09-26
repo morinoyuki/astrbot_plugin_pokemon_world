@@ -169,12 +169,16 @@ def render_map(
             shown[-1] = cur_key  # 当前位置必须可见,宁可不显示最后一个节点
         rows = max(1, (len(shown) + cols - 1) // cols)
         cw = (mx1 - mx0 - 8) / cols
-        ch = (my1 - my0 - 8) / rows
+        # 每个节点占「标记 + 下方标签」两块,共 14 逻辑像素;ch 必须按"标记块"分配,
+        # 否则最后一行(y+6.5 起画的标签)会越过面板底边 —— 实测过 108.7 > 108。
+        node_h = 14.0
+        ch = (my1 - my0 - 7) / rows
         for i, key in enumerate(shown):
             row, col = divmod(i, cols)
             if row % 2 == 1:  # 蛇形换行:相邻节点接在正下方,路线不会横穿整张图
                 col = cols - 1 - col
-            pos[key] = (mx0 + 4 + (col + 0.5) * cw, my0 + 4 + (row + 0.5) * ch + 3)
+            gy = my0 + 4 + row * ch + max(0.0, (ch - node_h) / 2)
+            pos[key] = (mx0 + 4 + (col + 0.5) * cw, gy)
 
         # 路线连线(沿主线顺序 + 显式 next 边)
         drawn: set[tuple[str, str]] = set()
@@ -218,7 +222,9 @@ def render_map(
             node = next((n for n in nodes if str(n.get("key")) == key), {})
             label = _fit(sc, str(node.get("zh") or key), cw - 2, 6.4)
             color = PIN_RED if key == cur_key else (TEXT if key in visited_set else TEXT_DIM)
-            sc.text_center(x, y + 6.5, label, size=6.4, fill=color)
+            # 硬钳制:标签墨迹(约 7px)必须留在面板内
+            ly = min(y + 6.5, my1 - 8.5)
+            sc.text_center(x, ly, label, size=6.4, fill=color)
 
         if not nodes:
             sc.text(14, 42, "暂无地图数据。", size=8.5, fill=TEXT_DIM)
