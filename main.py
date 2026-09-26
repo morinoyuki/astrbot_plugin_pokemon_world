@@ -46,6 +46,7 @@ from .pw.player import Trainer, TrainerStore, new_trainer
 from .pw.util import (
     bar,
     clamp,
+    coerce_bool,
     coerce_int,
     fmt_money,
     game_day,
@@ -102,6 +103,14 @@ class PokemonWorldPlugin(Star):
         except (AttributeError, TypeError):
             return default
         return val if val is not None else default
+
+    def _cfg_bool(self, key: str, default: bool = False) -> bool:
+        """读布尔配置。
+
+        不能直接 `if self._cfg(key, True):` —— 配置来自 YAML/WebUI,可能是字符串,
+        而**非空字符串恒为真**,写成 "false" 依然会被当成开启(开关"失效")。
+        """
+        return coerce_bool(self._cfg(key, default), default)
 
     def _scope(self, event: AstrMessageEvent) -> str:
         gid = str(event.get_group_id() or "")
@@ -165,7 +174,7 @@ class PokemonWorldPlugin(Star):
         return (getattr(resp, "completion_text", "") or "").strip()
 
     def _narrator(self) -> Narrator:
-        if not self._cfg("narrate_enable", True):
+        if not self._cfg_bool("narrate_enable", True):
             return Narrator(None)
         if not str(self._cfg("provider_id", "") or "").strip():
             return Narrator(None)
@@ -196,13 +205,13 @@ class PokemonWorldPlugin(Star):
             state=state,
             players=self._players(scope, current=trainer),
             day=day,
-            narrator=self._narrator() if self._cfg("event_enable", True) else Narrator(None),
+            narrator=self._narrator() if self._cfg_bool("event_enable", True) else Narrator(None),
         )
-        if self._cfg("quest_enable", True):
+        if self._cfg_bool("quest_enable", True):
             try:
                 new_q = await QT.roll_daily_async(
                     trainer, day,
-                    self._narrator() if self._cfg("quest_llm", True) else None,
+                    self._narrator() if self._cfg_bool("quest_llm", True) else None,
                 )
                 if new_q:
                     self._save(trainer)
@@ -219,7 +228,7 @@ class PokemonWorldPlugin(Star):
                 f"🌍 世界事件:{EV.event_text(e)}"
                 for e in res["world_events"]
             ]
-            if wl and self._cfg("announce_events", True):
+            if wl and self._cfg_bool("announce_events", True):
                 lines.append(f"📅 第 {day} 天({game_day_str(day)})开始了。")
                 lines += wl
         pe = D.deliver_player_events(trainer, state)
@@ -323,6 +332,7 @@ class PokemonWorldPlugin(Star):
                 money=t.money,
                 box_count=len(t.box),
                 badges=t.badge_count(),
+                sprites=self._cfg_bool("sprite_enable", True),
                 scale=self._img_scale(),
             ),
             text=text,
@@ -620,7 +630,7 @@ class PokemonWorldPlugin(Star):
                     "⚠️ 你的宝可梦倒下了,必须换人:\n" + B.team_status(t)
                 )
                 return
-            if self._cfg("narrate_every_turn", False):
+            if self._cfg_bool("narrate_every_turn", False):
                 yield event.plain_result(
                     await self._narrate("对战回合", res.lines, text)
                 )
@@ -1148,7 +1158,7 @@ class PokemonWorldPlugin(Star):
         body = D.today_brief(state, region=t.region, location=t.location)
         text = "\n".join([*lines, body])
         nar = self._narrator()
-        if nar.available() and self._cfg("announce_events", True):
+        if nar.available() and self._cfg_bool("announce_events", True):
             facts = [EV.event_text(e) for e in state.active_events()]
             rep = await nar.say(
                 NARRATE_EVENT_SYSTEM,
@@ -1433,7 +1443,7 @@ class PokemonWorldPlugin(Star):
         while True:
             try:
                 await asyncio.sleep(60)
-                if not self._cfg("event_enable", True):
+                if not self._cfg_bool("event_enable", True):
                     continue
                 hour = int(coerce_int(self._cfg("event_hour", 4), 4) or 4)
                 now = datetime.now()
@@ -1726,7 +1736,7 @@ class PokemonWorldPlugin(Star):
     async def _emit_result_cards(self, event: AstrMessageEvent, t: Trainer, meta: dict,
                                  res: B.TurnResult):
         """战斗结束后追加:捕获 / 成长 / 战报卡片。"""
-        if not self._cfg("ui_image", True) or not res.finished:
+        if not self._cfg_bool("ui_image", True) or not res.finished:
             return
         view = B.view(t)
         mon = view.get("my") or {}
@@ -1788,7 +1798,7 @@ class PokemonWorldPlugin(Star):
     async def _emit_ui(self, event: AstrMessageEvent, label: str, builder, *,
                        text: str = ""):
         """按配置输出界面图片(仿 GBA 菜单);失败或未开启则回退文本。"""
-        if self._cfg("ui_image", True):
+        if self._cfg_bool("ui_image", True):
             try:
                 data = builder()
                 if data:
@@ -1988,7 +1998,7 @@ class PokemonWorldPlugin(Star):
         text: str = "",
     ):
         """按配置输出战斗画面:优先图片(仿经典对战界面),失败自动回退文本。"""
-        if self._cfg("battle_image", True):
+        if self._cfg_bool("battle_image", True):
             try:
                 from .pw import battle_render
 

@@ -124,6 +124,28 @@ def coerce_int(value, default: int | None = None) -> int | None:
     return default
 
 
+def coerce_bool(value, default: bool = False) -> bool:
+    """把配置/LLM 传来的值强转 bool。
+
+    必要性:从 YAML/WebUI 拿到的可能是字符串,而 **非空字符串恒为真** ——
+    `if cfg.get("ui_image", True):` 在配置写成 `"false"` 时依然会开图,
+    玩家会以为开关失效。
+    """
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    if isinstance(value, str):
+        s = value.strip().lower()
+        if s in ("1", "true", "yes", "y", "on", "开", "是", "启用"):
+            return True
+        if s in ("0", "false", "no", "n", "off", "关", "否", "禁用", ""):
+            return False
+    return default
+
+
 def bar(cur: int, total: int, width: int = 10, fill: str = "█", empty: str = "░") -> str:
     total = max(1, int(total))
     cur = clamp(cur, 0, total)

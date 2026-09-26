@@ -1387,9 +1387,12 @@ def render_party(
     money: int = 0,
     box_count: int = 0,
     badges: int = 0,
+    sprites: bool = True,
     scale: int = SCALE_DEFAULT,
 ) -> bytes:
     """队伍界面:6 行,每行 [精灵图][名字 Lv 性别][血条 + 数值][异常]。
+
+    sprites=False 时不画缩略图(配置 sprite_enable 关闭),并把文字左移补位。
 
     mons: [{species, name, level, cur_hp, max_hp, status, gender, exp_pct}]
     """
@@ -1406,12 +1409,16 @@ def render_party(
                 sc.text(14, y0 + 5, f"{i + 1}. —", size=8.5, fill=TEXT_DIM)
                 continue
             mon = mons[i]
-            sc.sprite(str(mon.get("species") or ""), ground=(22, y0 + row_h - 2),
-                      factor=0.62, bounds=(20, 18), back=False,
-                      dim=_ratio(mon.get("cur_hp"), mon.get("max_hp")) <= 0)
+            x_name = 37.0
+            if sprites:
+                sc.sprite(str(mon.get("species") or ""), ground=(22, y0 + row_h - 2),
+                          factor=0.62, bounds=(20, 18), back=False,
+                          dim=_ratio(mon.get("cur_hp"), mon.get("max_hp")) <= 0)
+            else:
+                x_name = 14.0
             name = str(mon.get("name") or "?")
-            sc.text(37, y0 + 2.5, name, size=8.6, fill=TEXT)
-            w = sc.tw(name, 8.6) + 39
+            sc.text(x_name, y0 + 2.5, name, size=8.6, fill=TEXT)
+            w = sc.tw(name, 8.6) + x_name + 2
             gender, gcolor = gender_symbol(str(mon.get("gender") or ""))
             if gender:
                 sc.text(w, y0 + 2.5, gender, size=8.6, fill=gcolor)

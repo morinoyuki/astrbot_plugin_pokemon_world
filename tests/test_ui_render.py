@@ -403,3 +403,35 @@ def test_capture_records_ball_key(tmp_path=None):
         t2 = p._load(ev2)
         assert t2.data.get("battle") is None, "大师球应当直接结束战斗"
         assert any("捕获成功" in o for o in ev2.outputs)
+
+
+def test_sprite_enable_toggle_actually_works():
+    """sprite_enable 曾经只写在配置表里、代码从不读取(开关无效)。"""
+    from pw import ui_render as R
+    from pw.util import coerce_bool
+
+    # 布尔配置必须是语义解析,而不是"非空字符串即真"
+    assert coerce_bool("false", True) is False
+    assert coerce_bool("关", True) is False
+    assert coerce_bool("", True) is False
+    assert coerce_bool("yes", False) is True
+    assert coerce_bool(None, True) is True
+
+    mons = [{"species": "pikachu", "name": "皮卡丘", "level": 12, "cur_hp": 30,
+             "max_hp": 40, "gender": "M"} for _ in range(3)]
+    on = R.render_party(mons, sprites=True, scale=SCALE)
+    off = R.render_party(mons, sprites=False, scale=SCALE)
+    assert on and off and on != off, "开关必须真的改变渲染结果"
+
+    from test_commands import _Cmd, _Event, run_cmd
+
+    with tempfile.TemporaryDirectory() as tmp:
+        p = _Cmd(tmp)
+        p.config = {"ui_image": True, "sprite_enable": False, "quest_enable": False}
+        ev = _Event("/开始 小智 新叶喵")
+        run_cmd(p, ev, p.cmd_start)
+        # 关掉缩略图后仍然要能正常出图(只是不画精灵)
+        assert p._cfg_bool("sprite_enable", True) is False
+        ev2 = _Event("/队伍")
+        run_cmd(p, ev2, p.cmd_team)
+        assert "<chain:" in "".join(ev2.outputs)
