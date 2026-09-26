@@ -112,7 +112,9 @@ class WorldState:
         self.data.setdefault("events", []).append(ev)
         loc = ev.get("location")
         if loc and ev.get("kind") in ("block", "lock", "rocket"):
-            self.data.setdefault("locks", {})[loc] = int(ev["until_day"])
+            locks = self.data.setdefault("locks", {})
+            # 取 max:否则后生效的"短封锁"会把更长封锁的解除日**提前**(封锁被缩短)
+            locks[loc] = max(int(locks.get(loc) or 0), int(ev["until_day"]))
         self._recompute_modifiers()
 
     def expire(self, day: int) -> list[dict]:

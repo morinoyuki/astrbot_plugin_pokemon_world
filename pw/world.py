@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import heapq
 import json
 import os
 import re
@@ -421,6 +422,14 @@ def _fallback_map() -> dict:
     return {"regions": regions}
 
 
+# 少数地图节点上游没有中文名(也不是道路/水路),这里补齐。
+# 放模块级而不是类属性:类里的可变字面量会被判为"可变默认值"(RUF012)。
+_EXTRA_ZH = {
+    "mirage-island": "幻影岛",
+    "kalos-berry-fields": "卡洛斯树果园",
+}
+
+
 class WorldMap:
     """地图只读视图(线程安全、懒加载、单例)。"""
 
@@ -449,6 +458,8 @@ class WorldMap:
 
     @classmethod
     def _localize_zh(cls, key: str, zh: str, region: str) -> str:
+        if str(key) in _EXTRA_ZH:
+            return _EXTRA_ZH[str(key)]
         m = cls.ROUTE_NUM_RE.search(str(key or ""))
         if m:
             num = int(m.group(1))
@@ -655,6 +666,33 @@ class WorldMap:
                 return g
         return {}
 
+    def _route_cap(self, region: str, current: str, badges: list[str]) -> int:
+        """通往"下一个道馆"的最优路线上的**最大危险度**(瓶颈路径)。
+
+        用最小化"路径上最大 tier"的 Dijkstra:玩家至少应被允许走到下一个道馆,
+        但也不能因此把远处的高危区域全部开放(只开放到该路线需要的程度)。
+        """
+        gym = self.next_gym(region, badges)
+        dest = str((gym or {}).get("location") or "")
+        if not dest or dest not in self._index:
+            return 0
+        if self.region_of(current) != self.region_of(dest):
+            return 0
+        best: dict[str, int] = {current: self.tier(current)}
+        heap = [(best[current], current)]
+        while heap:
+            cost, node = heapq.heappop(heap)
+            if node == dest:
+                return cost
+            if cost > best.get(node, 10 ** 9):
+                continue
+            for nxt in self.neighbors(node):
+                cand = max(cost, self.tier(nxt))
+                if cand < best.get(nxt, 10 ** 9):
+                    best[nxt] = cand
+                    heapq.heappush(heap, (cand, nxt))
+        return best.get(dest, 0)
+
     # ── 通行规则 ──
     def travel_check(
         self,
@@ -683,9 +721,18 @@ class WorldMap:
         lock = (locked_until or {}).get(target)
         if lock is not None and not by_fly:
             return False, f"🚫 这里暂时无法进入(事件封锁中,第 {lock} 天解除)。"
-        # 徽章门槛(危险度)
+        # 徽章门槛(危险度)。
+        # 关键:must 保证玩家永远能走到"下一个道馆"。maps.json 的 tier 是按路线
+        # 名次启发式生成的,道馆城镇的 tier 并不等于"第几枚徽章"(关都:深灰2 /
+        # 华蓝4 / 枯叶6 / 玉虹7 / 浅红8 / 金黄7 / 红莲8),于是 `badges+1` 的门槛
+        # 让关都从第 3 枚起永远进不去、合众 0 徽章时连第一个道馆都到不了 →
+        # 联盟打不了 → 冠军拿不到 → 下一个地区永久锁死(实测 4/8 地区死锁)。
+        # 规则改成:还能进入"通往下一个道馆的**必经路线**上所需的最高危险度"。
         if not by_fly:
-            allowed = trainer.badge_count(region) + 1
+            allowed = max(
+                trainer.badge_count(region) + 1,
+                self._route_cap(region, cur, trainer.badges),
+            )
             if self.tier(target) > allowed:
                 return (
                     False,

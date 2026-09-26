@@ -926,3 +926,111 @@ def test_world_day_never_rolls_backwards():
     assert daily.ensure_rolled_sync(state, [], day=11) is False
     assert daily.ensure_rolled_sync(state, [], day=12) is True
     assert daily.ensure_rolled_sync(state, [], day=11) is False
+
+
+def test_every_region_can_earn_all_badges_under_tier_gate():
+    """P0 回归:危险度(tier)门槛不能让道馆进度死锁。
+
+    maps.json 的 tier 是按路线名次启发式生成的,道馆城镇的 tier 与"第几枚徽章"
+    无关(关都:深灰2/华蓝4/枯叶6/玉虹7/浅红8/金黄7/红莲8)。原来 `tier <= 徽章数+1`
+    的限制让关都从第 3 枚起永远进不去、合众 0 徽章时连第一个道馆都到不了 →
+    联盟打不了 → 冠军拿不到 → 下一个地区永久锁死(实测 4/8 地区死锁)。
+    """
+    from collections import deque
+
+    from pw.player import new_trainer
+    from pw.world import REGION_ORDER, WorldMap
+
+    world = WorldMap()
+    for region in REGION_ORDER:
+        if not world.nodes(region):
+            continue
+        t = new_trainer("u1", "g1", "测试", starter="新叶喵")
+        t.data["region"] = region
+        t.data["location"] = world.start_location(region)
+        t.data["unlocked_regions"] = [region]
+        for _ in range(30):
+            cap = max(
+                t.badge_count(region) + 1,
+                world._route_cap(region, t.location, t.badges),
+            )
+            seen = {t.location}
+            dq = deque([t.location])
+            while dq:
+                cur = dq.popleft()
+                for nxt in world.neighbors(cur):
+                    if nxt not in seen and world.tier(nxt) <= cap:
+                        seen.add(nxt)
+                        dq.append(nxt)
+            done = {
+                int(b.split(":")[1]) for b in t.badges if b.startswith(f"{region}:")
+            }
+            fresh = {
+                int(g["order"])
+                for key in seen
+                for g in world.gyms(region)
+                if g["location"] == key
+            } - done
+            if not fresh:
+                break
+            for order in fresh:
+                t.add_badge(region, order)
+        total = len(world.gyms(region))
+        assert t.badge_count(region) >= total, (
+            f"{region} 只能拿到 {t.badge_count(region)}/{total} 枚徽章 —— 进度死锁"
+        )
+
+
+def test_route_cap_guarantees_next_gym_is_walkable():
+    """关卡门槛至少要放行"通往下一个道馆"所必需的路线。"""
+    from pw.player import new_trainer
+    from pw.world import WorldMap
+
+    world = WorldMap()
+    t = new_trainer("u1", "g1", "测试", starter="新叶喵")
+    start = world.start_location("kanto")
+    t.data["location"] = start
+    cap = world._route_cap("kanto", start, [])
+    assert cap >= world.tier(start)
+    # 第一枚徽章(深灰市)必须在 cap 之内
+    first = world.next_gym("kanto", [])
+    assert world.tier(first["location"]) <= cap
+
+
+def test_short_event_lock_does_not_shorten_longer_lock():
+    """后生效的短封锁不能把更长封锁的解除日提前。"""
+    from pw.worldstate import WorldState
+
+    st = WorldState({"day": 1, "events": []}, "g1")
+    st.add_event({"id": "a", "kind": "block", "title": "长期封锁", "location": "x",
+                  "until_day": 30})
+    st.add_event({"id": "b", "kind": "block", "title": "短期封锁", "location": "x",
+                  "until_day": 5})
+    assert int(st.data["locks"]["x"]) == 30
+
+
+def test_all_map_nodes_have_chinese_names():
+    from pw.world import WorldMap
+
+    world = WorldMap()
+    missing = [k for k in world._index if world.node_zh(k) == k]
+    assert not missing, f"这些节点没有中文名:{missing}"
+
+
+def test_delete_scope_does_not_count_world_file():
+    """清空存档时把 _world.json 算成"一份存档"会让提示数量多 1。"""
+    import json
+    import os
+
+    from pw.player import TrainerStore
+    from pw.worldstate import WorldStore
+
+    with tempfile.TemporaryDirectory() as tmp:
+        store = TrainerStore(tmp)
+        store.save("g1", "u1", {"name": "A"})
+        store.save("g1", "u2", {"name": "B"})
+        WorldStore(tmp).save("g1", {"day": 1})
+        n = store.delete_scope("g1")
+        assert n == 2, f"应只统计 2 份玩家存档,实际 {n}"
+        assert not os.path.isdir(os.path.join(tmp, "pokemon_world", "g1"))
+        assert json

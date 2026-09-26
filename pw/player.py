@@ -383,6 +383,10 @@ class TrainerStore:
         d = os.path.join(self._root, safe_name(scope))
         if not os.path.isdir(d):
             return 0
-        n = len([f for f in os.listdir(d) if f.endswith(".json")])
+        # 排除 _world.json 等共享文件:它们不是玩家存档(否则提示数量多 1)
+        n = len([
+            f for f in os.listdir(d)
+            if f.endswith(".json") and not f.startswith("_")
+        ])
         shutil.rmtree(d, ignore_errors=True)
         return n

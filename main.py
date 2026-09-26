@@ -936,6 +936,11 @@ class PokemonWorldPlugin(Star):
         if B.in_battle(t):
             yield event.plain_result("⚠️ 对战中不能买卖,先结束当前对战。")
             return
+        # 任何指令都应懒刷新游戏日(设计约定);否则只逛商店的玩家会一直用着
+        # 已经过期的世界事件折扣。
+        async with self._lock(t.scope):
+            await self._ensure_day(event, t)
+            t = self._load(event) or t
         world = WorldMap()
         if "mart" not in world.services(t.location):
             yield event.plain_result("❌ 这里没有商店,去城镇(宝可梦中心所在地)吧。")
@@ -1700,17 +1705,20 @@ class PokemonWorldPlugin(Star):
                 players = self._players(scope)
                 if not players:
                     continue
-                state = self._state(scope)
-                res = await D.roll_day(
-                    scope=scope,
-                    state=state,
-                    players=players,
-                    day=day,
-                    narrator=self._narrator(),
-                )
-                if not res["rolled"]:
-                    continue
-                self._save_state(state)
+                # 必须与 _ensure_day 用同一把锁:否则"读-改-写"会交错,
+                # 玩家指令刚滚出来的事件会被调度器的旧快照覆盖(丢更新)。
+                async with self._lock(scope):
+                    state = self._state(scope)
+                    res = await D.roll_day(
+                        scope=scope,
+                        state=state,
+                        players=players,
+                        day=day,
+                        narrator=self._narrator(),
+                    )
+                    if not res["rolled"]:
+                        continue
+                    self._save_state(state)
                 await self._notify(scope, state, res)
             except Exception as e:
                 logger.debug("宝可梦世界: %s 每日刷新失败: %s", scope, e)
