@@ -860,10 +860,48 @@ class WorldMap:
             "nodes": len(self.nodes(region)),
         }
 
-    def shop_stock(self, key: str) -> list[str]:
-        """商店货架(按徽章数递增);返回道具 key 列表。"""
-        return list(SHOP_STOCK)
+    def shop_stock(self, key: str, badges: int = 0) -> list[str]:
+        """商店货架(按徽章数递增);返回道具 key 列表。
 
+        注意:`badges` 默认 0 只为兼容旧调用,命令层要传 `trainer.badge_count()`。
+        旧实现对所有地点/徽章返回同一份固定清单 —— 于是 60 个道具(11 种特殊球、
+        5 种树果、24 个进化道具、PP 药、X 道具、除虫喷雾以外的进化石)
+        在游戏里**没有任何获取途径**。
+        """
+        out: list[str] = []
+        for tier, keys in SHOP_TIERS:
+            if tier <= int(badges or 0):
+                out.extend(keys)
+        return out
+
+
+# 商店货架分档:徽章越多解锁越多。每档都对应真实存在的 BAG_ITEMS key,
+# 用于保证"数据里有的道具都能被买到"(此前 60 个道具完全没有获取途径)。
+SHOP_TIERS: list[tuple[int, list[str]]] = [
+    (0, [
+        "poke-ball", "potion", "antidote", "fresh-water", "moomoo-milk",
+        "cheri-berry", "chesto-berry", "pecha-berry", "rawst-berry",
+        "aspear-berry", "oran-berry", "leppa-berry", "berry-juice", "sweet-heart",
+    ]),
+    (1, ["great-ball", "super-potion", "paralyze-heal", "awakening", "soda-pop"]),
+    (2, ["burn-heal", "ice-heal", "lemonade", "ether", "x-attack", "x-defense",
+         "x-sp-defense", "guard-spec", "premier-ball"]),
+    (3, ["ultra-ball", "hyper-potion", "revive", "max-ether", "x-speed", "x-special", "dire-hit",
+         "net-ball", "nest-ball", "repeat-ball"]),
+    (4, ["full-heal", "max-potion", "max-revive", "full-restore", "elixir",
+         "dusk-ball", "quick-ball", "timer-ball", "level-ball", "heavy-ball",
+         "beast-ball"]),
+    (5, ["max-elixir", "rare-candy", "metal-coat", "kings-rock", "dragon-scale",
+         "deep-sea-scale", "deep-sea-tooth", "up-grade", "protector",
+         "electirizer", "magmarizer", "reaper-cloth", "razor-claw", "razor-fang",
+         "sachet", "whipped-dream", "prism-scale", "oval-stone"]),
+    (6, ["sweet-apple", "tart-apple", "syrupy-apple", "cracked-pot",
+         "unremarkable-teacup", "auspicious-armor", "malicious-armor", "metal-alloy",
+         "fire-stone", "water-stone", "thunder-stone", "leaf-stone", "moon-stone",
+         "sun-stone", "shiny-stone", "dusk-stone", "dawn-stone", "ice-stone"]),
+    # 大师球 / 究极球 / 特性胶囊 / 膏药 / PP 提升:不进普通商店(大赛奖励或事件获取),
+    # 特性切换与 PP 上限尚未实现,不会发给玩家。
+]
 
 SHOP_STOCK = [
     "poke-ball",

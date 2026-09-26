@@ -1077,3 +1077,62 @@ def test_corrupt_save_is_recoverable():
         assert bak.endswith(".bak")
         assert os.path.exists(os.path.join(os.path.dirname(path), bak))
         assert not store.exists("g1", "u1"), "备份后应允许重新开始"
+
+
+def test_in_scope_uses_english_region_codes():
+    """`in_scope` 必须认英文地区码 —— 否则地区范围检查被静默跳过。
+
+    `REGIONS` 的键是中文("关都/城都/丰缘…"),而调用方(trainer/events)传的是
+    `trainer.region` 的英文码("kanto")→ `REGIONS.get("kanto")` 恒为 None,
+    整个检查变成"永远通过"。
+    """
+    from pw.dex import get_dex
+    from pw.encounter import in_scope
+
+    dex = get_dex()
+    cases = [
+        ("pikachu", "kanto", True),
+        ("mewtwo", "kanto", True),        # #150 属于关都
+        ("victini", "kanto", False),      # #494 属于合众
+        ("pikachu", "unova", False),
+        ("zorua", "unova", True),
+    ]
+    for species, region, expect in cases:
+        entry = dex.species.get(species) or {}
+        got = in_scope(entry, region)
+        assert got is expect, f"{species} in {region} 应为 {expect},实际 {got}"
+
+
+def test_parse_llm_json_finds_first_object_anywhere():
+    """LLM 输出里对象后面跟说明文字/第二个对象时,要能拿到第一个对象。"""
+    from pw.events import parse_llm_json
+
+    assert parse_llm_json('{"a":1} noise {"b":2}') == {"a": 1}
+    assert parse_llm_json('前面 {"kind":"rare"} 后面') == {"kind": "rare"}
+    assert parse_llm_json('```json\n{"x":1}\n```') == {"x": 1}
+    assert parse_llm_json('{"nested":{"a":1},"k":2}') == {"nested": {"a": 1}, "k": 2}
+    assert parse_llm_json("没有对象") == {}
+    assert parse_llm_json("") == {}
+
+
+def test_shop_stock_grows_with_badges_and_covers_items():
+    """货架必须随徽章解锁(否则 60 个道具没有任何获取途径)。"""
+    from pw.items import BAG_ITEMS
+    from pw.quests import REWARD_ITEMS
+    from pw.world import SHOP_TIERS, WorldMap
+
+    world = WorldMap()
+    counts = [len(set(world.shop_stock("pewter-city", b))) for b in (0, 2, 4, 6)]
+    assert counts == sorted(counts) and counts[0] < counts[-1], counts
+    assert counts[0] >= 5, "0 徽章也该能买到最基础的东西"
+
+    # 货架里不能有数据里不存在的 key(死条目)
+    bad = [(t, k) for t, keys in SHOP_TIERS for k in keys if k not in BAG_ITEMS]
+    assert not bad, f"货架包含不存在的道具:{bad}"
+
+    # 除了"效果尚未实现"的 4 个,其余道具都必须有获取途径
+    avail = set(world.shop_stock("pewter-city", 8)) | set(REWARD_ITEMS) | {"master-ball"}
+    unreachable = [k for k in BAG_ITEMS if k not in avail]
+    assert set(unreachable) <= {"pp-up", "pp-max", "ability-capsule", "ability-patch"}, (
+        f"这些道具没有任何获取途径:{unreachable}"
+    )

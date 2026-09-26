@@ -123,13 +123,25 @@ def regional_tag(entry: dict) -> str:
     return ""
 
 
+# 英文地区码 → REGIONS 的中文键。REGIONS 是从 PokeAPI 的地区名生成的,
+# 键是"关都/城都/丰缘…",而调用方(trainer/events)传的是 trainer.region 的
+# 英文码("kanto")→ REGIONS.get("kanto") 恒为 None,整个地区范围检查被静默跳过。
+REGION_CODE_ZH = {
+    "kanto": "关都", "johto": "城都", "hoenn": "丰缘", "sinnoh": "神奥",
+    "unova": "合众", "kalos": "卡洛斯", "alola": "阿罗拉", "galar": "伽勒尔",
+    "paldea": "帕底亚",
+}
+
+
 def in_scope(entry: dict, region: str = "", gen: int = 0) -> bool:
     """条目是否落在指定地区/世代的全国图鉴范围内(含地区形态归属)。"""
     num = int(entry.get("num", 0) or 0)
     gen_range = GENS.get(gen) if gen else None
     if gen_range and not (gen_range[0] <= num <= gen_range[1]):
         return False
-    reg = REGIONS.get(region) if region else None
+    reg = None
+    if region:
+        reg = REGIONS.get(region) or REGIONS.get(REGION_CODE_ZH.get(str(region).lower(), ""))
     if reg:
         if not (reg[0] <= num <= reg[1]):
             return False

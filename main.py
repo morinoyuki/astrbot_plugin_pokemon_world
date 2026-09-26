@@ -60,7 +60,6 @@ from .pw.util import (
     stable_rng,
 )
 from .pw.world import (
-    EVO_STONE_STOCK,
     FLY_COST,
     WorldMap,
     item_price,
@@ -977,7 +976,7 @@ class PokemonWorldPlugin(Star):
             yield event.plain_result("❌ 用法:`/商店 买 伤药 3` 或 `/商店 卖 精灵球 2`")
             return
         n = int(clamp(n or 1, 1, 99))
-        stock = set(world.shop_stock(t.location)) | set(EVO_STONE_STOCK)
+        stock = set(world.shop_stock(t.location, t.badge_count()))
         if action in ("买", "buy"):
             key = _resolve_stock(name, stock)
             if not key:
@@ -1637,21 +1636,13 @@ class PokemonWorldPlugin(Star):
             f"🛒 商店({world.node_zh(t.location)})· 余额 {fmt_money(t.money)}"
             + (f" · 折扣 {int((1 - discount) * 100)}%" if discount < 1 else "")
         ]
-        for key in world.shop_stock(t.location):
+        for key in world.shop_stock(t.location, t.badge_count()):
             entry = BAG_ITEMS.get(key)
             if not entry:
                 continue
             lines.append(
                 f"· {entry['zh']} —— {fmt_money(item_price(key, badge_count=t.badge_count(), discount=discount))}"
                 f"({entry.get('desc', '')})"
-            )
-        lines.append("── 进化石 ──")
-        for key in EVO_STONE_STOCK:
-            entry = BAG_ITEMS.get(key)
-            if not entry:
-                continue
-            lines.append(
-                f"· {entry['zh']} —— {fmt_money(item_price(key, badge_count=t.badge_count(), discount=discount))}"
             )
         lines.append("用法:`/商店 买 伤药 3` · `/商店 卖 精灵球 2`")
         return "\n".join(lines)
@@ -1967,7 +1958,7 @@ class PokemonWorldPlugin(Star):
     def _shop_payload(self, t: Trainer, discount: float) -> list[dict]:
         world = WorldMap()
         out = []
-        for key in [*world.shop_stock(t.location), *EVO_STONE_STOCK]:
+        for key in world.shop_stock(t.location, t.badge_count()):
             entry = BAG_ITEMS.get(key)
             if not entry:
                 continue

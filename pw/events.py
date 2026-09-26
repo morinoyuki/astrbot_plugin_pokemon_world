@@ -54,7 +54,10 @@ MAX_PLAYER_EVENTS = 1
 
 
 # ── 校验 / 裁剪 ──────────────────────────────────────────────────
-_JSON_BLOCK = re.compile(r"\{.*\}", re.S)
+# 必须**非贪婪且逐候选尝试**:`\{.*\}` 会把 `{"a":1} noise {"b":2}` 整段吞掉,
+# 解析失败后返回 {} —— 明明有一个合法的 JSON 对象却丢弃了(LLM 常在对象后补说明文字)。
+_JSON_BLOCK = re.compile(r"\{.*?\}", re.S)
+_DECODER = json.JSONDecoder()
 
 
 def parse_llm_json(text: str) -> dict:
@@ -62,17 +65,19 @@ def parse_llm_json(text: str) -> dict:
     if not text:
         return {}
     s = text.strip()
-    m = _JSON_BLOCK.search(s)
-    if not m:
-        return {}
-    raw = m.group(0)
-    for candidate in (raw, raw.replace("'", '"')):
-        try:
-            data = json.loads(candidate)
-        except ValueError:
+    # 逐个 `{` 起点尝试 raw_decode:这样 `{"a":1} noise {"b":2}` 能拿到第一个对象,
+    # 而嵌套对象也不会被非贪婪正则截断(截断后 JSON 会解析失败)。
+    for i, ch in enumerate(s):
+        if ch != "{":
             continue
-        if isinstance(data, dict):
-            return data
+        for candidate in (s[i:], s[i:].replace("'", '"')):
+            try:
+                data, _end = _DECODER.raw_decode(candidate)
+            except ValueError:
+                continue
+            if isinstance(data, dict):
+                return data
+            break
     return {}
 
 
