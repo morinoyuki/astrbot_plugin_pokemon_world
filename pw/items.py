@@ -333,6 +333,164 @@ def resolve_bag_item(query: str) -> tuple[str, dict] | None:
     return None
 
 
+# 效果字段 → 人话。写在背包/商店说明框里,让玩家知道这道具**具体做什么**
+_STATUS_NAME_ZH = {
+    "psn": "中毒", "tox": "剧毒", "brn": "灼伤", "par": "麻痹", "slp": "睡眠",
+    "frz": "冰冻", "confusion": "混乱", "all": "所有异常状态",
+}
+_BALL_CONDITION_ZH = {
+    "ball_heal": "对 HP 低的宝可梦更有效",
+    "ball_net": "对水属性/虫属性更有效",
+    "ball_dusk": "在夜晚或洞窟里更有效",
+    "ball_quick": "对刚出现的宝可梦更有效",
+    "ball_timer": "回合拖得越久越有效",
+    "ball_repeat": "对已捕获过的种类更有效",
+    "ball_nest": "对等级低的宝可梦更有效",
+    "ball_level": "对手等级越高越有效",
+    "ball_heavy": "对体重重的宝可梦更有效",
+    "ball_beast": "对究极异兽特别有效",
+}
+_STAT_NAME_ZH = {
+    "atk": "攻击", "def": "防御", "spa": "特攻", "spd": "特防", "spe": "速度",
+    "accuracy": "命中", "evasion": "闪避",
+}
+_TYPE_ZH = {
+    "Normal": "一般", "Fire": "火", "Water": "水", "Electric": "电", "Grass": "草",
+    "Ice": "冰", "Fighting": "格斗", "Poison": "毒", "Ground": "地面",
+    "Flying": "飞行", "Psychic": "超能力", "Bug": "虫", "Rock": "岩石",
+    "Ghost": "幽灵", "Dragon": "龙", "Dark": "恶", "Steel": "钢", "Fairy": "妖精",
+}
+# 这些效果目前**没有消费方**(引擎里没人读) —— 说明里要如实标出来,
+# 免得玩家买了/用了却什么都没发生
+_UNIMPLEMENTED = {
+    "pp_up": "⚠️ 本插件暂未实现(PP 上限提升)",
+    "ability_switch": "⚠️ 本插件暂未实现(切换特性)",
+    "ability_patch": "⚠️ 本插件暂未实现(改为隐藏特性)",
+}
+
+
+def effect_text(key: str | None) -> str:
+    """把道具的 `effect` 结构化字段翻成一句中文效果(没有就返回空串)。"""
+    entry = BAG_ITEMS.get(str(key or "")) or ITEMS.get(str(key or "")) or {}
+    eff = entry.get("effect")
+    if not isinstance(eff, dict) or not eff:
+        return ""
+    bits: list[str] = []
+    for field, val in eff.items():
+        if field in _UNIMPLEMENTED:
+            bits.append(_UNIMPLEMENTED[field])
+        elif field == "heal_hp":
+            bits.append(f"回复 {int(val)} HP")
+        elif field == "heal_hp_frac":
+            bits.append(f"回复最大 HP 的 {float(val) * 100:.0f}%")
+        elif field == "heal_full":
+            bits.append("完全回复 HP")
+        elif field == "cure_status":
+            if val is True:
+                bits.append("治愈所有异常状态")
+            else:
+                names = "、".join(
+                    _STATUS_NAME_ZH.get(str(x), str(x))
+                    for x in (val if isinstance(val, (list, tuple)) else [val])
+                )
+                bits.append(f"治愈{names}")
+        elif field == "revive":
+            bits.append(f"复活并回复 {float(val) * 100:.0f}% HP")
+        elif field == "revive_full":
+            bits.append("完全复活并回满 HP")
+        elif field == "pp_restore":
+            bits.append(f"回复 {int(val)} 点 PP")
+        elif field in ("pp_restore_all", "pp_all"):
+            bits.append("回复全部 PP")
+        elif field == "ball_master":
+            bits.append("必定捕获")
+        elif field == "ball_bonus":
+            # ×1 是基础捕获率,不是加成 —— 别当效果写出来
+            if float(val) > 1.0:
+                bits.append(f"捕获率 ×{float(val):g}")
+        elif field in _BALL_CONDITION_ZH:
+            bits.append(_BALL_CONDITION_ZH[field])
+        elif field == "evolve_stone":
+            zh = _TYPE_ZH.get(str(val), str(val))
+            bits.append(f"让对应的宝可梦进化({zh}属性系)")
+        elif field == "evolve_item":
+            bits.append("让对应的宝可梦进化")
+        elif field == "stat_boost":
+            if isinstance(val, dict):
+                ups = "、".join(
+                    f"{_STAT_NAME_ZH.get(str(k), str(k))} {'+' if int(v) > 0 else ''}{int(v)}"
+                    for k, v in val.items()
+                )
+                bits.append(f"战斗中提升 {ups}")
+        elif field == "focus_energy":
+            bits.append("战斗中提升会心率")
+        elif field == "guard_spec":
+            bits.append("战斗中提升特防")
+        elif field == "level_up":
+            bits.append(f"提升 {int(val)} 级" if isinstance(val, (int, float)) and val
+                        else "提升等级")
+        # ── 持有道具的生效字段(引擎里真的有消费方)──
+        elif field == "type_mult" and isinstance(val, dict):
+            ups = "、".join(
+                f"{_TYPE_ZH.get(str(k), str(k))} ×{float(v):g}" for k, v in val.items()
+            )
+            bits.append(f"强化 {ups} 属性招式")
+        elif field == "stat_mult" and isinstance(val, dict):
+            ups = "、".join(
+                f"{_STAT_NAME_ZH.get(str(k), str(k))} ×{float(v):g}" for k, v in val.items()
+            )
+            bits.append(f"能力 {ups}")
+        elif field == "category_mult" and isinstance(val, dict):
+            ups = "、".join(
+                f"{'物理' if str(k) == 'Physical' else '特殊'} ×{float(v):g}"
+                for k, v in val.items()
+            )
+            bits.append(f"{ups} 招式")
+        elif field == "damage_mult":
+            bits.append(f"招式威力 ×{float(val):g}")
+        elif field == "end_turn_heal":
+            bits.append(f"每回合回复最大 HP 的 {float(val) * 100:g}%")
+        elif field == "end_turn_heal_poison":
+            bits.append("毒属性宝可梦每回合回复 HP")
+        elif field == "end_turn_damage_nonpoison":
+            bits.append("非毒属性宝可梦每回合受伤")
+        elif field == "weather":
+            wzh = {"sun": "大晴天", "rain": "下雨", "sand": "沙暴", "snow": "下雪"}
+            bits.append(f"出场时布下{wzh.get(str(val), val)}")
+        elif field == "weather_turns":
+            bits.append(f"天气持续 {int(val)} 回合")
+        elif field == "choice_lock":
+            bits.append("锁定一个招式,但威力提高")
+        elif field == "on_low_hp":
+            bits.append("HP 低时威力提高")
+        elif field == "focus_sash":
+            bits.append("满 HP 时受到致命伤害会留下 1 HP")
+        elif field == "recoil":
+            bits.append("攻击后承受反作用伤害")
+        elif field == "contact_recoil":
+            bits.append("被接触类招式打中时反伤对手")
+        elif field == "no_status_moves":
+            bits.append("不能使用变化招式")
+        elif field == "requires_nfe":
+            # 与 stat_mult 同时存在时(进化奇石)上面已经说明了,别再重复一遍
+            if "stat_mult" not in eff:
+                bits.append("未进化完全时防御与特防提高")
+        elif field == "no_hazards":
+            bits.append("不受入场陷阱影响")
+        elif field == "screen_turns":
+            bits.append(f"壁类招式持续 {int(val)} 回合")
+        elif field == "self_status":
+            bits.append(f"出场时获得{_STATUS_NAME_ZH.get(str(val), str(val))}状态")
+        else:
+            # 别把英文字段名丢给玩家看
+            bits.append("特殊效果(见下方说明)")
+        bits = list(bits)
+    # 球类的 ×1 是噪音(基础捕获率,不是加成)
+    if len(bits) > 1:
+        bits = [b for b in bits if b != "捕获率 ×1"]
+    return "、".join(bits)
+
+
 def bag_item_label(key: str | None) -> str:
     if not key:
         return ""

@@ -318,6 +318,10 @@ def render_map(
 # ══════════════════════════════════════════════════════════════════
 # 2. 商店(FRLG 友好商店)
 # ══════════════════════════════════════════════════════════════════
+# 商店每页条目数(满徽章时货架有 80+ 种,必须分页)
+SHOP_PER_PAGE = 5
+
+
 def render_shop(
     entries: list[dict],
     *,
@@ -325,9 +329,14 @@ def render_shop(
     location_zh: str = "",
     discount: float = 1.0,
     selected: int = 0,
+    per_page: int = SHOP_PER_PAGE,
     scale: int = SCALE_DEFAULT,
 ) -> bytes:
-    """商店:道具列表(图标 + 名称 + 价格)+ 选中行高亮 + 底部说明框。"""
+    """商店:道具列表(分页 + 选中高亮)+ 底部说明框(价格/持有/效果/说明)。
+
+    `selected` 是**整个货架上的下标**(0 起),会自动翻到它所在那一页并高亮 ——
+    以前只看得到前 6 件、说明框永远只写第 0 件,而满徽章时货架有 80+ 种商品。
+    """
     try:
         sc = Screen(scale=scale)
         entries = [dict(e) for e in (entries or []) if isinstance(e, dict)]
@@ -342,30 +351,37 @@ def render_shop(
         sc.title_bar(title, right=f"{int(money or 0):,}₽")
 
         # 折扣横幅(有折扣时把列表整体下移一行)
-        list_top = 19
+        list_top = 19.0
         if disc < 0.999:
             sc.d.rounded_rectangle([5, 18, 235, 29], radius=2, fill=DISCOUNT_RED,
                                    outline=BOX_EDGE)
             sc.d.rectangle([7, 19, 233, 20], fill=(238, 132, 120))
             sc.text(11, 20, f"限时折扣 · 全场 {disc * 10:g} 折", size=8,
                     fill=(255, 248, 240))
-            list_top = 30
-        list_bottom = 111
-        sc.window((5, list_top, 235, list_bottom), radius=2)
+            list_top = 30.0
+        list_bottom = 104.0
 
-        shown = entries[:6]
+        total = len(entries)
+        per = max(1, int(per_page))
+        pages = max(1, (total + per - 1) // per)
+        sel = max(0, min(int(selected or 0), total - 1)) if total else 0
+        page = max(0, min(sel // per, pages - 1)) if total else 0
+        shown = entries[page * per:(page + 1) * per]
+        sc.window((5, list_top, 235, list_bottom), radius=2)
         n = len(shown)
-        sel = max(0, min(int(selected or 0), n - 1)) if n else 0
-        row_h = max(12.0, (list_bottom - list_top - 2) / n) if n else 14.0
+        # 行高按"每页槽位数"算(否则最后半页的行会被拉开)
+        row_h = max(13.0, (list_bottom - list_top - 2) / per)
         for i, it in enumerate(shown):
+            idx = page * per + i
             y0 = list_top + 1 + i * row_h
-            if i == sel:
+            if idx == sel:
                 sc.highlight((7, y0, 233, y0 + row_h - 1))
             # 传 key 而不是大类:否则 15 种球、9 种药在货架上长得一模一样
             icon = str(it.get("key") or it.get("kind") or "")
             sc.item_icon(icon, 11, y0 + row_h / 2 - 4.5, 9)
-            sc.text(24, y0 + row_h / 2 - 5, _fit(sc, str(it.get("zh") or it.get("key") or "?"),
-                                                 96, 8.4), size=8.4, fill=TEXT)
+            sc.text(24, y0 + row_h / 2 - 5,
+                    _fit(sc, str(it.get("zh") or it.get("key") or "?"), 96, 8.4),
+                    size=8.4, fill=TEXT)
             try:
                 price = round(float(it.get("price") or 0) * disc)
             except (TypeError, ValueError):
@@ -381,16 +397,39 @@ def render_shop(
         if not shown:
             sc.text(14, list_top + 6, "这里暂时没有商品。", size=8.5, fill=TEXT_DIM)
 
-        # 底部说明框
-        sc.window((5, 115, 235, sc.content_bottom), radius=2)
-        cur = shown[sel] if n else {}
-        head = f"{cur.get('zh') or cur.get('key') or '—'} · 持有 ×{int(cur.get('count') or 0)}"
-        sc.text(10, 117, head, size=7.6, fill=TEXT_DIM)
-        desc = str(cur.get("desc") or "—")
-        for i, ln in enumerate(sc.wrap(desc, 220, size=8, limit=2)):
-            sc.text(10, 126 + i * 9.5, ln, size=8, fill=TEXT)
+        # 底部说明框:选中那一件的价格/持有/效果/说明
+        sc.window((5, 106, 235, sc.content_bottom), radius=2)
+        cur = shown[sel - page * per] if n else {}
+        if cur:
+            try:
+                price = round(float(cur.get("price") or 0) * disc)
+            except (TypeError, ValueError):
+                price = 0
+            head = (f"{sel + 1}. {cur.get('zh') or cur.get('key') or '—'}"
+                    f" · 持有 ×{int(cur.get('count') or 0)} · {price:,}₽")
+        else:
+            head = "—"
+        sc.text(10, 108.5, _fit(sc, head, 150, 7.6), size=7.6, fill=TEXT_DIM)
+        if pages > 1:
+            sc.text_right(231, 108.5,
+                          f"{page + 1}/{pages} 页 · {page * per + 1}-"
+                          f"{min(total, (page + 1) * per)}/共 {total}",
+                          size=6.6, fill=TEXT_DIM)
+        body = ""
+        if cur.get("effect"):
+            body += f"⚙️ {cur['effect']}\n"
+        body += str(cur.get("desc") or "—")
+        y = 117.5
+        room = max(1, int((sc.content_bottom - y - 0.5) // 8.6))
+        for ln in sc.wrap(body, 220, size=7.8, limit=room):
+            sc.text(10, y, ln, size=7.8,
+                    fill=(40, 96, 56) if ln.startswith("⚙️") else TEXT)
+            y += 8.6
 
-        sc.footer("◆ /商店 买 <道具> <数量>")
+        tail = "◆ /商店 买 <道具> [数量] · /商店 卖 <道具> [数量]"
+        if pages > 1:
+            tail += " · 翻页写序号"
+        sc.footer(_fit(sc, tail, 226, 7.0), size=7.0)
         return sc.finish()
     except Exception as e:  # 渲染失败回退文本
         logger.debug("宝可梦世界: 商店界面渲染失败: %s", e)

@@ -44,7 +44,7 @@ from .pw import ui_menu as UIM
 from .pw import ui_quest as UIQ
 from .pw import ui_render as UI
 from .pw.dex import get_dex
-from .pw.items import BAG_ITEMS
+from .pw.items import BAG_ITEMS, effect_text
 from .pw.narrate import Narrator
 from .pw.player import Trainer, TrainerStore, new_trainer
 from .pw.sqlite_store import SqliteBackend
@@ -875,8 +875,17 @@ class PokemonWorldPlugin(Star):
             return
         lines = [f"🎒 {t.name} 的背包({fmt_money(t.money)})"]
         for _k, entry, n in items:
-            lines.append(f"· {entry['zh']} ×{n} —— {entry.get('desc', '')}")
-        payload = self._bag_payload(t, self._args(event, ("背包", "bag", "道具")))
+            # 文本回退没有分页,直接全列出来,并带上"这道具到底做什么"
+            eff = effect_text(_k)
+            lines.append(
+                f"· {entry['zh']} ×{n}"
+                + (f" —— {eff}" if eff else "")
+                + (f"({entry['desc']})" if entry.get("desc") else "")
+            )
+        pocket_arg, want_index, want_page = _parse_page_args(
+            self._args(event, ("背包", "bag", "道具")), numeric_is_page=False
+        )
+        payload = self._bag_payload(t, pocket_arg, index=want_index, page=want_page)
         async for r in self._emit_ui(
             event, "bag",
             lambda: UI.render_bag(
@@ -1564,27 +1573,46 @@ class PokemonWorldPlugin(Star):
         state = self._state(t.scope)
         discount = float(state.modifiers.get("shop_discount", 1.0))
         arg = self._args(event, ("商店", "shop", "购买")).strip()
-        if not arg:
+        tokens = arg.split()
+        action = tokens[0] if tokens else ""
+        # **先判断买/卖**:否则 `/商店 买 伤药 2` 里的数字会被当成"看第 2 件"
+        if action in ("买", "buy", "卖", "sell") and len(tokens) >= 2:
+            pass
+        else:
+            # 只看不买:`/商店 12`(第 12 件)或 `/商店 页 4` —— 满徽章时货架 80+ 种
+            _, want_index, want_page = _parse_page_args(
+                arg, numeric_is_page=(action in ("页", "page"))
+            )
+            entries = self._shop_payload(t, discount)
+            per = max(1, int(UIM.SHOP_PER_PAGE))
+            if want_index > 0:
+                sel = min(want_index - 1, len(entries) - 1)
+            elif want_page > 1:
+                sel = min((want_page - 1) * per, len(entries) - 1)
+            else:
+                sel = 0
             text = self._shop_text(t, discount)
             async for r in self._emit_ui(
                 event, "shop",
                 lambda: UIM.render_shop(
-                    self._shop_payload(t, discount), money=t.money,
+                    entries, money=t.money,
                     location_zh=world.node_zh(t.location), discount=discount,
-                    scale=self._img_scale(),
+                    selected=max(0, sel), scale=self._img_scale(),
                 ),
                 text=text,
-                hint="买卖:`/商店 买 <道具> [数量]`、`/商店 卖 <道具> [数量]`",
+                hint="买卖:`/商店 买 <道具> [数量]`、`/商店 卖 <道具> [数量]`;"
+                     "看第 N 件:`/商店 <序号>`",
             ):
                 yield r
             return
-        tokens = arg.split()
-        action = tokens[0]
-        if (action in ("买", "buy") and len(tokens) >= 2) or (action in ("卖", "sell") and len(tokens) >= 2):
+        if (action in ("买", "buy") or action in ("卖", "sell")) and len(tokens) >= 2:
             name = tokens[1]
             n = coerce_int(tokens[2], 1) if len(tokens) > 2 else 1
         else:
-            yield event.plain_result("❌ 用法:`/商店 买 伤药 3` 或 `/商店 卖 精灵球 2`")
+            yield event.plain_result(
+                "❌ 用法:`/商店 买 <道具> [数量]`、`/商店 卖 <道具> [数量]`、"
+                "`/商店 <序号>`(看第 N 件)、`/商店 页 <N>`(翻页)"
+            )
             return
         n = int(clamp(n or 1, 1, 99))
         stock = set(world.shop_stock(t.location, t.badge_count()))
@@ -2258,17 +2286,22 @@ class PokemonWorldPlugin(Star):
 
     def _shop_text(self, t: Trainer, discount: float) -> str:
         world = WorldMap()
+        stock = world.shop_stock(t.location, t.badge_count())
         lines = [
             f"🛒 商店({world.node_zh(t.location)})· 余额 {fmt_money(t.money)}"
             + (f" · 折扣 {int((1 - discount) * 100)}%" if discount < 1 else "")
+            + f" · 共 {len(stock)} 种商品"
         ]
         for key in world.shop_stock(t.location, t.badge_count()):
             entry = BAG_ITEMS.get(key)
             if not entry:
                 continue
+            eff = effect_text(key)
             lines.append(
-                f"· {entry['zh']} —— {fmt_money(item_price(key, badge_count=t.badge_count(), discount=discount))}"
-                f"({entry.get('desc', '')})"
+                f"· {entry['zh']}"
+                f" —— {fmt_money(item_price(key, badge_count=t.badge_count(), discount=discount))}"
+                + (f" —— {eff}" if eff else "")
+                + (f"({entry['desc']})" if entry.get("desc") else "")
             )
         lines.append("用法:`/商店 买 伤药 3` · `/商店 卖 精灵球 2`")
         return "\n".join(lines)
@@ -2931,8 +2964,13 @@ class PokemonWorldPlugin(Star):
             )
         return out
 
-    def _bag_payload(self, t: Trainer, pocket_arg: str = "") -> dict:
-        """背包界面数据:按口袋分组,返回当前口袋的条目。"""
+    def _bag_payload(self, t: Trainer, pocket_arg: str = "", *,
+                     index: int = 0, page: int = 0) -> dict:
+        """背包界面数据:按口袋分组,返回当前口袋的条目。
+
+        `index`(1 起)/ `page`(1 起)用来定位要**高亮并显示说明**的那一件 ——
+        以前 `selected` 恒为 0,口袋一多就永远只看得到第一件的说明(用户反馈)。
+        """
         groups: dict[str, list[dict]] = {}
         for key, entry, n in t.bag_items():
             pk = UI.KIND_TO_POCKET.get(str(entry.get("kind") or ""), "items")
@@ -2956,10 +2994,18 @@ class PokemonWorldPlugin(Star):
                     pocket = pk
                     break
             pocket = pocket or "items"
+        rows = groups.get(pocket, [])
+        per = max(1, int(UI.BAG_PER_PAGE))
+        if index > 0:
+            sel = min(index - 1, len(rows) - 1)
+        elif page > 1:
+            sel = min((page - 1) * per, len(rows) - 1)
+        else:
+            sel = 0
         return {
-            "items": groups.get(pocket, []),
+            "items": rows,
             "pocket": pocket,
-            "selected": 0,
+            "selected": max(0, sel),
             "groups": groups,
         }
 
@@ -3319,6 +3365,45 @@ def _team_brief(team) -> str:
         if isinstance(m, dict) and m.get("species")
     ]
     return "、".join(out) or "?"
+
+
+def _parse_page_args(arg: str, *, numeric_is_page: bool = False) -> tuple[str, int, int]:
+    """解析"[口袋] [序号] [页 N]"(背包)与"[序号] [页 N]"(商店)。
+
+    返回 `(剩余的第一个非数字词, 序号, 页码)` —— 序号与页码都是 1 起,0 表示没给。
+    支持三种写法:`<序号>`、`页 <N>`/`第 <N> 页`/`page <N>`。
+    单独一个数字默认当**序号**(更常用:想知道第 12 件是什么);
+    `numeric_is_page=True` 时才当页码。
+    """
+    toks = [x for x in str(arg or "").replace("、", " ").split() if x]
+    page = 0
+    rest: list[str] = []
+    i = 0
+    while i < len(toks):
+        a = toks[i].lower()
+        if a in ("页", "第", "page", "p") and i + 1 < len(toks):
+            page = coerce_int(toks[i + 1], 0)
+            i += 2
+            if i < len(toks) and toks[i].lower() in ("页", "page"):
+                i += 1      # "第 3 页":尾巴那个"页"要吃掉
+            continue
+        if a.endswith("页") and a[:-1].isdigit():     # 第2页 写成 "2页"
+            page = coerce_int(a[:-1], 0)
+            i += 1
+            continue
+        rest.append(toks[i])
+        i += 1
+    index = 0
+    word = ""
+    for a in rest:
+        if a.isdigit():
+            if numeric_is_page and not page:
+                page = coerce_int(a, 0)
+            elif not index:
+                index = coerce_int(a, 0)
+        elif not word:
+            word = a
+    return word, index, page
 
 
 _LEARN_METHOD_ZH = {

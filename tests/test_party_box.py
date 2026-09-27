@@ -474,3 +474,196 @@ def test_mon_detail_hint_lists_move_effects():
         assert "喷射火焰" in hint and "灼伤" in hint
         assert "摇尾巴" in hint and "防御 -1" in hint
         assert "/招式 <序号>" in hint
+
+
+# ══════════════════════════════════════════════════════════════════
+# 背包 / 商店:分页 + 说明框跟着选中项
+# ══════════════════════════════════════════════════════════════════
+def _drawn_texts(monkeypatch, fn, *a, **kw) -> list[str]:
+    """把 Screen.text 画过的字符串全记下来。
+
+    界面渲染内部自己 new Screen,外面拿不到;spy 一层就能断言"到底画了什么字",
+    比对比像素稳得多。
+    """
+    from pw import ui_menu as UIM
+    from pw import ui_render as UI
+
+    seen: list[str] = []
+    for cls in (UI.Screen, getattr(UIM, "Screen", UI.Screen)):
+        orig = cls.text
+
+        def spy(self, x, y, s, _orig=orig, **k):
+            seen.append(str(s))
+            return _orig(self, x, y, s, **k)
+
+        monkeypatch.setattr(cls, "text", spy, raising=False)
+    fn(*a, **kw)
+    return seen
+
+
+def _many_items(n=14):
+    keys = ["potion", "super-potion", "antidote", "revive", "poke-ball",
+            "great-ball", "full-heal", "fire-stone", "pp-up", "x-attack",
+            "max-potion", "ether", "escape-rope", "rare-candy"]
+    from pw.items import BAG_ITEMS, effect_text
+
+    out = []
+    for i in range(min(n, len(keys))):
+        k = keys[i]
+        e = BAG_ITEMS.get(k) or {}
+        out.append({"key": k, "zh": e.get("zh") or k, "count": i + 1,
+                    "desc": e.get("desc") or "", "effect": effect_text(k),
+                    "kind": e.get("kind") or "", "price": 100 * (i + 1)})
+    return out
+
+
+def test_parse_page_args():
+    from test_commands import _MOD as _PKG
+
+    mod = sys.modules.get("pw_plugin.main", _PKG)
+    parse = mod._parse_page_args
+    assert parse("") == ("", 0, 0)
+    assert parse("12") == ("", 12, 0)
+    assert parse("页 3") == ("", 0, 3)
+    assert parse("第 3 页") == ("", 0, 3)          # 尾巴那个"页"不能当成口袋名
+    assert parse("3页") == ("", 0, 3)
+    assert parse("道具 4") == ("道具", 4, 0)
+    assert parse("精灵球 页 2") == ("精灵球", 0, 2)
+    assert parse("page 2") == ("", 0, 2)
+    # 页码写法可以当页码用(numeric_is_page)
+    assert parse("2", numeric_is_page=True) == ("", 0, 2)
+
+
+def test_bag_selection_and_paging():
+    """`selected` 要能定位到"第 N 件 / 第 N 页",而不是永远第 0 件。"""
+    from pw import ui_render as UI
+
+    with tempfile.TemporaryDirectory() as tmp:
+        p, ev = _start(tmp)
+        t = p._load(ev)
+        t.data["bag"] = {"potion": 3, "super-potion": 2, "antidote": 5, "revive": 1,
+                         "poke-ball": 12, "great-ball": 4, "full-heal": 1,
+                         "fire-stone": 2, "pp-up": 1, "x-attack": 2, "max-potion": 1,
+                         "ether": 2}
+        p._save(t)
+        per = UI.BAG_PER_PAGE
+        # 用**实际**条目数算期望:每个口袋装哪些 kind 由 KIND_TO_POCKET 决定,
+        # 手写数字容易被自己坑(道具口袋其实只有 3 件)。
+        n = len(p._bag_payload(t, "道具")["items"])
+        assert n > 0
+        # 不指定 → 第 0 件
+        assert p._bag_payload(t, "道具")["selected"] == 0
+        # 指定第 2 件
+        assert p._bag_payload(t, "道具", index=2)["selected"] == 1
+        # 指定第 2 页 → 该页第一件(够长时);够长时等于 per
+        if n > per:
+            assert p._bag_payload(t, "道具", page=2)["selected"] == per
+        # 越界的序号/页码钳到最后一件,而不是报错或越界
+        assert p._bag_payload(t, "道具", index=999)["selected"] == n - 1
+        assert p._bag_payload(t, "道具", page=99)["selected"] == n - 1
+        # 口袋名照旧可用,且精灵球口袋确实收着球
+        balls = p._bag_payload(t, "精灵球")
+        assert balls["pocket"] == "balls"
+        assert any(x["key"] in ("poke-ball", "great-ball") for x in balls["items"])
+
+
+def test_bag_desc_box_follows_the_selected_item(monkeypatch):
+    """说明框必须写**选中那一件**的说明(用户:只能看到第一个 item 的说明)。"""
+    from pw import ui_render as UI
+
+    items = _many_items(14)
+    # 选中第 12 件(第 3 页)
+    texts = _drawn_texts(monkeypatch, UI.render_bag, items, money=3000,
+                         active_pocket="items", selected=11, scale=1)
+    blob = "\n".join(texts)
+    sel_item = items[11]
+    assert str(sel_item["zh"]) in blob, blob[:300]
+    assert str(sel_item["desc"])[:10] in blob, f"说明框没写选中项的说明:\n{blob[-300:]}"
+    # 页码提示也要画出来
+    assert any("页" in x and "/共" in x for x in texts), texts[-6:]
+    # 第 0 件的说明不该出现在说明框里(它在列表里只有名字)
+    first_desc = str(items[0]["desc"])[:10]
+    assert first_desc not in blob or first_desc in str(sel_item["desc"])
+
+
+def test_shop_desc_box_follows_the_selected_item(monkeypatch):
+    """满徽章时货架 80+ 种,说明框要跟着选中的那件走(以前永远第 0 件)。"""
+    from pw import ui_menu as UIM
+    from pw.items import effect_text
+
+    entries = []
+    for i, it in enumerate(_many_items(14)):
+        entries.append({**it, "price": 100 * (i + 1),
+                        "effect": effect_text(it["key"])})
+    texts = _drawn_texts(monkeypatch, UIM.render_shop, entries, money=3000,
+                         location_zh="深灰市", selected=13, scale=1)
+    blob = "\n".join(texts)
+    assert str(entries[13]["zh"]) in blob
+    assert str(entries[13]["desc"])[:10] in blob, f"没写选中商品的说明:\n{blob[-300:]}"
+    assert any("/共" in x for x in texts), texts[-6:]
+
+
+def test_shop_buy_sell_still_works_with_numbers():
+    """`/商店 买 伤药 2` 里的数字不能被当成"看第 2 件"。"""
+    with tempfile.TemporaryDirectory() as tmp:
+        p, ev = _start(tmp)
+        t = p._load(ev)
+        t.data["location"] = "pewter-city"      # 有商店的城镇
+        t.data["bag"] = {"potion": 3}
+        p._save(t)
+        # 冻结"今天已滚动":否则世界事件(捡到钱包 +800₽)会让金钱断言随机失败
+        from pw.util import game_day
+
+        st = p._state("g10086")
+        st.data["day"] = game_day()
+        st.data["last_roll_day"] = game_day()
+        st.data["player_events"] = {}
+        p._save_state(st)
+        money0 = p._load(ev).money
+        out = _run(p, "/商店 买 伤药 2", "cmd_shop")
+        t2 = p._load(ev)
+        assert "买下" in out, out[:150]
+        assert t2.count("potion") == 5, t2.count("potion")
+        assert t2.money < money0
+        out = _run(p, "/商店 卖 伤药 1", "cmd_shop")
+        assert "卖" in out and p._load(ev).count("potion") == 4
+
+
+def test_item_effect_text_is_human_readable():
+    from pw.items import effect_text
+
+    cases = {
+        "potion": "回复 20 HP",
+        "max-potion": "完全回复 HP",
+        "antidote": "治愈中毒",
+        "full-heal": "所有异常状态",
+        "revive": "复活并回复 50% HP",
+        "great-ball": "捕获率 ×1.5",
+        "master-ball": "必定捕获",
+        "ether": "回复 10 点 PP",
+        "fire-stone": "进化",
+        "x-attack": "提升 攻击",
+        "rare-candy": "提升 1 级",
+        "leftovers": "每回合回复",
+    }
+    for key, want in cases.items():
+        got = effect_text(key)
+        assert want in got, f"{key} 的效果文本缺少「{want}」:{got}"
+    # 基础捕获率不该写成"捕获率 ×1"
+    assert "捕获率" not in effect_text("poke-ball")
+    # 引擎里没有消费方的效果要如实标出来
+    for key in ("pp-up", "ability-capsule"):
+        assert "暂未实现" in effect_text(key), key
+
+
+def test_bag_text_fallback_lists_effects():
+    """图片不可用时,文本回退也要带上效果(不能只有名字)。"""
+    with tempfile.TemporaryDirectory() as tmp:
+        p, ev = _start(tmp)
+        t = p._load(ev)
+        t.data["bag"] = {"potion": 3, "great-ball": 2, "pp-up": 1}
+        p._save(t)
+        out = _run(p, "/背包", "cmd_bag")
+        assert "回复 20 HP" in out
+        assert "捕获率 ×1.5" in out
+        assert "暂未实现" in out

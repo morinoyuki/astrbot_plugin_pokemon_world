@@ -17,6 +17,7 @@ from astrbot.api import logger
 
 from . import fonts
 from .dex import get_dex
+from .items import KIND_ZH
 from .sprites import back_sprite_path, sprite_path
 
 LOGICAL_W = 240
@@ -1575,18 +1576,26 @@ def render_party(
 # ══════════════════════════════════════════════════════════════════
 # 界面:背包(FRLG 背包 + 口袋页签)
 # ══════════════════════════════════════════════════════════════════
+# 背包每页条目数(与 main.py 的翻页换算共用,别各写各的)
+BAG_PER_PAGE = 5
+
+
 def render_bag(
     items: list[dict],
     *,
     money: int = 0,
     active_pocket: str = "items",
     selected: int = 0,
+    per_page: int = BAG_PER_PAGE,
     pockets: list[tuple[str, str]] | None = None,
     scale: int = SCALE_DEFAULT,
 ) -> bytes:
-    """背包界面:页签 + 条目列表 + 底部说明框。
+    """背包界面:页签 + 条目列表(分页) + 底部说明框。
 
-    items: [{key, zh, count, desc, kind}] —— 只显示属于 active_pocket 的条目。
+    items: [{key, zh, count, desc, effect, kind}] —— 只显示属于 active_pocket 的条目。
+    `selected` 是**整个口袋里的下标**(0 起),会自动翻到它所在的那一页并高亮;
+    说明框显示的是**选中那一件**的效果与说明(以前写死第 0 件,口袋东西一多
+    就永远只看得到第一件的说明 —— 用户反馈)。
     """
     try:
         pockets = pockets or POCKETS
@@ -1604,27 +1613,57 @@ def render_bag(
             sc.text(tx + 4, 20, label, size=7.6,
                     fill=(30, 40, 30) if on else TEXT_DIM)
             tx += kw + 2
-        # 列表
-        shown = items[:6]
-        sc.window((5, 31, 235, 112), radius=2)
+        # 列表(分页)
+        total = len(items)
+        per = max(1, int(per_page))
+        pages = max(1, (total + per - 1) // per)
+        sel = max(0, min(int(selected or 0), total - 1)) if total else 0
+        page = max(0, min(sel // per, pages - 1)) if total else 0
+        shown = items[page * per:(page + 1) * per]
+        top, bottom = 31.0, 104.0
+        sc.window((5, top, 235, bottom), radius=2)
         if not shown:
-            sc.text(14, 34, "这个口袋是空的。", size=8.5, fill=TEXT_DIM)
+            sc.text(14, top + 3, "这个口袋是空的。", size=8.5, fill=TEXT_DIM)
+        # 行高按"每页槽位数"算,不按实际条目数 —— 否则最后半页会被拉得很高
+        row_h = max(12.0, (bottom - top - 2) / per)
         for i, it in enumerate(shown):
-            y0 = 33 + i * 13
-            if i == selected:
-                sc.highlight((7, y0, 233, y0 + 12))
+            idx = page * per + i
+            y0 = top + 1 + i * row_h
+            if idx == sel:
+                sc.highlight((7, y0, 233, y0 + row_h - 1))
             sc.item_icon(str(it.get("key") or it.get("kind") or ""), 10, y0 + 1.5, 9)
-            sc.text(23, y0 + 1.5, str(it.get("zh") or it.get("key") or ""), size=8.4,
-                    fill=TEXT)
-            sc.text_right(228, y0 + 1.5, f"×{int(it.get('count') or 0)}", size=8.4,
-                          fill=TEXT)
-        # 说明框
-        sc.window((5, 113, 235, sc.content_bottom), radius=2)
-        cur = shown[selected] if 0 <= selected < len(shown) else (shown[0] if shown else {})
-        lines = sc.wrap(str(cur.get("desc") or "—"), 220, size=8, limit=3)
-        for i, ln in enumerate(lines):
-            sc.text(10, 116 + i * 9, ln, size=8, fill=TEXT)
-        sc.footer("◆ 用 /商店 买 卖 · 对战时 /对战 item <道具>")
+            sc.text(23, y0 + row_h / 2 - 5.2,
+                    _fit(sc, str(it.get("zh") or it.get("key") or ""), 120, 8.4),
+                    size=8.4, fill=TEXT)
+            sc.text_right(228, y0 + row_h / 2 - 5.2, f"×{int(it.get('count') or 0)}",
+                          size=8.4, fill=TEXT)
+        # 说明框:选中那一件的效果 + 说明(标题行右侧放页码,避免压住列表)
+        cur = items[sel] if total else {}
+        sc.window((5, 106, 235, sc.content_bottom), radius=2)
+        head = f"{sel + 1}. {cur.get('zh') or cur.get('key') or '—'}"
+        if cur.get("kind"):
+            head += f" · {KIND_ZH.get(str(cur['kind']), cur['kind'])}"
+        sc.text(10, 108.5, _fit(sc, head, 150, 7.6), size=7.6, fill=TEXT_DIM)
+        if pages > 1:
+            sc.text_right(231, 108.5,
+                          f"{page + 1}/{pages} 页 · {page * per + 1}-"
+                          f"{min(total, (page + 1) * per)}/共 {total}",
+                          size=6.6, fill=TEXT_DIM)
+        # 效果与说明合并成一个换行流:效果在前(更该看),总行数按剩余高度封顶
+        body = ""
+        if cur.get("effect"):
+            body += f"⚙️ {cur['effect']}\n"
+        body += str(cur.get("desc") or "—")
+        y = 117.5
+        room = max(1, int((sc.content_bottom - y - 0.5) // 8.6))
+        for ln in sc.wrap(body, 220, size=7.8, limit=room):
+            sc.text(10, y, ln, size=7.8,
+                    fill=(40, 96, 56) if ln.startswith("⚙️") else TEXT)
+            y += 8.6
+        tail = "◆ 使用:`/使用 <道具> [序号]`"
+        if pages > 1:
+            tail += " · 翻页写序号"
+        sc.footer(_fit(sc, tail, 226, 7.0), size=7.0)
         return sc.finish()
     except Exception as e:  # 渲染失败回退文本
         logger.debug("宝可梦世界: 背包界面渲染失败: %s", e)
