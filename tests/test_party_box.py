@@ -9,7 +9,11 @@ import tempfile
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, _ROOT)
 
-from test_commands import _Cmd, _Event, run_cmd  # noqa: E402
+from test_commands import (  # noqa: E402
+    _Cmd,
+    _Event,
+    run_cmd,
+)
 
 from pw import battle as B  # noqa: E402
 from pw.engine import create_pokemon  # noqa: E402
@@ -922,7 +926,7 @@ def test_bag_pocket_switching_works_in_both_paths(monkeypatch):
                              scale=1)
         assert any(t.strip() == "1." for t in texts), texts[:12]
         assert any(t.strip() == "2." for t in texts), texts[:12]
-        assert any("切换分类" in t for t in texts), texts[-6:]
+        assert any("详情:" in t or "分类:" in t for t in texts), texts[-6:]
 
 
 def test_battle_final_frame_shows_real_foe_after_wipe(monkeypatch):
@@ -979,3 +983,68 @@ def test_battle_final_frame_shows_real_foe_after_wipe(monkeypatch):
         assert money1 < money0, "非野生战失败应扣一半金钱"
         # 画面发完清掉 session
         assert not B.session(p._load(ev2)).get("battle")
+
+
+def test_paging_commands_for_bag_and_shop(monkeypatch):
+    """`/背包 <分类> 页 2`、`/商店 页 2` 必须真的翻页。
+
+    选序号会自动翻页(上一条测试),但"翻到下一页"也得有自己的写法 ——
+    否则一页只看得到 4 件时,玩家只能靠猜序号往后走。
+    """
+    from pw import ui_menu as UIM
+    from pw import ui_render as UI
+
+    with tempfile.TemporaryDirectory() as tmp:
+        p, ev = _start(tmp)
+        t = p._load(ev)
+        keys = ["potion", "super-potion", "hyper-potion", "max-potion", "antidote",
+                "burn-heal", "ice-heal", "awakening", "paralyze-heal", "full-heal",
+                "revive", "ether"]
+        t.data["bag"] = dict.fromkeys(keys, 1)
+        t.data["location"] = "pewter-city"
+        p._save(t)
+        per = UI.BAG_PER_PAGE
+        assert per >= 2
+
+        # 页码 → payload 的 selected 落到该页第一件
+        assert p._bag_payload(t, "回复", page=1)["selected"] == 0
+        assert p._bag_payload(t, "回复", page=2)["selected"] == per
+        assert p._bag_payload(t, "回复", page=3)["selected"] == per * 2
+        # 越界页码钳到最后
+        n = len(p._bag_payload(t, "回复")["items"])
+        assert p._bag_payload(t, "回复", page=99)["selected"] == n - 1
+
+        # 两页画出来的图必须不同(否则就是没翻页)
+        def bag_img(page):
+            pay = p._bag_payload(t, "回复", page=page)
+            return UI.render_bag(pay["items"], money=t.money,
+                                 active_pocket=pay["pocket"],
+                                 selected=pay["selected"], scale=2)
+
+        assert bag_img(1) != bag_img(2), "第 1/2 页画出来一样,翻页没生效"
+        # 底部提示要写出翻页写法
+        texts = _drawn_texts(monkeypatch, UI.render_bag,
+                             p._bag_payload(t, "回复", page=1)["items"],
+                             money=t.money, active_pocket="medicine", selected=0,
+                             scale=1)
+        foot = " ".join(t for t in texts if "翻页" in t or "详情" in t)
+        assert "页 2" in foot, foot
+
+        # 商店:页语法 + 图片不同
+        entries = p._shop_payload(t, 1.0)
+        assert len(entries) > UIM.SHOP_PER_PAGE, "货架条目太少,测不到分页"
+        img1 = UIM.render_shop(entries, money=t.money, selected=0, scale=2)
+        img2 = UIM.render_shop(entries, money=t.money,
+                               selected=UIM.SHOP_PER_PAGE, scale=2)
+        assert img1 != img2
+        # `/商店 页 2` 走的是 sel = (2-1)*per(开图片才会走 UI 路径)
+        p.config = {"ui_image": True, "battle_image_scale": 2}
+        ev2 = _Event("/商店 页 2")
+        run_cmd(p, ev2, p.cmd_shop)
+        assert "<chain:" in "".join(ev2.outputs), ev2.outputs
+        p.config = None
+        # 页码写法若被当成序号会退化成"看第 2 件",所以再确认一次 payload 语义
+        _, want_index, want_page = sys.modules["pw_plugin.main"]._parse_page_args(
+            "页 2", numeric_is_page=True
+        )
+        assert (want_index, want_page) == (0, 2)

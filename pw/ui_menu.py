@@ -156,6 +156,11 @@ def _chain_keys(nodes: list[dict]) -> tuple[list[str], dict[str, list[str]]]:
 # ══════════════════════════════════════════════════════════════════
 # 1. 镇地图(RSE/FRLG 风格)
 # ══════════════════════════════════════════════════════════════════
+# 地图界面几何(测试据此推导"面板之间的缝隙",避免写死数字)
+MAP_BOX = (5, 19, 150, 102)
+TOWN_TOP = 105
+
+
 def render_map(
     region_zh: str,
     nodes: list[dict],
@@ -177,8 +182,11 @@ def render_map(
         cur_key = str(current or "")
 
         sc.title_bar("镇地图", right=region)
-        MAP = (5, 19, 150, 108)
-        TOWN = (5, 111, 150, sc.content_bottom)
+        # 宽度保持原样(左列到 150、右栏 153..235);溢出是**纵向**的:
+        # 左下清单最后一行、右栏图例最后一行原本都贴着面板下边框。
+        # 做法是把上面地图压矮 4px,把左下清单**加高** —— 而不是去动宽度。
+        MAP = MAP_BOX
+        TOWN = (5, TOWN_TOP, 150, sc.content_bottom)
         INFO = (153, 19, 235, sc.content_bottom)
         sc.window(MAP, radius=2)
         sc.window(TOWN, radius=2)
@@ -199,7 +207,7 @@ def render_map(
         if cur_key and cur_key not in shown and nodes:
             shown[-1] = cur_key  # 当前位置必须可见,宁可不显示最后一个节点
         rows = max(1, (len(shown) + cols - 1) // cols)
-        cw = (mx1 - mx0 - 8) / cols
+        cw = (mx1 - mx0 - 8) / cols   # 左列收窄后 cw 自动跟着变
         # 每个节点占「标记 + 下方标签」两块,共 14 逻辑像素;ch 必须按"标记块"分配,
         # 否则最后一行(y+6.5 起画的标签)会越过面板底边 —— 实测过 108.7 > 108。
         node_h = 14.0
@@ -261,9 +269,9 @@ def render_map(
             sc.text(14, 42, "暂无地图数据。", size=8.5, fill=TEXT_DIM)
 
         # 左下:城镇清单(最多 6 条,3 列 × 2 行)
-        sc.text(9, 112.5, "地点", size=7, fill=TEXT_DIM)
+        sc.text(9, 107.5, "地点", size=7, fill=TEXT_DIM)
         if len(order) > len(shown):
-            sc.text_right(146, 112.5, f"图中前 {len(shown)}/{len(order)} 处", size=7,
+            sc.text_right(146, 107.5, f"图中前 {len(shown)}/{len(order)} 处", size=7,
                           fill=TEXT_DIM)
         disp: list[tuple[str, tuple[int, int, int]]] = []
         for key in order[:6]:
@@ -275,11 +283,11 @@ def render_map(
             disp = [*disp[:5], (f"+{len(order) - 5}", TEXT_DIM)]
         for i, (label, color) in enumerate(disp):
             col, row = i % 3, i // 3
-            sc.text(9 + col * 46, 123 + row * 9, label, size=7, fill=color)
+            sc.text(9 + col * 46, 119 + row * 9.4, label, size=7, fill=color)
 
         # 右侧:地区 / 排名 / 当前位置 / 下一目标 / 图例
         cx = (INFO[0] + INFO[2]) / 2
-        sc.text_center(cx, 23, _fit(sc, region, 76, 10.5), size=10.5, fill=TEXT)
+        sc.text_center(cx, 23, _fit(sc, region, 82, 10.5), size=10.5, fill=TEXT)
         sc.text_center(cx, 38, f"第{int(region_order or 1)}地区", size=7.6, fill=TEXT_DIM)
         sc.d.line([INFO[0] + 5, 47, INFO[2] - 5, 47], fill=BOX_HI)
         sc.text(158, 50, "当前位置", size=7, fill=TEXT_DIM)
@@ -296,7 +304,7 @@ def render_map(
         legend = [("current", "当前位置"), ("visited", "已到过"),
                   ("empty", "未到过"), ("gym", "道馆城镇")]
         for i, (kind, label) in enumerate(legend):
-            ly = 104 + i * 9.5
+            ly = 101.5 + i * 9.2
             if kind == "current":
                 sc.d.ellipse([160, ly + 1, 166, ly + 7], outline=PIN_RED)
                 sc.d.ellipse([162, ly + 3, 164, ly + 5], fill=PIN_RED)
@@ -435,7 +443,10 @@ def render_shop(
             sc.text(10, y, ln, size=7.8, fill=TEXT)
             y += 8.6
 
-        tail = "◆ 买:`/商店 买 <道具> [数量]` · 看第 N 件:`/商店 <序号>`"
+        # 底部只放最常用的(长了会被截断);买/卖的完整写法在消息文本的提示行
+        tail = '◆ 详情:"/商店 12"'
+        if pages > 1:
+            tail += ' · 翻页:"/商店 页 2"'
         sc.footer(_fit(sc, tail, 226, 7.0), size=7.0)
         return sc.finish()
     except Exception as e:  # 渲染失败回退文本

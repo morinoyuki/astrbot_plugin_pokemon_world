@@ -246,7 +246,9 @@ def render_news(day: int, *, world_events: list[str] = (), player_events: list[s
         sc.title_bar("早间新闻", right=f"第 {day} 天")
 
         # 天气 / 地区 / 地点 信息条
-        sc.window((5, 19, 235, 30), radius=2, shadow=False)
+        # 信息条整体加高 2px(19..32),药丸与文字都上移 —— 7 号字在 scale=1 时
+        # 墨迹高度比 scale=3 时更大,原来会压出信息条下边
+        sc.window((5, 19, 235, 32), radius=2, shadow=False)
         chips = [
             (_str(weather_zh), CHIP_WEATHER),
             (_str(region_zh), CHIP_REGION),
@@ -256,18 +258,20 @@ def render_news(day: int, *, world_events: list[str] = (), player_events: list[s
         for label, color in chips:
             if not label:
                 continue
-            w = sc.tw(label, 7.4) + 8
+            w = sc.tw(label, 7.0) + 8
             if cx + w > 231:
                 break
-            sc.d.rounded_rectangle([cx, 21, cx + w, 28.5], radius=2, fill=color,
+            # 药丸框与字号都要留余量:7.4 号字的墨迹到 y+8.3,原来画到 29.9,
+            # 比药丸底(28.5)和信息条(30)都低 —— 肉眼就是"文字压出边框"
+            sc.d.rounded_rectangle([cx, 20.5, cx + w, 30], radius=2, fill=color,
                                    outline=BOX_EDGE)
-            sc.text(cx + 4, 21.6, label, size=7.4, fill=(255, 255, 250))
+            sc.text(cx + 4, 21.0, label, size=7.0, fill=(255, 255, 250))
             cx += w + 4
         if cx == 10:
-            sc.text(10, 21.6, "天气与行踪:暂无记录", size=7.6, fill=TEXT_DIM)
+            sc.text(10, 21.2, "天气与行踪:暂无记录", size=7.0, fill=TEXT_DIM)
 
         # 世界播报
-        world_box = (4, 33, 236, 85)
+        world_box = (4, 35, 236, 85)
         _dialog(sc, world_box)
         world = [f"· {x}" for x in _lines(world_events, limit=4)] or ["世界很平静。"]
         _dialog_text(sc, world_box, "◆ 世界", world)

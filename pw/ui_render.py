@@ -1671,7 +1671,10 @@ def render_bag(
             y += 8.6
         # 提示里写**中文分类名**,别把内部 key(items/balls)抖给玩家
         pk_label = next((lb for pk, lb in pockets if pk == active_pocket), "道具")
-        tail = f"◆ 切换分类:`/背包 <分类>` · 看第 N 件:`/背包 {pk_label} <序号>`"
+        # 底部只放最常用的两条(长了会被截断);完整用法在消息文本的提示行里
+        tail = f'◆ 详情:"/背包 {pk_label} 5"'
+        if pages > 1:
+            tail += f' · 翻页:"/背包 {pk_label} 页 2"'
         sc.footer(_fit(sc, tail, 226, 7.0), size=7.0)
         return sc.finish()
     except Exception as e:  # 渲染失败回退文本

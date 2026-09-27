@@ -278,9 +278,10 @@ def test_map_last_row_does_not_overflow_panel():
                         visited=["pallet-town"], gyms=world.gyms("kanto"),
                         next_goal="挑战枯叶市道馆:马志士", scale=SCALE)
     im = _img(data)
-    # 地图面板 MAP=(5,19,150,108),地点框 TOWN=(5,111,150,144)。
-    # 检查整段 [106,111]:节点标签(含最低一行)绝不能碰到/越过面板底边 108。
-    band = im.crop((10 * SCALE, 106 * SCALE, 146 * SCALE, 112 * SCALE))
+    # 两块面板之间的缝隙由渲染层的几何常量推导(MAP_BOX / TOWN_TOP),
+    # 不再写死行号 —— 之前调过面板高度后这个测试就误报了。
+    y0, y1 = M.MAP_BOX[3] + 1, M.TOWN_TOP
+    band = im.crop((10 * SCALE, y0 * SCALE, 146 * SCALE, y1 * SCALE))
     text_like = 0
     for _c, px in (band.getcolors(maxcolors=1 << 20) or []):
         r, g, b = px[:3]
@@ -703,3 +704,107 @@ def test_no_screen_overlaps_the_footer_bar():
             f"{name} 的内容(最低第 {lowest} 行)压到了底部提示条"
             f"(间隙 {gap}px)"
         )
+
+
+# ══════════════════════════════════════════════════════════════════
+# 文本溢出检测:任何文字都不能压出所在面板
+# ══════════════════════════════════════════════════════════════════
+class _PanelSpy:
+    """记录渲染时 `Screen.window()` 画的框和 `Screen.text()` 画的字。"""
+
+    def __enter__(self):
+        from pw import fonts as F  # noqa: F401
+
+        self.boxes: list[tuple] = []
+        self.texts: list[tuple] = []
+        self._ow, self._ot = UI.Screen.window, UI.Screen.text
+
+        def window(inner, box, **kw):
+            self.boxes.append(tuple(float(v) for v in box))
+            return self._ow(inner, box, **kw)
+
+        def text(inner, x, y, s, **kw):
+            self.texts.append((float(x), float(y), str(s), dict(kw)))
+            return self._ot(inner, x, y, s, **kw)
+
+        UI.Screen.window, UI.Screen.text = window, text
+        return self
+
+    def __exit__(self, *exc):
+        UI.Screen.window, UI.Screen.text = self._ow, self._ot
+
+    def offenders(self, scale: int, pad: float = 2.0) -> list[tuple]:
+        """返回越出所属面板内边框的文字(右溢出, 下溢出, 文本)。"""
+        from pw import fonts
+
+        meas = UI.Screen(scale=scale)
+        out = []
+        for x, y, s, kw in self.texts:
+            if not s.strip():
+                continue
+            size = float(kw.get("size", 9) or 9)
+            width = meas.tw(s, size)
+            _, y0, _, y1 = fonts.bbox(s, round(size * scale))
+            ink_h = (y1 - y0) / scale
+            inner = None
+            for b in self.boxes:
+                inside = b[0] - 1 <= x <= b[2] + 1 and b[1] - 1 <= y <= b[3] + 1
+                smaller = inner is None or (b[2] - b[0]) * (b[3] - b[1]) < (
+                    (inner[2] - inner[0]) * (inner[3] - inner[1])
+                )
+                if inside and smaller:
+                    inner = b
+            if inner is None:
+                continue
+            over_r = x + width - (inner[2] - pad)
+            over_b = y + ink_h - (inner[3] - pad)
+            if over_r > 0.5 or over_b > 0.5:
+                out.append((round(over_r, 1), round(over_b, 1), s[:24], inner))
+        return out
+
+
+def test_no_text_overflows_its_panel():
+    """地图 / 新闻等界面的文字不能压出所在窗口。
+
+    用户反馈:"地图界面 右边和左边下面的窗口都有一定程度上的文本溢出" ——
+    实测两处:右侧资料栏图例最后一行墨迹到 139.4(面板内边框在 138)、
+    左下第三列标签顶到边框;另外 `/今日` 顶部信息条的天气药丸文字比药丸框还低。
+    这里对多个界面 × 多个 scale 做统一检测(取**最内层**包含该文字的窗口做比较)。
+    """
+    from pw import ui_info as I
+    from pw import ui_menu as M
+    from pw.world import WorldMap
+
+    world = WorldMap()
+    nodes = world.nodes("kanto")
+    goals = [
+        "挑战 深灰市 的 小刚",
+        "前往 华蓝市 的 小霞(先穿过 9 号道路)",
+        "完成 关都 主线:击退火箭队、集齐 8 枚徽章",
+        "自由探索",
+    ]
+    visited = ["pallet-town", "viridian-city", "pewter-city", "kanto-route-2"]
+
+    for scale in (1, 2, 3, 5):
+        for goal in goals:
+            with _PanelSpy() as spy:
+                M.render_map(world.region_zh("kanto"), nodes, current="pewter-city",
+                             visited=visited, gyms=world.gyms("kanto"),
+                             next_goal=goal, region_order=1, scale=scale)
+            assert not spy.offenders(scale), (
+                f"地图文案压出面板(scale={scale} goal={goal}):{spy.offenders(scale)}"
+            )
+        with _PanelSpy() as spy:
+            I.render_news(7, world_events=["火箭队 在 3 号道路 活动"],
+                          region_zh="关都", location_zh="深灰市", weather_zh="晴天",
+                          locks=["3 号道路 暂时封锁"], scale=scale)
+        assert not spy.offenders(scale), f"新闻界面压出面板:{spy.offenders(scale)}"
+
+        # 长名字也要过得去
+        with _PanelSpy() as spy:
+            UI.render_bag(
+                [{"key": "super-potion", "zh": "厉害伤药", "count": 12,
+                  "desc": "回复 120 HP。", "effect": "回复 120 HP", "kind": "medicine"}],
+                money=999999, active_pocket="medicine", selected=0, scale=scale,
+            )
+        assert not spy.offenders(scale), f"背包压出面板:{spy.offenders(scale)}"

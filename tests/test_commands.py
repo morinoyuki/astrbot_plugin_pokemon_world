@@ -480,7 +480,7 @@ def test_menu_screens_emit_images_when_enabled():
                 assert any(
                     k in joined
                     for k in ("行动", "使用:", "移动:", "买卖:", "挑战:", "管理:",
-                              "切换分类")
+                              "分类:", "详情:")
                 ), f"{cmd} 附带的文本不是指令提示:{joined[:120]}"
         # 关闭开关 → 回退纯文本
         p.config = {"ui_image": False}

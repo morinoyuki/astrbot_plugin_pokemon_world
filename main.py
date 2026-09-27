@@ -919,8 +919,8 @@ class PokemonWorldPlugin(Star):
                 selected=payload["selected"], scale=self._img_scale(),
             ),
             text="\n".join(lines),
-            hint="切换分类:`/背包 <分类>`(道具/精灵球/回复/招式机/重要)· "
-                 "看第 N 件:`/背包 <分类> <序号>`",
+            hint="分类:`/背包 <分类>`(道具/精灵球/回复/招式机/重要)· "
+                 "看第 N 件:`/背包 <分类> <序号>` · 翻页:`/背包 <分类> 页 <N>`",
         ):
             yield r
 
@@ -1659,8 +1659,8 @@ class PokemonWorldPlugin(Star):
                     selected=max(0, sel), scale=self._img_scale(),
                 ),
                 text=text,
-                hint="买卖:`/商店 买 <道具> [数量]`、`/商店 卖 <道具> [数量]`;"
-                     "看第 N 件:`/商店 <序号>`",
+                hint="买卖:`/商店 买 <道具> [数量]`、`/商店 卖 <道具> [数量]` · "
+                     "看第 N 件:`/商店 <序号>` · 翻页:`/商店 页 <N>`",
             ):
                 yield r
             return
