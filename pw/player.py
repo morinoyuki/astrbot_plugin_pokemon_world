@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import os
 from typing import Any
 
@@ -489,6 +490,32 @@ class TrainerStore:
         return sorted(
             f[:-5] for f in os.listdir(d) if f.endswith(".json") and not f.startswith("_")
         )
+
+    def list_scopes(self) -> list[str]:
+        """所有有玩家存档的 scope(JSON 后端就扫目录)。"""
+        if self._db is not None:
+            return self._db.list_trainer_scopes()
+        if not os.path.isdir(self._root):
+            return []
+        return sorted(
+            name
+            for name in os.listdir(self._root)
+            if os.path.isdir(os.path.join(self._root, name))
+        )
+
+    def scope_stats(self) -> dict:
+        """库统计(管理页总览用)。"""
+        if self._db is not None:
+            return self._db.scope_stats()
+        files = size = 0
+        for root, _dirs, fs in os.walk(self._root):
+            for f in fs:
+                if f.endswith(".json"):
+                    files += 1
+                    with contextlib.suppress(OSError):
+                        size += os.path.getsize(os.path.join(root, f))
+        return {"trainers": files, "worlds": 0, "backups": 0, "size": size,
+                "path": self._root}
 
     def delete_scope(self, scope: str) -> int:
         if self._db is not None:

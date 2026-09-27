@@ -201,6 +201,31 @@ class SqliteBackend:
             for r in self._rows("SELECT scope FROM worlds ORDER BY scope")
         ]
 
+    def list_trainer_scopes(self) -> list[str]:
+        """有玩家存档的 scope(与 list_scopes 的 worlds 表不同,管理页要用)。"""
+        return [
+            r["scope"]
+            for r in self._rows("SELECT DISTINCT scope FROM trainers ORDER BY scope")
+        ]
+
+    def scope_stats(self) -> dict:
+        """给管理页用的库统计(玩家数/世界数/文件大小)。"""
+        t = self._rows("SELECT COUNT(*) AS n FROM trainers")
+        w = self._rows("SELECT COUNT(*) AS n FROM worlds")
+        b = self._rows("SELECT COUNT(*) AS n FROM backups")
+        size = 0
+        try:
+            size = os.path.getsize(self.path)
+        except OSError:
+            size = 0
+        return {
+            "trainers": int(t[0]["n"]) if t else 0,
+            "worlds": int(w[0]["n"]) if w else 0,
+            "backups": int(b[0]["n"]) if b else 0,
+            "size": size,
+            "path": str(self.path),
+        }
+
     # ── 旧 JSON 存档导入(只做一次) ──
     def import_legacy(self) -> dict:
         """把磁盘上的旧 JSON 存档导入数据库;返回 {"trainers": n, "worlds": n}。

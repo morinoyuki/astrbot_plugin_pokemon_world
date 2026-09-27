@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>宝可梦世界 · 数据管理</title>
+<link rel="stylesheet" href="./style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">🎮 宝可梦世界 <span class="sub">数据管理</span></div>
+  <button id="btn-refresh" class="btn ghost" title="重新加载当前页数据">↻ 刷新</button>
+</header>
+
+<nav class="tabs" id="tabs">
+  <button class="tab active" data-tab="overview">📊 总览</button>
+  <button class="tab" data-tab="players">🧢 玩家存档</button>
+  <button class="tab" data-tab="world">🌍 世界状态</button>
+  <button class="tab" data-tab="selfcheck">🩺 数据自检</button>
+  <button class="tab" data-tab="maint">🧰 维护</button>
+</nav>
+
+<main id="main">
+
+  <!-- ── 总览 ── -->
+  <section class="panel active" id="tab-overview">
+    <div class="cards" id="ov-cards"></div>
+    <div class="cards" id="ov-data"></div>
+    <p class="hint muted" id="ov-datadir"></p>
+  </section>
+
+  <!-- ── 玩家存档 ── -->
+  <section class="panel" id="tab-players">
+    <div class="toolbar">
+      <label>范围 <select id="p-scope"><option value="">全部</option></select></label>
+      <input id="p-keyword" placeholder="按 uid / 名字过滤">
+      <button class="btn ghost" id="p-load">载入</button>
+      <span class="spacer"></span>
+      <button class="btn danger" id="p-wipe">删除整个范围…</button>
+    </div>
+    <div class="table-wrap"><table class="tbl" id="p-tbl">
+      <thead><tr>
+        <th>范围</th><th>uid</th><th>名字</th><th>地区 / 位置</th><th>金钱</th>
+        <th>徽章</th><th>队伍</th><th>电脑</th><th>天数</th><th>状态</th><th>操作</th>
+      </tr></thead>
+      <tbody></tbody>
+    </table></div>
+  </section>
+
+  <!-- ── 世界状态 ── -->
+  <section class="panel" id="tab-world">
+    <div class="toolbar">
+      <label>范围 <select id="w-scope"></select></label>
+      <button class="btn ghost" id="w-load">载入</button>
+    </div>
+    <div class="cards" id="w-cards"></div>
+    <div class="grid2" id="w-weather"></div>
+    <h3>封锁</h3>
+    <div class="table-wrap"><table class="tbl" id="w-lock-tbl">
+      <thead><tr><th>地点</th><th>解除日(绝对序号)</th></tr></thead><tbody></tbody>
+    </table></div>
+    <h3>本地事件</h3>
+    <div class="table-wrap"><table class="tbl" id="w-ev-tbl">
+      <thead><tr><th>地点</th><th>类型</th><th>内容</th></tr></thead><tbody></tbody>
+    </table></div>
+    <h3>重置</h3>
+    <div class="toolbar">
+      <button class="btn ghost" data-reset="weather">重置天气</button>
+      <button class="btn ghost" data-reset="locks">清除封锁</button>
+      <button class="btn ghost" data-reset="events">清除本地事件</button>
+      <button class="btn ghost" data-reset="player_events">清除个人事件</button>
+      <button class="btn ghost" data-reset="modifiers">重置增益</button>
+      <button class="btn danger" data-reset="all">全部重置</button>
+    </div>
+  </section>
+
+  <!-- ── 数据自检 ── -->
+  <section class="panel" id="tab-selfcheck">
+    <div class="toolbar">
+      <button class="btn primary" id="sc-run">开始自检</button>
+      <span class="hint muted">检查"拿不到的道具 / 进化不了的条件 / 走不到的道馆"这类静默故障</span>
+    </div>
+    <div class="checks" id="sc-list"></div>
+  </section>
+
+  <!-- ── 维护 ── -->
+  <section class="panel" id="tab-maint">
+    <div class="cards" id="m-cards"></div>
+    <div class="toolbar">
+      <label>保留最近(秒) <input id="m-keep" type="number" value="1800" style="width:8em"></label>
+      <button class="btn primary" id="m-clean">清理过期界面图</button>
+      <button class="btn ghost" id="m-reload">重新统计</button>
+    </div>
+    <p class="hint muted">界面图写到系统临时目录(`pw_*.png`),过期的可以随时清掉;</p>
+  </section>
+</main>
+
+<!-- 玩家详情抽屉 -->
+<div class="drawer-mask" id="drawer-mask"></div>
+<aside class="drawer" id="drawer">
+  <div class="drawer-head">
+    <strong id="drawer-title">玩家存档</strong>
+    <span class="muted" id="drawer-sub"></span>
+    <button class="btn ghost" id="drawer-close">✕ 关闭</button>
+  </div>
+  <div class="drawer-body">
+    <div class="drawer-tabs">
+      <button class="dt active" data-dt="base">基础 / 动作</button>
+      <button class="dt" data-dt="mons">队伍 / 电脑</button>
+      <button class="dt" data-dt="raw">原始 JSON</button>
+    </div>
+
+    <div class="dpane active" id="dp-base">
+      <div class="grid2">
+        <label>名字 <input id="e-name"></label>
+        <label>金钱 <input id="e-money" type="number"></label>
+        <label>地区 <select id="e-region"></select></label>
+        <label>位置 <input id="e-location"></label>
+        <label>步数 <input id="e-steps" type="number"></label>
+      </div>
+      <div class="row-end"><button class="btn primary" id="save-base">保存基础信息</button></div>
+
+      <h4>快捷动作</h4>
+      <div class="toolbar">
+        <button class="btn ghost" id="act-heal">全队治愈</button>
+      </div>
+      <div class="toolbar">
+        <input id="act-item" placeholder="道具名/key,如 精灵球">
+        <input id="act-item-n" type="number" value="1" style="width:5em">
+        <button class="btn ghost" id="act-item-add">发放</button>
+        <button class="btn ghost" id="act-item-del">扣除</button>
+      </div>
+      <div class="toolbar">
+        <select id="act-badge-region"></select>
+        <input id="act-badge-order" type="number" placeholder="第几枚(1-8)" style="width:8em">
+        <button class="btn ghost" id="act-badge-add">授予徽章</button>
+        <button class="btn ghost" id="act-badge-del">移除徽章</button>
+      </div>
+      <p class="hint muted" id="e-badges"></p>
+      <div class="row-end"><button class="btn danger" id="e-delete">删除该玩家存档</button></div>
+    </div>
+
+    <div class="dpane" id="dp-mons">
+      <h4>队伍 <span class="sub" id="mon-party-n"></span></h4>
+      <div id="mon-party"></div>
+      <h4>电脑 <span class="sub" id="mon-box-n"></span></h4>
+      <div id="mon-box"></div>
+      <p class="hint muted">点「编辑」改等级 / 经验 / 亲密度 / 昵称 / HP / 携带物 / 招式。</p>
+    </div>
+
+    <div class="dpane" id="dp-raw">
+      <div class="toolbar">
+        <button class="btn ghost" id="raw-reload">重新载入</button>
+        <button class="btn ghost" id="raw-export">导出 JSON</button>
+      </div>
+      <textarea id="raw-json" rows="24" spellcheck="false"
+        style="width:100%;font-family:ui-monospace,monospace;font-size:12px"></textarea>
+    </div>
+  </div>
+</aside>
+
+<!-- 通用弹窗(编辑宝可梦 / 查看 JSON / 确认) -->
+<div class="modal-mask" id="modal-mask">
+  <div class="modal" role="dialog">
+    <div class="modal-head"><strong id="modal-title"></strong></div>
+    <div class="modal-body" id="modal-body"></div>
+    <div class="modal-foot" id="modal-foot"></div>
+  </div>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<script src="/api/plugin/page/bridge-sdk.js"></script>
+<script src="./app.js"></script>
+</body>
+</html>

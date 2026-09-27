@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import functools
 import glob
 import os
 import re
@@ -68,10 +69,61 @@ if TYPE_CHECKING:  # 仅用于类型注解(运行时不需要)
     from .pw.engine import Pokemon
 from .pw.world import (
     FLY_COST,
+    REGION_ORDER,
     WorldMap,
     item_price,
 )
 from .pw.worldstate import WorldState, WorldStore
+
+try:  # 插件 Web API / 插件页面(较新版本提供);旧版缺失时跳过页面接口注册
+    from astrbot.api.web import error_response as _web_error
+    from astrbot.api.web import file_response as _web_file
+    from astrbot.api.web import json_response as _web_json
+    from astrbot.api.web import request as _web_request
+except ImportError:  # pragma: no cover
+    _web_error = _web_file = _web_json = _web_request = None
+
+# 插件页面路由前缀就是插件名(dashboard 按 /plugins/extensions/<插件名>/<路由> 匹配)
+_WEB_BASE = "/astrbot_plugin_pokemon_world"
+
+# 天气 key → 中文(插件内部用 sun/rain/sand/snow,空串=晴朗)
+_WEATHER_ZH = {"": "晴朗", "sun": "大晴天", "rain": "下雨", "sand": "沙暴", "snow": "下雪"}
+
+
+async def _web_body() -> dict:
+    """读请求 JSON 体;没有绑定请求上下文(测试直调)时返回空 dict。"""
+    try:
+        body = await _web_request.json(default=None)
+    except Exception:
+        return {}
+    return body if isinstance(body, dict) else {}
+
+
+def _web_query(name: str, default: str = "") -> str:
+    """读 query 参数;同上,取不到就回默认值。"""
+    try:
+        val = _web_request.query.get(name)
+    except Exception:
+        return default
+    return str(val).strip() if val is not None else default
+
+
+def _web_handler(func):
+    """包装插件 Web API handler:统一异常 → error envelope。"""
+
+    @functools.wraps(func)
+    async def wrapper(*args, **kwargs):
+        if _web_json is None:
+            return {"ok": False, "message": "AstrBot 版本过低,无插件 Web API"}
+        try:
+            return await func(*args, **kwargs)
+        except ValueError as e:
+            return _web_error(str(e), status_code=400)
+        except Exception as e:
+            logger.error("宝可梦世界: Web API %s 失败: %s", func.__name__, e)
+            return _web_error("内部错误,请查看日志", status_code=500)
+
+    return wrapper
 
 DEFAULT_STARTERS = ["新叶喵", "呆火鳄", "润水鸭", "皮卡丘", "伊布", "小火龙", "杰尼龟", "妙蛙种子"]
 EXPLORE_ITEM_POOL = ["potion", "poke-ball", "antidote", "oran-berry", "super-potion"]
@@ -249,6 +301,8 @@ class PokemonWorldPlugin(Star):
         self._locks: dict[str, asyncio.Lock] = {}
         self._scheduler_task: asyncio.Task | None = None
         self._last_notified_day = 0
+        # 插件页面(pages/manage)的数据管理 REST 接口
+        self._register_web_apis()
 
     async def initialize(self):
         if self._scheduler_task is None or self._scheduler_task.done():
@@ -4278,6 +4332,442 @@ class PokemonWorldPlugin(Star):
         if body:
             yield event.plain_result(body)
 
+    # ════════════════════════════════════════════════════════════
+    # WebUI 插件页面:数据管理 REST 接口
+    #
+    # 页面本体在 pages/manage/(index.html + app.js + style.css),由 dashboard
+    # 自动发现并以 iframe + bridge SDK 方式加载;这里只注册 JSON 接口。
+    # 路由必须带插件名前缀(dashboard 按
+    # /plugins/extensions/<插件名>/<路由> 匹配 registered_web_apis)。
+    # 所有写操作复用聊天命令同一把会话锁,避免和指令并发改坏存档。
+    # ════════════════════════════════════════════════════════════
+
+    def _register_web_apis(self) -> None:
+        if _web_json is None or not hasattr(self.context, "register_web_api"):
+            logger.debug("宝可梦世界: 当前 AstrBot 无插件 Web API,跳过页面接口注册")
+            return
+        routes = (
+            (f"{_WEB_BASE}/api/overview", self._web_overview, ["GET"], "总览统计"),
+            (f"{_WEB_BASE}/api/scopes", self._web_scopes, ["GET"], "会话 scope 列表"),
+            (f"{_WEB_BASE}/api/players", self._web_players, ["GET"], "玩家存档列表"),
+            (f"{_WEB_BASE}/api/player/<scope>/<uid>", self._web_player, ["GET"],
+             "玩家存档详情"),
+            (f"{_WEB_BASE}/api/player/update", self._web_player_update, ["POST"],
+             "修改玩家存档"),
+            (f"{_WEB_BASE}/api/player/delete", self._web_player_delete, ["POST"],
+             "删除玩家存档"),
+            (f"{_WEB_BASE}/api/world/<scope>", self._web_world, ["GET"], "世界状态"),
+            (f"{_WEB_BASE}/api/world/reset", self._web_world_reset, ["POST"],
+             "重置世界状态项"),
+            (f"{_WEB_BASE}/api/selfcheck", self._web_selfcheck, ["GET"], "数据自检"),
+            (f"{_WEB_BASE}/api/maintenance", self._web_maintenance, ["GET"], "维护信息"),
+            (f"{_WEB_BASE}/api/cleanup", self._web_cleanup, ["POST"], "清理临时文件"),
+        )
+        def _reg(route, handler, methods, desc) -> None:
+            try:
+                self.context.register_web_api(
+                    route, handler, methods, f"宝可梦世界: {desc}"
+                )
+            except Exception as e:
+                logger.warning("宝可梦世界: 注册 Web API %s 失败: %s", route, e)
+
+        for route, handler, methods, desc in routes:
+            _reg(route, handler, methods, desc)
+
+    async def _all_scopes(self) -> list[str]:
+        """所有有数据的 scope(玩家表 ∪ 世界表;JSON 后端则扫目录)。"""
+        out = set(self.worlds.list_scopes())
+        out.update(self.trainers.list_scopes())
+        return sorted(out)
+
+    def _tmp_stats(self) -> dict:
+        """临时图片(渲染出的界面图)数量与占用。"""
+        import glob
+
+        tmp = tempfile.gettempdir()
+        files = glob.glob(os.path.join(tmp, "pw_*.png"))
+        size = 0
+        oldest = newest = 0.0
+        for p in files:
+            try:
+                st = os.stat(p)
+            except OSError:
+                continue
+            size += st.st_size
+            oldest = st.st_mtime if not oldest else min(oldest, st.st_mtime)
+            newest = max(newest, st.st_mtime)
+        return {"count": len(files), "size": size, "dir": tmp,
+                "oldest": oldest, "newest": newest}
+
+    # ── 总览 ──
+    @_web_handler
+    async def _web_overview(self) -> dict:
+        from .pw.dex import get_dex
+        from .pw.items import BAG_ITEMS, TM_MOVES
+        from .pw.quests import REWARD_ITEMS
+
+        dex = get_dex()
+        scopes = await self._all_scopes()
+        players = sum(len(self.trainers.list_players(sc)) for sc in scopes)
+        world = WorldMap()
+        nodes = sum(len(world.nodes(r)) for r in REGION_ORDER)
+        return {
+            "ok": True,
+            "storage": self._storage,
+            "data_dir": self.data_dir,
+            "scopes": len(scopes),
+            "players": players,
+            "db": self.trainers.scope_stats(),
+            "temp": self._tmp_stats(),
+            "data": {
+                "species": len(dex.species),
+                "moves": len(dex.moves),
+                "abilities": len(getattr(dex, "abilities", {}) or {}),
+                "items": len(BAG_ITEMS),
+                "tms": len(TM_MOVES),
+                "quest_rewards": len(REWARD_ITEMS),
+                "regions": len(REGION_ORDER),
+                "nodes": nodes,
+                "sprites": _sprite_count(),
+            },
+        }
+
+    @_web_handler
+    async def _web_scopes(self) -> dict:
+        out = []
+        for sc in await self._all_scopes():
+            uids = self.trainers.list_players(sc)
+            out.append({
+                "scope": sc,
+                "players": len(uids),
+                "has_world": bool(self.worlds.load(sc)),
+                "kind": "群" if sc.startswith("g") else "私聊",
+            })
+        return {"ok": True, "scopes": out}
+
+    # ── 玩家列表 ──
+    @_web_handler
+    async def _web_players(self) -> dict:
+        world = WorldMap()
+        want_scope = _web_query("scope")
+        scopes = [want_scope] if want_scope else await self._all_scopes()
+        rows = []
+        for sc in scopes:
+            for uid in self.trainers.list_players(sc):
+                d = self.trainers.load(sc, uid)
+                if d is None:
+                    rows.append({"scope": sc, "uid": uid, "broken": True,
+                                 "name": "(读不出来/已损坏)"})
+                    continue
+                party = d.get("party") or []
+                rows.append({
+                    "scope": sc,
+                    "uid": uid,
+                    "broken": False,
+                    "name": str(d.get("name") or ""),
+                    "region": str(d.get("region") or ""),
+                    "region_zh": world.region_zh(str(d.get("region") or "")),
+                    "location": str(d.get("location") or ""),
+                    "location_zh": world.node_zh(str(d.get("location") or "")),
+                    "money": int(d.get("money") or 0),
+                    "badges": len(d.get("badges") or []),
+                    "party": len(party),
+                    "party_zh": [
+                        _sp_zh(str(m.get("species") or "")) for m in party[:6]
+                    ],
+                    "box": len(d.get("box") or []),
+                    "steps": int(d.get("steps") or 0),
+                    "battle": bool(d.get("battle")),
+                    "in_battle": bool(B.in_battle(_trainer_view(d))),
+                    "day": _play_day(d),
+                })
+        rows.sort(key=lambda r: (r["scope"], r["uid"]))
+        return {"ok": True, "players": rows, "total": len(rows)}
+
+    @_web_handler
+    async def _web_player(self, scope: str = "", uid: str = "") -> dict:
+        d = self.trainers.load(scope, uid)
+        if d is None:
+            return _web_error(f"存档不存在或已损坏:{scope}/{uid}", status_code=404)
+        party = []
+        for i, raw in enumerate(d.get("party") or [], 1):
+            mon = B.dict_to_mon(raw)
+            party.append({
+                "index": i,
+                "id": str(raw.get("id") or ""),
+                "species": mon.species,
+                "zh": _sp_zh(mon.species),
+                "nickname": mon.nickname,
+                "level": int(mon.level),
+                "exp": int(mon.exp),
+                "cur_hp": int(mon.cur_hp),
+                "max_hp": int(mon.max_hp),
+                "friendship": int(mon.friendship),
+                "item": mon.item,
+                "item_zh": _item_zh(mon.item),
+                "moves": [{"key": k, "zh": get_dex().moves.get(k, {}).get("zh", k)}
+                          for k in mon.moves],
+                "pending": list(raw.get("pending") or []),
+                "pending_zh": [_move_zh(m) for m in (raw.get("pending") or [])],
+                "pending_tm": dict(raw.get("pending_tm") or {}),
+            })
+        return {
+            "ok": True,
+            "scope": scope,
+            "uid": uid,
+            "raw": d,
+            "summary": {
+                "name": str(d.get("name") or ""),
+                "money": int(d.get("money") or 0),
+                "region": str(d.get("region") or ""),
+                "location_zh": WorldMap().node_zh(str(d.get("location") or "")),
+                "badges": [str(x) for x in (d.get("badges") or [])],
+                "steps": int(d.get("steps") or 0),
+                "day": _play_day(d),
+                "in_battle": bool(B.in_battle(_trainer_view(d))),
+                "dex_seen": len(d.get("dex_seen") or []),
+                "dex_caught": len(d.get("dex_caught") or []),
+                "flags": dict(d.get("flags") or {}),
+                "bag": [
+                    {"key": k, "zh": _item_zh(k), "count": int(n)}
+                    for k, n in sorted((d.get("bag") or {}).items())
+                    if int(n or 0) > 0
+                ],
+                "quests": [
+                    {"title": str(q.get("title") or ""), "giver": str(q.get("giver") or ""),
+                     "progress": int(q.get("progress") or 0),
+                     "count": int((q.get("objective") or {}).get("count") or 0)}
+                    for q in ((d.get("quests") or {}).get("active") or [])
+                ],
+            },
+            "party": party,
+            "box": [
+                {"index": i, "species": m.get("species"),
+                 "zh": _sp_zh(str(m.get("species") or "")),
+                 "level": int(m.get("level") or 0)}
+                for i, m in enumerate(d.get("box") or [], 1)
+            ],
+        }
+
+    # ── 修改存档 ──
+    @_web_handler
+    async def _web_player_update(self) -> dict:
+        body = await _web_body()
+        scope = str(body.get("scope") or "")
+        uid = str(body.get("uid") or "")
+        if not scope or not uid:
+            raise ValueError("缺少 scope / uid")
+        sets = body.get("set") or {}
+        acts = body.get("actions") or []
+        if not isinstance(sets, dict) or not isinstance(acts, list):
+            raise ValueError("set 必须是对象、actions 必须是数组")
+        async with self._lock(scope):
+            d = self.trainers.load(scope, uid)
+            if d is None:
+                raise ValueError("存档不存在或已损坏(损坏的存档请先备份后删除)")
+            done: list[str] = []
+
+            # ① 基础字段(白名单,避免页面写坏结构)
+            for k in ("name", "money", "region", "location", "steps"):
+                if k not in sets:
+                    continue
+                val = sets[k]
+                if k in ("money", "steps"):
+                    d[k] = max(0, coerce_int(val, 0))
+                else:
+                    d[k] = str(val)
+                done.append(f"{k} = {d[k]}")
+
+            # ② 具体动作
+            view = _trainer_view(d)
+            for act in acts:
+                if not isinstance(act, dict):
+                    continue
+                op = str(act.get("op") or "")
+                if op == "heal":
+                    view.heal_party()
+                    done.append("全队治愈")
+                elif op == "badge":
+                    region = str(act.get("region") or d.get("region") or "")
+                    order = coerce_int(act.get("order"), 0)
+                    if not region or order <= 0:
+                        raise ValueError("徽章需要 region 与 order")
+                    if act.get("remove"):
+                        key = f"{region}:{order}"
+                        badges = [b for b in (d.get("badges") or []) if b != key]
+                        d["badges"] = badges
+                        done.append(f"移除徽章 {key}")
+                    else:
+                        view.add_badge(region, order)
+                        done.append(f"授予徽章 {region}:{order}")
+                elif op == "item":
+                    key_in = str(act.get("key") or "")
+                    key = _resolve_stock(key_in, set(BAG_ITEMS)) or key_in
+                    if key not in BAG_ITEMS:
+                        raise ValueError(f"没有这个道具:{key_in}")
+                    n = max(1, coerce_int(act.get("count"), 1))
+                    if act.get("remove"):
+                        d["bag"] = {
+                            k: v for k, v in _take_items(d.get("bag") or {}, key, n).items()
+                            if int(v or 0) > 0
+                        }
+                        done.append(f"移除 {key}×{n}")
+                    else:
+                        bag = dict(d.get("bag") or {})
+                        bag[key] = int(bag.get(key) or 0) + n
+                        d["bag"] = bag
+                        done.append(f"发放 {key}×{n}")
+                elif op == "flag":
+                    name = str(act.get("name") or "")
+                    if not name:
+                        raise ValueError("flag 需要 name")
+                    flags = dict(d.get("flags") or {})
+                    if act.get("remove"):
+                        flags.pop(name, None)
+                        done.append(f"删除 flag {name}")
+                    else:
+                        flags[name] = act.get("value", True)
+                        done.append(f"设置 flag {name}")
+                    d["flags"] = flags
+                elif op == "mon":
+                    done.append(_web_edit_mon(d, act))
+                else:
+                    raise ValueError(f"未知操作:{op}")
+
+            self.trainers.save(scope, uid, d)
+        return {"ok": True, "done": done}
+
+    @_web_handler
+    async def _web_player_delete(self) -> dict:
+        body = await _web_body()
+        scope = str(body.get("scope") or "")
+        uid = str(body.get("uid") or "")
+        if not scope:
+            raise ValueError("缺少 scope")
+        # 删除整群/整个 scope 是危险操作:必须显式确认
+        if body.get("all"):
+            if str(body.get("confirm") or "") != "DELETE":
+                raise ValueError("删除整个 scope 需要 confirm=DELETE")
+            async with self._lock(scope):
+                n = self.trainers.delete_scope(scope)
+                self.worlds.delete(scope)
+            return {"ok": True, "deleted": n, "scope": scope}
+        if not uid:
+            raise ValueError("缺少 uid")
+        async with self._lock(scope):
+            ok = self.trainers.delete(scope, uid)
+        if not ok:
+            return _web_error(f"存档不存在:{scope}/{uid}", status_code=404)
+        return {"ok": True, "deleted": 1, "scope": scope, "uid": uid}
+
+    # ── 世界状态 ──
+    @_web_handler
+    async def _web_world(self, scope: str = "") -> dict:
+        data = self.worlds.load(scope)
+        if not data:
+            return _web_error(
+                f"这个 scope 还没有世界数据(玩家跑一次 `/今日` 或 `/探索` 就会生成):"
+                f"{scope}", status_code=404)
+        state = WorldState(data, scope)
+        events = state.data.get("events") or {}
+        return {
+            "ok": True,
+            "scope": scope,
+            "raw": state.data,
+            "summary": {
+                "day_no": state.day_no(state.day),
+                "started_day": int(state.data.get("started_day") or 0),
+                "weather": {
+                    r: {
+                        "key": state.weather_for(r),
+                        "zh": _WEATHER_ZH.get(state.weather_for(r), "晴朗"),
+                    }
+                    for r in REGION_ORDER
+                },
+                # locks 是 {地点: 解锁日};events 是**列表**(不是字典,别用 items())
+                "locks": [
+                    {"key": str(k), "until": int(v or 0)}
+                    for k, v in (state.data.get("locks") or {}).items()
+                ],
+                "events": [
+                    {"location": str(e.get("location") or ""),
+                     "kind": str(e.get("kind") or ""),
+                     "text": EV.event_text(e)}
+                    for e in events
+                    if isinstance(e, dict)
+                ],
+                "modifiers": dict(state.data.get("modifiers") or {}),
+                "player_events": len(state.data.get("player_events") or {}),
+            },
+        }
+
+    @_web_handler
+    async def _web_world_reset(self) -> dict:
+        body = await _web_body()
+        scope = str(body.get("scope") or "")
+        what = str(body.get("what") or "")
+        if not scope or not what:
+            raise ValueError("缺少 scope / what")
+        async with self._lock(scope):
+            data = self.worlds.load(scope)
+            if not data:
+                raise ValueError(f"这个 scope 还没有世界数据:{scope}")
+            hit: list[str] = []
+            if what in ("all", "weather"):
+                data["weather"] = {}
+                hit.append("天气")
+            if what in ("all", "locks"):
+                data["locks"] = {}
+                hit.append("封锁")
+            if what in ("all", "events"):
+                data["events"] = []          # 注意是列表(不是字典)
+                hit.append("本地事件")
+            if what in ("all", "player_events"):
+                data["player_events"] = {}
+                hit.append("个人事件")
+            if what in ("all", "modifiers"):
+                data["modifiers"] = {}
+                hit.append("增益")
+            if not hit:
+                raise ValueError(f"不认识的 what:{what}")
+            self.worlds.save(scope, data)
+        return {"ok": True, "reset": hit}
+
+    # ── 维护:数据自检 ──
+    @_web_handler
+    async def _web_selfcheck(self) -> dict:
+        checks = _run_selfcheck()
+        return {
+            "ok": True,
+            "checks": checks,
+            "failed": [c["name"] for c in checks if not c["ok"]],
+            "passed": all(c["ok"] for c in checks),
+        }
+
+    # ── 维护:占用与清理 ──
+    @_web_handler
+    async def _web_maintenance(self) -> dict:
+        return {
+            "ok": True,
+            "db": self.trainers.scope_stats(),
+            "temp": self._tmp_stats(),
+            "sprites": _sprite_count(),
+        }
+
+    @_web_handler
+    async def _web_cleanup(self) -> dict:
+        body = await _web_body()
+        keep = max(0, coerce_int(body.get("keep_seconds"), 1800))
+        before = self._tmp_stats()
+        _prune_temp_images(before["dir"], keep_seconds=keep)
+        after = self._tmp_stats()
+        return {
+            "ok": True,
+            "removed": max(0, before["count"] - after["count"]),
+            "freed": max(0, before["size"] - after["size"]),
+            "temp": after,
+        }
+
 # ── 模块级小工具 ──────────────────────────────────────────────────
 # 对战中其他行动的一律锁定文案。写成**模块级常量**而不是类属性:
 # 类上非 callable 的属性在测试宿主对象 `_Cmd` 上不会被拷贝(它只拷 callable),
@@ -4324,7 +4814,10 @@ def _prune_temp_images(tmp: str, keep_seconds: int = 1800) -> None:
     普通函数、多绑一个 self,导致调用签名错位。
     """
     now = time.time()
-    for pat in ("pw_ui_*.png", "pw_battle_*.png"):
+    # 只碰本插件的命名空间(pw_ 前缀)。**要和页面统计用同一个 glob**:
+    # 之前这里只认 pw_ui_/pw_battle_ 两种前缀,而页面按 pw_*.png 统计,
+    # 于是"统计说有 500 个、清理却说删了 0 个"(实测反馈)。
+    for pat in ("pw_*.png",):
         for name in glob.glob(os.path.join(tmp, pat)):
             if not _older_than(name, now, keep_seconds):
                 continue
@@ -4555,3 +5048,209 @@ def _badges_by_region(t: Trainer) -> list[str]:
 
         out.append(f"{world.region_zh(region)}({len(ids)}):" + "、".join(names))
     return out
+
+# ── 插件页面用的小工具 ────────────────────────────────────────────
+def _trainer_view(d: dict) -> Trainer:
+    """用存档 dict 造一个只读 Trainer(不改 store,给页面做派生信息用)。"""
+    return Trainer(d or {}, uid=str((d or {}).get("uid") or ""),
+                   scope=str((d or {}).get("scope") or ""))
+
+
+def _play_day(d: dict) -> int:
+    """玩家自己的第 N 天(创建那天 = 第 1 天);存档里的 play_day 是绝对序号。"""
+    from .pw.util import game_day
+
+    start = int((d or {}).get("play_day") or 0)
+    return max(1, game_day() - start + 1) if start else 1
+
+
+def _item_zh(key: str | None) -> str:
+    k = str(key or "")
+    if not k:
+        return ""
+    if k.startswith("tm-"):
+        from .pw.items import tm_move
+
+        return "招式机·" + _move_zh(tm_move(k))
+    return (BAG_ITEMS.get(k) or {}).get("zh") or k
+
+
+def _move_zh(key: str | None) -> str:
+    k = str(key or "")
+    return ((get_dex().moves.get(k) or {}).get("zh")) or k
+
+
+def _take_items(bag: dict, key: str, n: int) -> dict:
+    """从背包扣掉 n 个(不足则清零)。"""
+    out = dict(bag or {})
+    out[key] = max(0, int(out.get(key) or 0) - max(0, int(n)))
+    return out
+
+
+def _reachable_within(world: WorldMap, start: str, dest: str, cap: int) -> bool:
+    """在"危险度不超过 cap"的前提下能否从 start 走到 dest(BFS)。"""
+    if not start or not dest or start not in world._index or dest not in world._index:
+        return False
+    seen = {start}
+    queue = [start]
+    while queue:
+        node = queue.pop(0)
+        if node == dest:
+            return True
+        for nxt in world.neighbors(node):
+            if nxt in seen or world.tier(nxt) > cap:
+                continue
+            seen.add(nxt)
+            queue.append(nxt)
+    return dest in seen
+
+
+def _run_selfcheck() -> list[dict]:
+    """数据自检:这些不变量一破,玩家就会遇到"拿不到 / 进化不了 / 走不到"。
+
+    每项返回 `{"name", "ok", "detail"}`,管理页直接展示;失败项要能一眼看出原因。
+    """
+    from .pw.dex import get_dex
+    from .pw.items import (
+        BAG_ITEMS,
+        TM_GYM_BY_TYPE,
+        TM_MISSING,
+        TM_MOVES,
+        TM_SHOP,
+        tm_key,
+    )
+    from .pw.quests import REWARD_ITEMS
+
+    dex = get_dex()
+    world = WorldMap()
+    out: list[dict] = []
+
+    def add(name: str, ok: bool, detail: str = "") -> None:
+        out.append({"name": name, "ok": bool(ok), "detail": detail})
+
+    # ① 招式机数据一致
+    bad_shop = [m for _t, ks in TM_SHOP for m in ks if m not in TM_MOVES]
+    no_item = [m for m in TM_MOVES if tm_key(m) not in BAG_ITEMS]
+    add("招式机数据", not (TM_MISSING or bad_shop or no_item),
+        f"招式表缺失 {TM_MISSING or '无'} · 商店死条目 {bad_shop or '无'} · "
+        f"无背包条目 {no_item or '无'}")
+
+    # ② 每件道具都有获取途径(商店 ∪ 委托奖励 ∪ 道馆招牌招式机 ∪ 探索掉落)
+    stock = set(world.shop_stock("pewter-city", 8))
+    avail = (stock | set(REWARD_ITEMS) | {tm_key(m) for m in TM_GYM_BY_TYPE.values()}
+             | {"master-ball"} | set(EXPLORE_ITEM_POOL))
+    unreachable = [k for k in BAG_ITEMS if k not in avail]
+    add("道具获取途径", not unreachable,
+        f"{len(unreachable)} 件拿不到:{unreachable[:10]}")
+
+    # ③ 进化目标都存在
+    bad_evo = [f"{sp}→{t}" for sp, e in dex.species.items()
+               for t in (e.get("evos") or []) if t not in dex.species]
+    add("进化目标", not bad_evo, f"{len(bad_evo)} 条目标不存在:{bad_evo[:6]}")
+
+    # ④ 学习表里的招式都在招式表里
+    bad_learn = sorted({mv for codes in (dex.learnsets or {}).values()
+                        for mv in (codes or {}) if mv not in dex.moves})
+    add("学习表招式", not bad_learn, f"{len(bad_learn)} 个招式不存在:{bad_learn[:6]}")
+
+    # ⑤ 昼夜条件能被识别(识别不了 = "永远进化不了"的静默失败)
+    bad_day = []
+    for sp, e in dex.species.items():
+        for t in (e.get("evos") or []):
+            cond = str((dex.species.get(t) or {}).get("evoCondition") or "")
+            low = cond.lower()
+            if ("day" in low or "night" in low) and (
+                dex._daytime_ok(cond, "day") == dex._daytime_ok(cond, "night")
+            ):
+                bad_day.append(f"{sp}→{t}({cond})")
+    add("昼夜条件", not bad_day, f"{len(bad_day)} 条无法判定:{bad_day[:6]}")
+
+    # ⑥ 精灵图覆盖(缺图会画成空白)。PokeAPI 本来就缺"超级基格尔德"的官方图,
+    #    它走基础形态回退,是有意的例外 —— 不算失败,但要显示出来。
+    sp_dir = os.path.join(os.path.dirname(__file__), "pw", "static", "sprites")
+    missing = [sp for sp in dex.species
+               if not os.path.exists(os.path.join(sp_dir, f"{sp}.png"))]
+    known = {"zygardemega"}
+    bad_sprite = [sp for sp in missing if sp not in known]
+    add("精灵图", not bad_sprite,
+        f"{len(bad_sprite)} 个形态缺正面图:{bad_sprite[:6]}"
+        + (f"(已知例外:{sorted(set(missing) & known)})" if set(missing) & known else ""))
+
+    # ⑦ 道馆按顺序可达(危险度门槛不能把主线卡死)
+    stuck: list[str] = []
+    for region in REGION_ORDER:
+        cur = world.start_location(region)
+        badges: list[str] = []
+        gyms = world.gyms(region)
+        if not gyms:
+            continue          # 占位地区(如 paldea 还没做地图)不算失败
+        for order in range(1, 9):
+            gym = next((g for g in gyms if int(g.get("order", 0)) == order), None)
+            if not gym:
+                stuck.append(f"{region} 缺第 {order} 道馆")
+                break
+            dest = str(gym.get("location") or "")
+            cap = world._route_cap(region, cur, badges)
+            if not _reachable_within(world, cur, dest, max(cap, world.tier(dest))):
+                stuck.append(f"{region} 第 {order} 馆走不到({cur}→{dest})")
+                break
+            badges = [*badges, f"{region}:{order}"]
+            cur = dest
+    have_gyms = [r for r in REGION_ORDER if world.gyms(r)]
+    add("道馆可达", not stuck,
+        "; ".join(stuck[:4]) or f"{len(have_gyms)} 个地区都能按顺序拿满 8 枚" +
+        (f"(另有 {len(REGION_ORDER) - len(have_gyms)} 个占位地区暂无地图)"
+         if len(have_gyms) < len(REGION_ORDER) else ""))
+
+    return out
+
+
+def _web_edit_mon(d: dict, act: dict) -> str:
+    """改单只宝可梦:等级/经验/亲密度/昵称/HP/携带物/招式。
+
+    写成**模块级函数**:测试宿主 `_Cmd` 会把类上的 `@staticmethod` 重绑成实例方法,
+    多传一个 self(`_web_edit_mon() takes 2 positional arguments but 3 were given`)。
+    """
+    where = str(act.get("where") or "party")
+    idx = coerce_int(act.get("index"), 0)
+    rows = d.get("party") if where == "party" else d.get("box")
+    if not isinstance(rows, list) or not (0 < idx <= len(rows)):
+        raise ValueError(f"找不到{'队伍' if where == 'party' else '电脑'}里的第 {idx} 只")
+    raw = rows[idx - 1]
+    mon = B.dict_to_mon(raw)
+    st = act.get("set") or {}
+    if "level" in st:
+        lv = min(100, max(1, coerce_int(st["level"], mon.level)))
+        mon.level = lv
+        dex = get_dex()
+        # 等级变了就把经验对齐到该等级的下限,免得出现"Lv20 却是 Lv5 的经验"
+        mon.exp = max(int(mon.exp), dex.exp_for_level(dex.growth_of(mon.species), lv))
+        growth.recompute(mon)
+    if "exp" in st:
+        mon.exp = max(0, coerce_int(st["exp"], mon.exp))
+        mon.level = min(100, max(1, get_dex().level_from_exp(
+            get_dex().growth_of(mon.species), mon.exp)))
+        growth.recompute(mon)
+    if "friendship" in st:
+        mon.friendship = min(255, max(0, coerce_int(st["friendship"], mon.friendship)))
+    if "nickname" in st:
+        mon.nickname = str(st["nickname"] or "")[:12]
+    if "item" in st:
+        item = str(st["item"] or "")
+        mon.item = "" if not item else (_resolve_stock(item, set(BAG_ITEMS)) or item)
+    if "hp" in st:
+        mon.cur_hp = min(int(mon.max_hp), max(0, coerce_int(st["hp"], mon.cur_hp)))
+    if "moves" in st and isinstance(st["moves"], list):
+        dex = get_dex()
+        moves = []
+        for mv in st["moves"][:4]:
+            r = dex.resolve_move(str(mv))
+            if r:
+                moves.append(r[0])
+        if moves:
+            mon.moves = moves
+            for k in list(mon.pp):
+                if k not in moves:
+                    mon.pp.pop(k, None)
+    rows[idx - 1] = B.mon_to_dict(mon, raw)
+    return f"修改{where}[{idx}] {_sp_zh(mon.species)} → Lv{mon.level}"
