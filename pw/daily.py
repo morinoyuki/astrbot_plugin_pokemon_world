@@ -166,6 +166,14 @@ def today_brief(state: WorldState, *, region: str = "", location: str = "") -> s
     )
     # 必须用相对天数:state.day 是 ordinal,直接显示就是"第 739885 游戏日"
     lines = [f"📅 世界第 {state.day_no(day)} 天(04:00 刷新)"]
+    # 昼夜要显示出来:太阳伊布/月亮伊布、玛狃拉这类进化按它判定,
+    # 而游戏里没有别的"现在是白天还是晚上"的提示(以**服务器本地时间**为准)
+    from .battle import daytime_of
+
+    now_day = daytime_of() == "day"
+    lines.append(
+        f"{'🌞 现在是白天' if now_day else '🌙 现在是夜晚'}(06:00 天亮 · 18:00 天黑)"
+    )
     if region:
         lines.append(f"🌦️ 当前地区天气:{weather}")
     if location:

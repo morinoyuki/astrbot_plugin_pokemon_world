@@ -34,6 +34,7 @@ from .ui_render import (
 
 # ── 局部配色(在 ui_render 调色板上补几个)──────────────────────
 MSG_FRAME_HI = (214, 100, 82)      # 暗红框内圈高光
+CHIP_TIME = (92, 88, 152)          # 昼夜标签
 CHIP_WEATHER = (232, 176, 64)      # 天气标签
 CHIP_REGION = (96, 152, 104)       # 地区标签
 CHIP_PLACE = (104, 144, 206)       # 地点标签
@@ -239,7 +240,8 @@ def render_legendaries(region_zh: str, sites: list[dict], *, caught: list[str] =
 # ══════════════════════════════════════════════════════════════════
 def render_news(day: int, *, world_events: list[str] = (), player_events: list[str] = (),
                 weather_zh: str = "", region_zh: str = "", location_zh: str = "",
-                locks: list[str] = (), scale: int = SCALE_DEFAULT) -> bytes:
+                daytime_zh: str = "", locks: list[str] = (),
+                scale: int = SCALE_DEFAULT) -> bytes:
     """早间新闻:顶部信息条 + 世界 / 个人 两段播报(经典对话框)。"""
     try:
         sc = Screen(scale=scale)
@@ -250,6 +252,8 @@ def render_news(day: int, *, world_events: list[str] = (), player_events: list[s
         # 墨迹高度比 scale=3 时更大,原来会压出信息条下边
         sc.window((5, 19, 235, 32), radius=2, shadow=False)
         chips = [
+            # 昼夜放最前:太阳伊布/月亮伊布、玛狃拉这类进化按它判定
+            (_str(daytime_zh), CHIP_TIME),
             (_str(weather_zh), CHIP_WEATHER),
             (_str(region_zh), CHIP_REGION),
             (_str(location_zh), CHIP_PLACE),

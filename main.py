@@ -153,7 +153,8 @@ def _next_step(t: Trainer, state=None) -> str:
             try:
                 opts = dex.evolution_options(
                     mon.species, level=mon.level, moves=mon.moves, item=mon.item,
-                    friendship=mon.friendship, gender=mon.gender, daytime="day",
+                    friendship=mon.friendship, gender=mon.gender,
+                    daytime=B.daytime_of(),          # 写死"day"会误报月亮伊布这类夜行进化
                     party=party,
                 )
             except Exception as e:
@@ -2070,15 +2071,28 @@ class PokemonWorldPlugin(Star):
                     friendship=mon.friendship,
                     gender=mon.gender,
                     stats=mon.stats,
+                    daytime=B.daytime_of(),
                 )
                 if not opts:
                     lines.append(f"{i}. {mon.display} —— 无法进化")
                     continue
+                # 分支多的时候(伊布有 8 条)不能只看前 3 条:先排"现在就能进化"的,
+                # 再排等级/亲密度/昼夜这类**看条件**的,最后才是要道具的,超出写总数
+                ordered = sorted(
+                    opts,
+                    key=lambda o: (
+                        0 if o.get("met") else 1,
+                        1 if str(o.get("kind")) in ("useItem", "trade") else 0,
+                    ),
+                )
+                shown = ordered[:4]
                 desc = "、".join(
                     f"{growth.species_zh(o['target'])}"
                     f"({'可进化' if o.get('met') else '条件不足:' + _kind_zh(o.get('kind'))})"
-                    for o in opts[:3]
+                    for o in shown
                 )
+                if len(opts) > len(shown):
+                    desc += f" …(共 {len(opts)} 种)"
                 lines.append(f"{i}. {mon.display} → {desc}")
             lines.append("用法:`/进化 <序号>` 或 `/进化 <序号> <进化石>`")
             yield event.plain_result("\n".join(lines))
@@ -2125,6 +2139,9 @@ class PokemonWorldPlugin(Star):
             friendship=mon.friendship,
             gender=mon.gender,
             stats=mon.stats,
+            # **昼夜必须传**:漏了白天/夜晚条件永远判不成立,太阳伊布/月亮伊布
+            # 在 `/进化` 里会一直显示"条件未满足"
+            daytime=B.daytime_of(),
         )
         met = [o for o in opts if o.get("met")]
         if not met:
@@ -2199,6 +2216,7 @@ class PokemonWorldPlugin(Star):
                 mon.species, level=mon.level, moves=set(mon.moves),
                 item=mon.item or None, friendship=mon.friendship,
                 gender=mon.gender, stats=mon.stats, trade=True, party=party,
+                daytime=B.daytime_of(),
             )
             if o.get("kind") == "trade" and o.get("met")
         ]
@@ -2426,6 +2444,7 @@ class PokemonWorldPlugin(Star):
                     item=mon.item or None,
                     friendship=mon.friendship, gender=mon.gender, stats=mon.stats,
                     trade=True,
+                    daytime=B.daytime_of(),
                 )
                 if o.get("kind") == "trade"
             ]
@@ -2977,6 +2996,7 @@ class PokemonWorldPlugin(Star):
                 world_events=[EV.event_text(e) for e in state2.active_events()],
                 player_events=pe_lines,
                 weather_zh=state2.weather_for(t.region),
+                daytime_zh="白天" if B.daytime_of() == "day" else "夜晚",
                 region_zh=WorldMap().region_zh(t.region),
                 location_zh=WorldMap().node_zh(t.location),
                 locks=locks, scale=self._img_scale(),
@@ -3829,6 +3849,7 @@ class PokemonWorldPlugin(Star):
             mon.species, level=mon.level, moves=mon.moves, item=mon.item or None,
             friendship=mon.friendship, gender=mon.gender,
             stats=mon.stats, party=t.party_mon(),
+            daytime=B.daytime_of(),
         ) or []
         evo_hint = ""
         if evo:
