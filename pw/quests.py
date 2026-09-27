@@ -88,6 +88,9 @@ LLM_OBJECTIVES = (
 
 # ── 奖励池(LLM 只能从这些道具里挑,且数量受限)──
 REWARD_ITEMS: dict[str, dict] = {
+    # 化石也给一条非商店途径(权重低)
+    "old-amber": {"zh": "琥珀", "weight": 1, "max": 1},
+    "skull-fossil": {"zh": "头盖化石", "weight": 1, "max": 1},
     "poke-ball": {"zh": "精灵球", "weight": 10, "max": 5},
     "great-ball": {"zh": "超级球", "weight": 6, "max": 3},
     "ultra-ball": {"zh": "高级球", "weight": 3, "max": 2},

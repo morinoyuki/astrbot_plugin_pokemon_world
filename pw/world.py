@@ -34,6 +34,10 @@ REGION_ORDER = [
     "galar",
     "paldea",
 ]
+# 尚无地图数据、但名字要能显示的地区(帕底亚还没做地图,可它的御三家能领养)
+_EXTRA_REGION_ZH = {
+    "paldea": "帕底亚",
+}
 REGION_GEN = {
     "kanto": 1,
     "johto": 2,
@@ -497,7 +501,8 @@ class WorldMap:
         return region in self.regions
 
     def region_zh(self, region: str) -> str:
-        return (self.regions.get(region) or {}).get("zh") or region
+        r = str(region or "")
+        return (self.regions.get(r) or {}).get("zh") or _EXTRA_REGION_ZH.get(r) or r
 
     def resolve_region(self, query: str) -> str:
         q = str(query or "").strip().lower()
@@ -936,6 +941,10 @@ SHOP_TIERS: list[tuple[int, list[str]]] = [
          "twisted-spoon", "silver-powder", "hard-stone", "spell-tag", "dragon-fang",
          "black-glasses", "fairy-feather"]),
     (4, ["full-heal", "max-potion", "max-revive", "full-restore", "elixir",
+         # 化石:在「研究所」用 `/复活 <化石>` 换回古代宝可梦
+         "helix-fossil", "dome-fossil", "old-amber", "root-fossil", "claw-fossil",
+         "skull-fossil", "armor-fossil", "cover-fossil", "plume-fossil",
+         "jaw-fossil", "sail-fossil",
          "dusk-ball", "quick-ball", "timer-ball", "level-ball", "heavy-ball",
          "beast-ball",
          # 中档持有道具

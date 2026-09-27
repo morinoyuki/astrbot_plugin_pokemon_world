@@ -178,7 +178,11 @@ def resolve_item(query: str) -> tuple[str, dict] | None:
         return raw, ITEMS[raw]
     key = _ITEM_IDX.get(_norm(raw))
     if key:
-        return key, ITEMS[key]
+        # 有些道具(化石、树果)只登记在 BAG_ITEMS 里,不在持有道具表 ——
+        # 以前这里直接取 ITEMS[key] 会 KeyError
+        entry = ITEMS.get(key) or BAG_ITEMS.get(key)
+        if entry:
+            return key, entry
     # 背包表里的道具(如树果/消耗品)也可作为携带道具解析
     bag_key = raw if raw in BAG_ITEMS else _BAG_IDX.get(_norm(raw), "")
     if bag_key:
@@ -573,6 +577,37 @@ def apply_out_of_battle(mon, key: str, *, move: str | None = None) -> tuple[bool
     return False, ""
 
 
+# ── 化石道具:在「研究所」(宝可梦中心)用 `/复活 <化石>` 换回古代宝可梦 ──
+_FOSSILS = {
+    "helix-fossil": ("菊石兽的化石", "omanyte", "菊石兽"),
+    "dome-fossil": ("甲壳化石", "kabuto", "化石盔"),
+    "old-amber": ("琥珀", "aerodactyl", "化石翼龙"),
+    "root-fossil": ("根之化石", "lileep", "触手百合"),
+    "claw-fossil": ("爪之化石", "anorith", "太古羽虫"),
+    "skull-fossil": ("头盖化石", "cranidos", "头盖龙"),
+    "armor-fossil": ("盾甲化石", "shieldon", "盾甲龙"),
+    "cover-fossil": ("甲壳化石", "tirtouga", "原盖海龟"),
+    "plume-fossil": ("羽毛化石", "archen", "始祖小鸟"),
+    "jaw-fossil": ("颚之化石", "tyrunt", "宝宝暴龙"),
+    "sail-fossil": ("鳍之化石", "amaura", "冰雪龙"),
+}
+for _k, (_zh, _sp, _sp_zh) in _FOSSILS.items():
+    BAG_ITEMS.setdefault(_k, {
+        "zh": _zh,
+        "kind": "rare",
+        "desc": f"古代宝可梦的化石,可以复活成{_sp_zh}。",
+        "effect": {"revive_species": _sp},
+    })
+    for _alias in (_zh, f"{_sp_zh}的化石", _sp_zh):
+        _ITEM_IDX.setdefault(_norm(_alias), _k)
+
+
+def fossil_species(key: str) -> str:
+    """化石道具 → 能复活的宝可梦 key(不是化石就返回空串)。"""
+    eff = (BAG_ITEMS.get(str(key or "")) or {}).get("effect") or {}
+    return str(eff.get("revive_species") or "")
+
+
 def effect_text(key: str | None) -> str:
     """把道具的 `effect` 结构化字段翻成一句中文效果(没有就返回空串)。"""
     entry = BAG_ITEMS.get(str(key or "")) or ITEMS.get(str(key or "")) or {}
@@ -638,6 +673,8 @@ def effect_text(key: str | None) -> str:
         elif field == "teaches":
             zh = (get_dex().moves.get(str(val)) or {}).get("zh") or val
             bits.append(f"教会「{zh}」")
+        elif field == "revive_species":
+            bits.append(f"可复活成{(get_dex().species.get(str(val)) or {}).get('zh', val)}")
         elif field == "level_up":
             bits.append(f"提升 {int(val)} 级" if isinstance(val, (int, float)) and val
                         else "提升等级")

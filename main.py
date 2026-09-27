@@ -48,7 +48,14 @@ from .pw import ui_menu as UIM
 from .pw import ui_quest as UIQ
 from .pw import ui_render as UI
 from .pw.dex import get_dex
-from .pw.items import BAG_ITEMS, effect_text, max_pp
+from .pw.engine import create_pokemon  # 领养/复活要用(运行时需要)
+from .pw.items import (
+    BAG_ITEMS,
+    effect_text,
+    fossil_species,
+    max_pp,
+    resolve_bag_item,
+)
 from .pw.narrate import Narrator
 from .pw.player import Trainer, TrainerStore, mon_to_dict, new_trainer
 from .pw.sqlite_store import SqliteBackend
@@ -123,6 +130,41 @@ def _json_view(handler):
         return res
 
     return view
+
+
+# ── 可领取的御三家(按地区,存**中文名**,运行时解析成 key) ─────────────
+# 御三家在任何地区都不野生出现(数据忠实于原作),以前玩家选了哪只就永久
+# 拿不到另外两只,连图鉴都无法补全 —— 现在可以在「研究所」用 `/领养` 换。
+ADOPT_TRIOS: dict[str, list[str]] = {
+    "kanto": ["妙蛙种子", "小火龙", "杰尼龟"],
+    "johto": ["菊草叶", "火球鼠", "小锯鳄"],
+    "hoenn": ["木守宫", "火稚鸡", "水跃鱼"],
+    "sinnoh": ["草苗龟", "小火焰猴", "波加曼"],
+    "unova": ["藤藤蛇", "暖暖猪", "水水獭"],
+    "kalos": ["哈力栗", "火狐狸", "呱呱泡蛙"],
+    "alola": ["木木枭", "火斑喵", "球球海狮"],
+    "galar": ["敲音猴", "炎兔儿", "泪眼蜥"],
+    "paldea": ["新叶喵", "呆火鳄", "润水鸭"],
+}
+ADOPT_BASE = 2000          # 领养基础花费
+ADOPT_PER_BADGE = 800      # 每枚徽章加价
+REVIVE_LEVEL = 20          # 化石复活的等级(与初代一致)
+
+
+def _adopt_entries() -> dict[str, tuple[str, str]]:
+    """中文名 → (species key, 地区中文名)。"""
+    from .pw.world import REGION_ORDER
+
+    out: dict[str, tuple[str, str]] = {}
+    for region, names in ADOPT_TRIOS.items():
+        if region not in REGION_ORDER:
+            continue
+        rzh = WorldMap().region_zh(region)
+        for zh in names:
+            hit = get_dex().resolve_species(zh)
+            if hit:
+                out[zh] = (hit[0], rzh)
+    return out
 
 
 def _web_handler(func):
@@ -1943,6 +1985,126 @@ class PokemonWorldPlugin(Star):
             f"🏥 乔伊小姐为你的 {n} 只宝可梦做了治疗 —— 全部恢复如初!"
         )
 
+    @filter.command("领养", alias={"adopt", "领取", "研究所"})
+    async def cmd_adopt(self, event: AstrMessageEvent):
+        """`/领养 [地区] [宝可梦]` —— 在宝可梦中心(研究所)领养御三家。
+
+        御三家按原作不野生出现,所以以前"选了这只就拿不到另外两只";
+        这里给一条花金币的正规途径(钱是唯一的代价,等级从 5 起)。
+        """
+        t, err = self._require(event)
+        if err:
+            yield event.plain_result(err)
+            return
+        world = WorldMap()
+        if not world.is_hub(t.location):
+            yield event.plain_result("❌ 领养要去「宝可梦中心」(研究所)办理。")
+            return
+        arg = self._args(event, ("领养", "adopt", "领取", "研究所")).strip()
+        entries = _adopt_entries()
+        if not entries:
+            yield event.plain_result("❌ 御三家数据缺失。")
+            return
+        # 只有名字 → 直接领养;只有地区 → 列该地区的三只;什么都没有 → 全列
+        want_zh = ""
+        want_region = ""
+        for tok in arg.replace(",", " ").split():
+            if tok in entries:
+                want_zh = tok
+            elif tok:
+                want_region = tok
+        if not want_zh:
+            rk = ""
+            for region in REGION_ORDER:
+                if want_region and want_region in (region, world.region_zh(region)):
+                    rk = region
+            lines = [f"🏫 {world.node_zh(t.location)}的研究所 —— 可领养的御三家"]
+            cost = ADOPT_BASE + ADOPT_PER_BADGE * t.badge_count()
+            for region in REGION_ORDER:
+                if rk and region != rk:
+                    continue
+                names = [n for n in ADOPT_TRIOS.get(region, []) if n in entries]
+                if names:
+                    tail = "" if world.nodes(region) else "(未开放地图)"
+                    lines.append(
+                        f"· {world.region_zh(region)}{tail}:{' / '.join(names)}"
+                    )
+            lines.append(f"花费 {fmt_money(cost)}(已有 {fmt_money(t.money)})")
+            lines.append(f"用法:`/领养 {want_region or '火斑喵'}`".replace(" 火斑喵", " 火斑喵"))
+            yield event.plain_result("\n".join(lines))
+            return
+        key, region_zh = entries[want_zh]
+        cost = ADOPT_BASE + ADOPT_PER_BADGE * t.badge_count()
+        if t.money < cost:
+            yield event.plain_result(
+                f"❌ 领养 {want_zh} 需要 {fmt_money(cost)},你只有 {fmt_money(t.money)}。"
+            )
+            return
+        async with self._lock(t.scope):
+            t.spend_money(cost)
+            mon = create_pokemon(key, 5)
+            mon.friendship = 120
+            added = t.add_pokemon(mon, day=self._state(t.scope).day)
+            self._save(t)
+            in_party = any(str(p.get("id")) == str(added.get("id")) for p in t.party)
+        yield event.plain_result(
+            f"🏫 研究员的助手把「{want_zh}」交给你了!({region_zh}御三家 · Lv5)\n"
+            f"花费 {fmt_money(cost)} —— 它已经在你的"
+            f"{'队伍' if in_party else '电脑'}里。"
+        )
+
+    @filter.command("复活", alias={"revive", "化石复活", "研究所复活"})
+    async def cmd_revive(self, event: AstrMessageEvent):
+        """`/复活 <化石>` —— 在宝可梦中心(研究所)把化石复活成宝可梦。"""
+        t, err = self._require(event)
+        if err:
+            yield event.plain_result(err)
+            return
+        if B.in_battle(t):
+            yield event.plain_result("⚠️ 对战中不能去研究所,先结束当前对战。")
+            return
+        world = WorldMap()
+        if not world.is_hub(t.location):
+            yield event.plain_result("❌ 化石复活要在「宝可梦中心」(研究所)办理。")
+            return
+        arg = self._args(event, ("复活", "revive", "化石复活", "研究所复活")).strip()
+        have = [
+            k for k in (t.data.get("bag") or {})
+            if int((t.data.get("bag") or {}).get(k) or 0) > 0 and fossil_species(k)
+        ]
+        if not arg:
+            lines = [f"🦴 {world.node_zh(t.location)}的研究所 —— 化石复活"]
+            if have:
+                for k in sorted(have):
+                    sp = fossil_species(k)
+                    lines.append(
+                        f"· {BAG_ITEMS[k]['zh']} ×{t.count(k)} → "
+                        f"{_sp_zh(sp)}(Lv{REVIVE_LEVEL})"
+                    )
+                lines.append(f"用法:`/复活 {BAG_ITEMS[have[0]]['zh']}`")
+            else:
+                lines.append("你还没有化石。4 枚徽章后可在商店买到,委托奖励偶尔也有。")
+            yield event.plain_result("\n".join(lines))
+            return
+        hit = resolve_bag_item(arg)
+        key = hit[0] if hit else ""
+        sp = fossil_species(key)
+        if not sp or not t.count(key):
+            yield event.plain_result(
+                f"❌ 没有「{arg}」这件化石(用 `/复活` 看看手里有什么)。"
+            )
+            return
+        async with self._lock(t.scope):
+            t.take_item(key, 1)
+            mon = create_pokemon(sp, REVIVE_LEVEL)
+            t.add_pokemon(mon, day=self._state(t.scope).day)
+            self._save(t)
+            left = t.count(key)
+        yield event.plain_result(
+            f"🦴 化石在机器的嗡鸣中裂开了 —— {_sp_zh(sp)} 复活了!(Lv{REVIVE_LEVEL})\n"
+            f"{BAG_ITEMS[key]['zh']} 用掉 1 个,还剩 {left} 个。"
+        )
+
     @filter.command("学招", alias={"learn", "学招式"})
     async def cmd_learn(self, event: AstrMessageEvent):
         """/学招 <队伍序号> [替换 <现有招式> | 放弃] [待定序号]
@@ -2990,6 +3152,8 @@ class PokemonWorldPlugin(Star):
                 f"Lv{loc['min']}-{loc['max']}"
                 for loc in locs
             ]
+        # 获取途径:野外没有的(御三家/化石/神兽)要明确告诉玩家**怎么才能拿到**
+        lines.append("获取途径:" + "、".join(_obtain_paths(key, locs, entry)))
         if t.caught(key):
             lines.append("✅ 已捕获")
         elif t.seen(key):
@@ -4733,11 +4897,14 @@ class PokemonWorldPlugin(Star):
     @_web_handler
     async def _web_selfcheck(self) -> dict:
         checks = _run_selfcheck()
+        failed = [c["name"] for c in checks if not c["ok"] and not c.get("warn")]
+        warned = [c["name"] for c in checks if not c["ok"] and c.get("warn")]
         return {
             "ok": True,
             "checks": checks,
-            "failed": [c["name"] for c in checks if not c["ok"]],
-            "passed": all(c["ok"] for c in checks),
+            "failed": failed,
+            "warnings": warned,
+            "passed": not failed,
         }
 
     # ── 维护:占用与清理 ──
@@ -5198,6 +5365,29 @@ def _run_selfcheck() -> list[dict]:
         (f"(另有 {len(REGION_ORDER) - len(have_gyms)} 个占位地区暂无地图)"
          if len(have_gyms) < len(REGION_ORDER) else ""))
 
+    # ⑧ 获取途径覆盖率 —— 信息项(warn):帕底亚地图与地区形态还没做,如实报数
+    got = _obtainable_set()
+
+    def _is_forme(k: str) -> bool:
+        e = dex.species[k]
+        return bool(e.get("forme") or e.get("isNonstandard") or e.get("battleOnly"))
+
+    left = [k for k in dex.species if k not in got and not _is_forme(k)]
+    leg = [k for k in left
+           if dex.species[k].get("isLegendary") or dex.species[k].get("isMythical")]
+    normal = [k for k in left if k not in leg]
+    out.append({
+        "name": "获取途径覆盖率",
+        "ok": not normal,
+        "warn": True,
+        "detail": (
+            f"{len(got)}/{len(dex.species)} 形态可获得;仍缺 传说幻兽 {len(leg)} · "
+            f"普通 {len(normal)}"
+            + (f"(多为帕底亚/伽勒尔与地区形态):"
+               f"{[dex.species[k].get('zh', k) for k in normal[:8]]}" if normal else "")
+        ),
+    })
+
     return out
 
 
@@ -5279,3 +5469,57 @@ def _web_mon_row(raw: dict, index: int) -> dict:
         "pending": list((raw or {}).get("pending") or []),
         "pending_zh": [_move_zh(m) for m in ((raw or {}).get("pending") or [])],
     }
+
+
+def _obtainable_set() -> frozenset[str]:
+    """所有"能拿到"的形态:野外 ∪ 领养 ∪ 化石复活 ∪ 神兽定点 ∪ 它们的进化闭包。
+
+    计算一次后缓存(`lru_cache`);`/图鉴` 的"获取途径"和数据自检都用它。
+    """
+    world = WorldMap()
+    got: set[str] = set()
+    for r in REGION_ORDER:
+        for loc in world.nodes(r):
+            for row in world.wild_pools(loc):
+                got.add(str(row.get("species")))
+    got |= _adopt_keys() | _fossil_keys()
+    for r in REGION_ORDER:
+        for s in legendary.sites_for(r):
+            got.add(str(s.get("species")))
+    evos = {k: (e.get("evos") or []) for k, e in get_dex().species.items()}
+    for _ in range(8):                      # 进化链最长 3 段,8 轮足够
+        for k in list(got):
+            got.update(evos.get(k) or [])
+    return frozenset(got)
+
+
+def _obtain_paths(key: str, locs, entry: dict) -> list[str]:
+    """这只宝可梦的获取途径(一条都没有就是"尚未开放")。
+
+    `/图鉴` 直接展示 —— 以前只写"野外分布",御三家/化石这类不野生的看起来
+    就像"根本拿不到"(玩家真的来问过火斑喵)。
+    """
+    k = str(key)
+    out: list[str] = []
+    if locs:
+        out.append("野外遭遇")
+    if k in _adopt_keys():
+        out.append("宝可梦中心领养")
+    if k in _fossil_keys():
+        out.append("化石复活")
+    if any(str(s.get("species")) == k for r in REGION_ORDER
+           for s in legendary.sites_for(r)):
+        out.append("神兽定点")
+    bases = [b for b, e in get_dex().species.items() if k in (e.get("evos") or [])]
+    hit = next((b for b in bases if b in _obtainable_set()), "")
+    if hit:
+        out.append(f"由{_sp_zh(hit)}进化")
+    return out or ["尚未开放(欢迎反馈)"]
+
+
+def _adopt_keys() -> set[str]:
+    return {v[0] for v in _adopt_entries().values()}
+
+
+def _fossil_keys() -> set[str]:
+    return {fossil_species(k) for k in BAG_ITEMS if fossil_species(k)}

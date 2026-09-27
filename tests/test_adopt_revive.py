@@ -1,0 +1,146 @@
+"""御三家领养 / 化石复活:给"不野生出现"的宝可梦一条正规获取途径。
+
+起因:玩家问"火斑喵好像没有野外分布,有获取途径吗" —— 排查后确认**没有**:
+御三家忠实于原作不野生出现,而除了开局选的那只,其余连图鉴都无法补全;
+化石宝可梦同样(而且化石道具**根本不存在**)。
+"""
+
+from __future__ import annotations
+
+import sys
+import tempfile
+from pathlib import Path
+
+_ROOT = Path(__file__).resolve().parent.parent
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
+sys.path.insert(0, str(_ROOT / "tests"))
+
+from test_commands import _Cmd, _Event, run_cmd  # noqa: E402
+
+
+def _plugin(tmp):
+    p = _Cmd(tmp)
+    p.config = {"ui_image": False, "battle_image": False, "quest_enable": False}
+    run_cmd(p, _Event("/开始 小智 杰尼龟"), p.cmd_start)
+    t = p._load(_Event(""))
+    t.data["location"] = "pewter-city"          # 有宝可梦中心(研究所)
+    t.data["money"] = 50000
+    p._save(t)
+    return p
+
+
+def _run(p, cmd, fn):
+    ev = _Event(cmd)
+    run_cmd(p, ev, getattr(p, fn))
+    return "".join(str(x) for x in ev.outputs)
+
+
+def test_starters_have_no_wild_distribution():
+    """前提:御三家本来就不野生出现(数据忠实于原作)。"""
+    from pw.world import REGION_ORDER, WorldMap
+
+    w = WorldMap()
+    for sp in ("litten", "rowlet", "popplio", "chikorita"):
+        found = [
+            loc for r in REGION_ORDER for loc in w.nodes(r)
+            if any(str(x.get("species")) == sp for x in w.wild_pools(loc))
+        ]
+        assert not found, f"{sp} 竟然在野外出现:{found[:3]}"
+
+
+def test_adopt_starter_at_pokemon_center():
+    """/领养 能把任意地区的御三家领回家(花钱、Lv5、进队伍)。"""
+    with tempfile.TemporaryDirectory() as tmp:
+        p = _plugin(tmp)
+        out = _run(p, "/领养 火斑喵", "cmd_adopt")
+        t = p._load(_Event(""))
+        assert "火斑喵" in out and "阿罗拉" in out, out
+        assert "litten" in [m["species"] for m in t.data["party"]], t.data["party"]
+        adopted = next(m for m in t.data["party"] if m["species"] == "litten")
+        assert adopted["level"] == 5
+        assert t.money == 50000 - 2000, t.money          # 0 徽章 → 2000
+        assert t.caught("litten"), "领养也应记入图鉴"
+
+
+def test_adopt_cost_grows_with_badges_and_needs_money():
+    """花费随徽章增加;钱不够要明确拒绝且不发放。"""
+    with tempfile.TemporaryDirectory() as tmp:
+        p = _plugin(tmp)
+        t = p._load(_Event(""))
+        for i in range(3):
+            t.add_badge("kanto", i)
+        t.data["money"] = 3000          # 3 徽章 → 2000+2400 = 4400
+        p._save(t)
+        out = _run(p, "/领养 木木枭", "cmd_adopt")
+        assert "需要" in out and "只有" in out, out
+        t2 = p._load(_Event(""))
+        assert "rowlet" not in [m["species"] for m in t2.data["party"]]
+        assert t2.money == 3000, "失败不能扣钱"
+
+
+def test_adopt_requires_pokemon_center():
+    with tempfile.TemporaryDirectory() as tmp:
+        p = _plugin(tmp)
+        t = p._load(_Event(""))
+        t.data["location"] = "kanto-route-1"     # 野外,不是中心
+        p._save(t)
+        out = _run(p, "/领养 火斑喵", "cmd_adopt")
+        assert "宝可梦中心" in out and "litten" not in [
+            m["species"] for m in p._load(_Event()).data["party"]
+        ]
+
+
+def test_fossil_items_exist_and_are_obtainable():
+    """化石道具必须存在且有获取途径(以前一件都没有 → 化石宝可梦拿不到)。"""
+    from pw.items import BAG_ITEMS, effect_text, fossil_species
+    from pw.world import WorldMap
+
+    fossils = {k: fossil_species(k) for k in BAG_ITEMS if fossil_species(k)}
+    assert len(fossils) == 11, fossils
+    assert all(v for v in fossils.values())
+    assert "可复活成" in effect_text("skull-fossil")
+    stock = set(WorldMap().shop_stock("pewter-city", 8))
+    assert set(fossils) <= stock, set(fossils) - stock
+
+
+def test_revive_fossil_at_pokemon_center():
+    """/复活 消耗化石、按 Lv20 加入队伍。"""
+    with tempfile.TemporaryDirectory() as tmp:
+        p = _plugin(tmp)
+        t = p._load(_Event(""))
+        t.add_item("skull-fossil", 2)
+        p._save(t)
+        out = _run(p, "/复活 头盖化石", "cmd_revive")
+        t2 = p._load(_Event(""))
+        assert "头盖龙" in out and "Lv20" in out, out
+        revived = [m for m in t2.data["party"] if m["species"] == "cranidos"]
+        assert revived and revived[0]["level"] == 20, t2.data["party"]
+        assert t2.count("skull-fossil") == 1, "应消耗 1 个化石"
+        # 没有化石时明确拒绝
+        out2 = _run(p, "/复活 根之化石", "cmd_revive")
+        assert "没有" in out2, out2
+
+
+def test_dex_reports_obtain_paths():
+    """`/图鉴` 要写清获取途径 —— 不野生的宝可梦不能只说"野外分布"就完事。"""
+    with tempfile.TemporaryDirectory() as tmp:
+        p = _plugin(tmp)
+        for name, want in (("火斑喵", "领养"), ("头盖龙", "化石复活"),
+                           ("超梦", "神兽定点"), ("皮卡丘", "野外遭遇")):
+            out = _run(p, f"/图鉴 {name}", "cmd_dex")
+            line = [ln for ln in out.split("\n") if ln.startswith("获取途径")]
+            assert line, out[:200]
+            assert want in line[0], f"{name} 的获取途径没写「{want}」:{line[0]}"
+        # 完全拿不到的(帕底亚/地区形态)要如实说明,不能假装能野外遇到
+        out = _run(p, "/图鉴 铁包袱", "cmd_dex")
+        assert "尚未开放" in out, out[:200]
+
+
+def test_obtainable_set_covers_starters_and_fossils():
+    """可得集合必须包含御三家与化石,并且**进化闭包**也算(进化型能进化来)。"""
+    import pw_plugin.main as PM
+
+    got = PM._obtainable_set()
+    for sp in ("litten", "torracat", "incineroar", "rowlet", "cranidos", "rampardos"):
+        assert sp in got, f"{sp} 不在可得集合里"
