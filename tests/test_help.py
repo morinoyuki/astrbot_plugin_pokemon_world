@@ -21,7 +21,7 @@ from test_commands import _Cmd, _Event, run_cmd  # noqa: E402
 
 # 帮助里必须出现的关键写法(加子命令时同步填这里)
 DOCUMENTED = {
-    "/探索": ["野生", "属性", "训练家", "道具", "事件", "40 步"],
+    "/探索": ["野生", "训练家", "道具", "事件", "40 步"],
     "/背包": ["分类", "页 2", "道具", "精灵球", "回复", "招式机", "重要"],
     "/商店": ["买", "卖", "页 2", "序号"],
     "/招式": ["电脑", "队伍序号"],
@@ -84,8 +84,6 @@ def test_documented_forms_actually_work():
         ("/探索 道具", p.cmd_explore),
         ("/探索 事件", p.cmd_explore),
         ("/探索 训练家", p.cmd_explore),
-        ("/探索 属性 水", p.cmd_explore),
-        ("/探索 水", p.cmd_explore),
         ("/背包 回复", p.cmd_bag),
         ("/背包 回复 页 2", p.cmd_bag),
         ("/背包 精灵球", p.cmd_bag),

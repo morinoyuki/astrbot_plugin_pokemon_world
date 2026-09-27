@@ -211,7 +211,6 @@ _EXPLORE_ALIASES: dict[str, frozenset[str]] = {
 _EXPLORE_USAGE = """❌ 用法:`/探索 [目标]`
 · `/探索` 或 `/探索 全部` —— 什么都可能碰上(默认)
 · `/探索 野生` —— **只**找野生宝可梦
-· `/探索 属性 水` —— 只找水属性的野生宝可梦(也可直接写 `/探索 水`)
 · `/探索 训练家` —— 只找路边训练家(看到后用 `/训练家战` 挑战)
 · `/探索 道具` —— 只捡道具
 · `/探索 事件` —— 只看这里今天有什么事件与世界动态
@@ -308,50 +307,153 @@ def _next_step(t: Trainer, state=None) -> str:
         return "🎯 下一步:`/探索` 出门看看,或 `/帮助` 看全部指令。"
 
 
-def _explore_target(arg: str) -> tuple[str, str]:
-    """解析 `/探索` 的目标,返回 `(模式, 属性英文名或空串)`。
+def _explore_target(arg: str) -> str:
+    """解析 `/探索` 的目标,返回模式名;无法识别返回空串。
 
-    模式:`all` / `wild` / `trainer` / `item` / `event`;无法识别返回 `("", "")`。
-    属性支持 `/探索 属性 水` 与 `/探索 水` 两种写法。
+    模式:`all` / `wild` / `trainer` / `item` / `event`。
+    **不支持按属性筛选** —— 想让玩家按属性定点找宝可梦会把"野外分布"变成点菜单,
+    所以这里刻意只认目标类别。
     """
     raw = str(arg or "").strip()
     if not raw:
-        return "all", ""
+        return "all"
     parts = raw.replace(",", " ").replace("、", " ").split()
-    head = parts[0] if parts else ""
-    dex = get_dex()
-    if head in ("属性", "type", "系"):
-        if len(parts) < 2:
-            return "", ""
-        t = dex.resolve_type(parts[1])
-        return ("wild", t) if t else ("", "")
+    head = (parts[0] if parts else "").lower()
     low = raw.lower()
     for mode, names in _EXPLORE_ALIASES.items():
-        if low in names or head.lower() in names:
-            return mode, ""
-    t = dex.resolve_type(raw)          # 直接写属性名
-    if t:
-        return "wild", t
-    return "", ""
+        if low in names or head in names:
+            return mode
+    return ""
 
 
-def _species_types(species: str | None) -> list[str]:
-    """图鉴里的属性(英文)。"""
-    if not species:
-        return []
-    entry = get_dex().species.get(str(species)) or {}
-    return [str(x) for x in (entry.get("types") or [])]
+EXPLORE_ITEM_POOL = ["potion", "poke-ball", "antidote", "oran-berry", "super-potion"]
 
 
-def _available_types(world, location: str) -> list[str]:
-    """该地点野生宝可梦的属性集合(中文名,去重排序,给提示用)。"""
-    dex = get_dex()
-    out: set[str] = set()
-    for row in world.wild_pools(location):
-        for t in _species_types(row.get("species")):
-            out.add(dex.type_label(t))
-    return sorted(out)
+# `/探索` 的目标别名:值里的第一项是规范模式名
+_EXPLORE_ALIASES: dict[str, frozenset[str]] = {
+    "all": frozenset({"", "全部", "任意", "随便", "都行", "all", "any"}),
+    "wild": frozenset({"野生", "野怪", "宝可梦", "精灵", "wild", "pokemon"}),
+    "trainer": frozenset({"训练家", "训练师", "npc", "trainer"}),
+    "item": frozenset({"道具", "物品", "东西", "捡", "item", "items"}),
+    "event": frozenset({"事件", "情报", "状况", "动态", "event", "news"}),
+}
 
+_EXPLORE_USAGE = """❌ 用法:`/探索 [目标]`
+· `/探索` 或 `/探索 全部` —— 什么都可能碰上(默认)
+· `/探索 野生` —— **只**找野生宝可梦
+· `/探索 训练家` —— 只找路边训练家(看到后用 `/训练家战` 挑战)
+· `/探索 道具` —— 只捡道具
+· `/探索 事件` —— 只看这里今天有什么事件与世界动态
+每次探索固定消耗 40 步。"""
+
+
+def _next_step(t: Trainer, state=None) -> str:
+    """根据当前进度给一句"下一步该做什么"(新手引导的核心)。
+
+    优先级刻意如此(先救命 → 先出门 → 就地能做的事 → 再去赶路):
+    队伍危险 → 还没出门 → 还没抓到宝可梦 → 站在道馆城镇 → 徽章够了打联盟
+    → 能进化/有没学的招 → 去下一个道馆 → 委托/探索。
+    这样"就地的动作"总排在"赶路"前面,玩家不会被一句"去某某镇"牵着走一辈子。
+    """
+    try:
+        world = WorldMap()
+        dex = get_dex()
+        party = t.data.get("party") or []
+        if not party:
+            return "🎯 下一步:去 `/探索` 找一只宝可梦收服它。"
+        # ① 先救命
+        hurt = [m for m in party
+                if int(m.get("cur_hp") or 0) <= int(m.get("max_hp") or 1) // 4]
+        if t.all_fainted() or len(hurt) >= max(1, len(party) // 2):
+            if any(k.startswith(("potion", "super", "hyper", "max"))
+                   for k in t.data.get("bag") or {}):
+                return "🎯 下一步:队伍有点惨 —— 用 `/使用 伤药` 回血,或回宝可梦中心 `/治疗`。"
+            return "🎯 下一步:队伍有点惨 —— 去宝可梦中心 `/治疗`(免费,顺带回满 PP)。"
+        # ② 还没出过门
+        if int(t.data.get("steps") or 0) <= 0:
+            return ("🎯 下一步:发 `/探索` 出门看看(只想遇宝可梦就 `/探索 野生`,"
+                    "只想捡道具就 `/探索 道具`)。")
+        # ③ 图鉴才刚开始 → 教怎么抓
+        if len(t.data.get("dex_caught") or []) <= 1 and t.count("poke-ball") > 0:
+            return "🎯 下一步:遇到野生宝可梦时用 `/捕捉 精灵球` 收服(`/对战 1` 出招削弱它)。"
+        # ④ 就地在下一个道馆城镇 → 直接挑战
+        try:
+            gym = world.next_gym(t.region, t.badges)
+        except Exception as e:
+            logger.debug("宝可梦世界: 下一道馆查询失败: %s", e)
+            gym = None
+        if gym and str(gym.get("location") or "") == t.location:
+            return (f"🎯 下一步:{world.node_zh(t.location)} 的道馆就在眼前 —— "
+                    f"`/道馆 挑战` 打 {gym.get('leader') or '馆主'}"
+                    f"(现在 {t.badge_count()} 枚徽章)。")
+        # ⑤ 本地区徽章齐了 → 联盟 / 大赛
+        total_gym = len(world.gyms(t.region)) or 8
+        if t.badge_count() >= total_gym and not t.flag(f"champion:{t.region}", False):
+            gate = world.gateway(t.region)
+            if gate and t.location == gate:
+                return "🎯 下一步:`/联盟 挑战` —— 四天王与冠军在等你!"
+            if gate:
+                return (f"🎯 下一步:徽章齐了,`/地图` 走到 "
+                        f"{world.node_zh(gate)},那里能 `/联盟 挑战`。")
+            return "🎯 下一步:`/联盟 挑战` 打四天王与冠军!"
+        if t.flag(f"champion:{t.region}", False):
+            return "🎯 下一步:你已是本地区冠军 —— `/大赛 挑战` 冲击世界冠军。"
+        # ⑥ 就地培养:能进化 / 有没学的招
+        for i, p in enumerate(party, 1):
+            mon = B.dict_to_mon(p)
+            try:
+                opts = dex.evolution_options(
+                    mon.species, level=mon.level, moves=mon.moves, item=mon.item,
+                    friendship=mon.friendship, gender=mon.gender,
+                    daytime=B.daytime_of(),          # 写死"day"会误报月亮伊布这类夜行进化
+                    party=party,
+                )
+            except Exception as e:
+                logger.debug("宝可梦世界: 进化条件查询失败: %s", e)
+                opts = []
+            if any(o.get("kind") in ("level", "levelFriendship", "levelMove", "levelHold")
+                   for o in opts):
+                return f"🎯 下一步:第 {i} 只 {mon.display} 可以 `/进化` 了(变强不少)。"
+        for i, p in enumerate(party, 1):
+            mon = B.dict_to_mon(p)
+            try:
+                new = [m for m in dex.learnable(mon.species, mon.level)
+                       if m.get("move") not in mon.moves]
+            except Exception as e:
+                logger.debug("宝可梦世界: 可学招式查询失败: %s", e)
+                new = []
+            if new:
+                zh = growth.move_zh(new[0].get("move") or "")
+                return f"🎯 下一步:第 {i} 只 {mon.display} 有没学的招(`/学招 {i}`,例如 {zh})。"
+        # ⑦ 赶路:去下一个道馆
+        if gym:
+            town = str(gym.get("location") or "")
+            if town:
+                return (f"🎯 下一步:`/地图` 看路线、`/前往 <相邻地点>` 一路走到 "
+                        f"{world.node_zh(town)},那里有道馆。")
+        return "🎯 下一步:`/任务` 看今日委托,或 `/探索` 继续变强。"
+    except Exception as e:      # 引导文案绝不能把指令搞崩,但留日志便于排查
+        logger.warning("宝可梦世界: 下一步提示生成失败: %s", e)
+        return "🎯 下一步:`/探索` 出门看看,或 `/帮助` 看全部指令。"
+
+
+def _explore_target(arg: str) -> str:
+    """解析 `/探索` 的目标,返回模式名;无法识别返回空串。
+
+    模式:`all` / `wild` / `trainer` / `item` / `event`。
+    **不支持按属性筛选** —— 想让玩家按属性定点找宝可梦会把"野外分布"变成点菜单,
+    所以这里刻意只认目标类别。
+    """
+    raw = str(arg or "").strip()
+    if not raw:
+        return "all"
+    parts = raw.replace(",", " ").replace("、", " ").split()
+    head = (parts[0] if parts else "").lower()
+    low = raw.lower()
+    for mode, names in _EXPLORE_ALIASES.items():
+        if low in names or head in names:
+            return mode
+    return ""
 
 
 class PokemonWorldPlugin(Star):
@@ -1282,7 +1384,7 @@ class PokemonWorldPlugin(Star):
         if B.in_battle(t):
             yield event.plain_result("⚠️ 先把眼前的战斗打完:`/对战 <招式>`")
             return
-        mode, want_type = _explore_target(
+        mode = _explore_target(
             self._args(event, ("探索", "explore", "遭遇", "搜索"))
         )
         if not mode:
@@ -1324,8 +1426,6 @@ class PokemonWorldPlugin(Star):
             # 想捡道具/看事件却被神兽拦住会很烦,所以按目标过滤。
             if mode in ("all", "wild"):
                 site = (legendary.ready(t, world=world, day=state.day) or [None])[0]
-                if site and want_type and want_type not in _species_types(site.get("species")):
-                    site = None
                 if site:
                     meta = legendary.legendary_meta(t, site)
                     log = B.start(
@@ -1419,18 +1519,16 @@ class PokemonWorldPlugin(Star):
                     )
                 return
 
-            # ── 只想找野生(可指定属性) ──
+            # ── 只想找野生 ──
             if mode == "wild":
                 env = _environment_of(world, loc)
-                hit = self._roll_wild_typed(t, rng, env, want_type) if roll < wild_p else None
+                hit = B.roll_wild(t, rng=rng, environment=env) if roll < wild_p else None
                 if hit is None:
                     self._save(t)
-                    head = f"🌿 附近没有{get_dex().type_label(want_type)}属性的宝可梦" if want_type else ""
-                    tail = f"(这里能遇到:{'、'.join(_available_types(world, loc)) or '未知'})" if want_type else ""
                     yield event.plain_result(
                         "\n".join(
                             [*notice,
-                             f"👀 你在附近转了一圈,什么也没遇到……{head}{tail}",
+                             "👀 你在附近转了一圈,什么也没遇到……",
                              "可以再来一次 `/探索 野生`(每次都算 40 步)。"]
                         )
                     )
@@ -1489,21 +1587,6 @@ class PokemonWorldPlugin(Star):
             yield event.plain_result(
                 "\n".join([*notice, f"🔍 你在草丛里发现了 {zh} ×{n}!{tail}"])
             )
-
-    def _roll_wild_typed(self, t: Trainer, rng, environment: str,
-                         want_type: str, *, tries: int = 12) -> dict | None:
-        """掷一只野生宝可梦;**指定属性**时最多重掷 tries 次直到属性匹配。
-
-        不做"过滤分布表"是有意的:地点分布是按真实版本数据来的,
-        重掷等价于"在这片草丛里多找一会儿",命中率为分布的属性占比。
-        """
-        if not want_type:
-            return B.roll_wild(t, rng=rng, environment=environment)
-        for _ in range(tries):
-            hit = B.roll_wild(t, rng=rng, environment=environment)
-            if hit and want_type in _species_types(hit.get("species")):
-                return hit
-        return None
 
     def _maybe_rare(self, t: Trainer, state, ev, rng, hit: dict) -> dict:
         """罕见现身事件:有概率把普通遭遇换成稀有/传说宝可梦。"""

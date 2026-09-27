@@ -198,3 +198,19 @@ def test_battle_hint_hides_run_for_trainer_battles():
         p._save(t)
         hint2 = p._battle_hint(p._load(_Event("")))
         assert "/对战 run" in hint2 and "/捕捉" in hint2, hint2
+
+
+def test_type_targeting_is_gone():
+    """按属性定点探索已移除 —— 别让这个入口悄悄回来。
+
+    玩家提的要求:"把 /探索 属性 这个命令删除,不要让玩家能指定属性"。
+    能指定属性会让"真实野外分布"变成点菜单。
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        p = _plugin(tmp)
+        for cmd in ("/探索 属性 水", "/探索 水", "/探索 火", "/探索 属性 皮卡丘"):
+            out = _explore(p, cmd)
+            assert "用法" in out, f"{cmd} 不该被接受:{out[:80]}"
+        # 正当目标仍然可用
+        out = _explore(p, "/探索 道具")
+        assert "发现" in out or "捡完" in out, out
