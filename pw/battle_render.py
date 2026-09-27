@@ -227,15 +227,15 @@ def _chip(big, d, x: int, y: int, text: str, bg, fg, font, scale: int,
 # ── 玩家对战(PvP)专用版式 ────────────────────────────────────────
 # 与 PvE 的区别:双方都是"我方",两只宝可梦都用**正面图**面对面站着
 # (左侧水平翻转),信息框左右对称,对话框在下方。
-PVP_A_BOX = (8, 12, 116, 46)
-PVP_B_BOX = (124, 12, 232, 46)
+PVP_A_BOX = (8, 8, 116, 46)
+PVP_B_BOX = (124, 8, 232, 46)
 # 注意:`_draw_hp_row` 的 tag_box 是 (x0,y0,x1,y1),bar_box 是 (x,y,w,h)
-PVP_A_TAG = (17, 29, 30, 39)
-PVP_B_TAG = (210, 29, 223, 39)
-PVP_A_BAR = (32, 31, 70, 6)
-PVP_B_BAR = (138, 31, 70, 6)
-PVP_A_BALL = (12, 30, 4)
-PVP_B_BALL = (224, 30, 4)
+PVP_A_TAG = (17, 22, 30, 33)
+PVP_B_TAG = (210, 22, 223, 33)
+PVP_A_BAR = (32, 24, 70, 6)
+PVP_B_BAR = (138, 24, 70, 6)
+PVP_A_BALL = (12, 23, 4)
+PVP_B_BALL = (224, 23, 4)
 PVP_A_GROUND = (64, 100)
 PVP_B_GROUND = (176, 100)
 PVP_MSG_TOP_MAX = 104
@@ -275,9 +275,9 @@ def render_pvp_battle(
         _draw_scene(d, weather)
 
         # 左侧用正面图**水平翻转**,与右侧面对面
-        _paste_small(small, left, PVP_A_GROUND, factor=MY_SCALE, bounds=(92, 74),
+        _paste_small(small, left, PVP_A_GROUND, factor=MY_SCALE, bounds=(92, 50),
                      back=False, dim=not _alive(left), flip=True)
-        _paste_small(small, right, PVP_B_GROUND, factor=MY_SCALE, bounds=(92, 74),
+        _paste_small(small, right, PVP_B_GROUND, factor=MY_SCALE, bounds=(92, 50),
                      back=False, dim=not _alive(right))
 
         # 左右对称的信息框
@@ -285,31 +285,19 @@ def render_pvp_battle(
         _draw_box(d, PVP_B_BOX)
         _draw_hp_row(d, PVP_A_BALL, PVP_A_TAG, PVP_A_BAR, _ratio(left))
         _draw_hp_row(d, PVP_B_BALL, PVP_B_TAG, PVP_B_BAR, _ratio(right))
-        for mon, box, at_left in ((left, PVP_A_BOX, True), (right, PVP_B_BOX, False)):
-            st = str(mon.get("status") or "")
-            if st:
-                _status_chip(d, (box[0] + 4) if at_left else (box[2] - 18),
-                             box[3] - 12, st)
-
-        # 双方剩余宝可梦(球行)
-        f_ball = _font(int(6.5 * S))
-        for mon_row, box in ((left_party or [], PVP_A_BOX), (right_party or [], PVP_B_BOX)):
-            bx = box[0] + 5
-            by = box[3] - 9
-            for mon in list(mon_row)[:6]:
-                alive = int(mon.get("cur_hp", 0) or 0) > 0
-                _draw_ball(d, bx, by, 3)
-                if not alive:
-                    d.ellipse([bx, by, bx + 6, by + 6], fill=(120, 118, 108),
-                              outline=BOX_EDGE)
-                bx += 8
-
+        # 状态章:放在血条下方(右下/左下),避开名字与等级文字
+        _status_chip(d, PVP_A_BOX[0] + 5, PVP_A_BOX[3] - 13, left.get("status") or "")
+        _status_chip(d, PVP_B_BOX[2] - 18, PVP_B_BOX[3] - 13, right.get("status") or "")
         # 对话框(与 PvE 同一套配色/自适应高度)
         f_name = _font(int(9.5 * S))
         f_small = _font(int(8.5 * S))
         f_msg = _font(int(9 * S))
+        f_ball = _font(int(6.5 * S))
         mx0, mx1 = MSG_EDGE_X
-        tx_pad, tx_right = 6, 6
+        # 双方剩余宝可梦画在对话框左右两端(PvE 也是画在对话框里)
+        lp, rp = list(left_party or [])[:6], list(right_party or [])[:6]
+        tx_pad = 8 + len(lp) * 9 + 4
+        tx_right = 8 + len(rp) * 9 + 4
         maxw = (mx1 - mx0 - tx_pad - tx_right) * S
         src = []
         head = [str(location) if location else "",
@@ -351,10 +339,37 @@ def render_pvp_battle(
                 big, ((box[0] + 5) * S, (box[1] - 7) * S), lab, f_small.size,
                 (250, 250, 245), stroke_width=max(1, S // 2), stroke_fill=(40, 52, 40),
             )
-        # 「HP」标签文字
+        # 「HP」标签文字(必须用真正的框中心:tag 是 (x0,y0,x1,y1),[2]/[3] 不是宽高)
+        # 双方球行(左端 / 右端):倒下的画灰殫并打叉
+        for row, at_left in ((lp, True), (rp, False)):
+            base = (mx0 + 6) if at_left else (mx1 - 6 - len(row) * 9)
+            by = my0 + max(2, int((my1 - my0 - 8) / 2) - 1)
+            for i, mon in enumerate(row):
+                bx = int((base + i * 9) * S)
+                ball_y = int(by * S)
+                if int(mon.get("cur_hp", 0) or 0) > 0:
+                    _draw_ball(d2, bx, ball_y, 3 * S)
+                else:
+                    fat = 6 * S
+                    d2.ellipse([bx, ball_y, bx + fat, ball_y + fat],
+                               fill=(126, 122, 110), outline=BOX_EDGE)
+                    d2.line([bx + 1, ball_y + 1, bx + fat - 1, ball_y + fat - 1],
+                            fill=(70, 68, 62))
+                    d2.line([bx + 1, ball_y + fat - 1, bx + fat - 1, ball_y + 1],
+                            fill=(70, 68, 62))
+        # 状态章的汉字自己画:`_box_text` 里那套是按 PvE 的框坐标算的,这里位置不同
+        for box, mon_row in ((PVP_A_BOX, left), (PVP_B_BOX, right)):
+            style = STATUS_STYLE.get(str(mon_row.get("status") or ""))
+            if not style:
+                continue
+            sx = (box[0] + 5) if box is PVP_A_BOX else (box[2] - 18)
+            sy = box[3] - 13
+            fonts.draw_text(big, ((sx + 4) * S, (sy + 1) * S), style[0], f_ball.size,
+                            (252, 250, 244), stroke_width=max(1, S // 2),
+                            stroke_fill=(60, 48, 40))
         for tag_box in (PVP_A_TAG, PVP_B_TAG):
-            cx = (tag_box[0] + tag_box[2] / 2) * S
-            cy = (tag_box[1] + tag_box[3] / 2) * S
+            cx = (tag_box[0] + tag_box[2]) / 2 * S
+            cy = (tag_box[1] + tag_box[3]) / 2 * S
             fonts.draw_text(big, (cx - fonts.measure("HP", f_ball.size) / 2,
                                   cy - f_ball.size * 0.62), "HP", f_ball.size,
                             HP_TAG_FG)
