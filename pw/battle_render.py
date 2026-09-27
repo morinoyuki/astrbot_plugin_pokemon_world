@@ -230,12 +230,10 @@ def _chip(big, d, x: int, y: int, text: str, bg, fg, font, scale: int,
 PVP_A_BOX = (8, 8, 116, 46)
 PVP_B_BOX = (124, 8, 232, 46)
 # 注意:`_draw_hp_row` 的 tag_box 是 (x0,y0,x1,y1),bar_box 是 (x,y,w,h)
-PVP_A_TAG = (17, 22, 30, 33)
-PVP_B_TAG = (210, 22, 223, 33)
-PVP_A_BAR = (32, 24, 70, 6)
-PVP_B_BAR = (138, 24, 70, 6)
-PVP_A_BALL = (12, 23, 4)
-PVP_B_BALL = (224, 23, 4)
+PVP_A_TAG = (12, 22, 25, 33)
+PVP_B_TAG = (215, 22, 228, 33)
+PVP_A_BAR = (27, 24, 75, 6)
+PVP_B_BAR = (138, 24, 75, 6)
 PVP_A_GROUND = (64, 100)
 PVP_B_GROUND = (176, 100)
 PVP_MSG_TOP_MAX = 104
@@ -283,11 +281,11 @@ def render_pvp_battle(
         # 左右对称的信息框
         _draw_box(d, PVP_A_BOX)
         _draw_box(d, PVP_B_BOX)
-        _draw_hp_row(d, PVP_A_BALL, PVP_A_TAG, PVP_A_BAR, _ratio(left))
-        _draw_hp_row(d, PVP_B_BALL, PVP_B_TAG, PVP_B_BAR, _ratio(right))
-        # 状态章:放在血条下方(右下/左下),避开名字与等级文字
+        _draw_hp_row(d, None, PVP_A_TAG, PVP_A_BAR, _ratio(left))
+        _draw_hp_row(d, None, PVP_B_TAG, PVP_B_BAR, _ratio(right))
+        # 状态章:贴在各自框的**左下内侧** —— 右侧是右对齐的 HP 数字,会相撞
         _status_chip(d, PVP_A_BOX[0] + 5, PVP_A_BOX[3] - 13, left.get("status") or "")
-        _status_chip(d, PVP_B_BOX[2] - 18, PVP_B_BOX[3] - 13, right.get("status") or "")
+        _status_chip(d, PVP_B_BOX[0] + 5, PVP_B_BOX[3] - 13, right.get("status") or "")
         # 对话框(与 PvE 同一套配色/自适应高度)
         f_name = _font(int(9.5 * S))
         f_small = _font(int(8.5 * S))
@@ -362,7 +360,7 @@ def render_pvp_battle(
             style = STATUS_STYLE.get(str(mon_row.get("status") or ""))
             if not style:
                 continue
-            sx = (box[0] + 5) if box is PVP_A_BOX else (box[2] - 18)
+            sx = box[0] + 5
             sy = box[3] - 13
             fonts.draw_text(big, ((sx + 4) * S, (sy + 1) * S), style[0], f_ball.size,
                             (252, 250, 244), stroke_width=max(1, S // 2),
@@ -409,9 +407,10 @@ def _draw_ball(d, x: int, y: int, r: int) -> None:
 
 
 def _draw_hp_row(d, ball_xy, tag_box, bar_box, ratio: float) -> None:
-    """一行血条:精灵球图标 + 「HP」标签 + 带刻度的血条。"""
+    """一行血条:「HP」标签 + 带刻度的血条(传 `ball_xy=None` 则不画精灵球图标)。"""
     d.rectangle(tag_box, fill=HP_TAG_BG, outline=BOX_EDGE)
-    _draw_ball(d, ball_xy[0], ball_xy[1], ball_xy[2])
+    if ball_xy:
+        _draw_ball(d, ball_xy[0], ball_xy[1], ball_xy[2])
     _draw_hp_bar(d, bar_box, ratio)
 
 
