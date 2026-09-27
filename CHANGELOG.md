@@ -1,5 +1,28 @@
 # Changelog
 
+## 1.10.2
+
+### 修复:插件页面字段全是 undefined(玩家 undefined · 世界 undefined · 数据目录 -)
+
+**根因**:dashboard 拿到插件响应后会做 `r.data.data ?? r.data` —— **顶层 `data`
+会被当成信封载荷解包掉**。而总览偏偏把统计数据放在名为 `data` 的字段里,
+于是前端拿到的是那个统计对象,`players`/`scopes`/`db`/`data_dir` 全部 undefined。
+字段名撞上了框架的信封约定(排查时最容易被忽略的一类)。
+
+**改法**:
+- 总览的统计字段改名为 `catalog`(前端同步);
+- 电脑里的宝可梦改为与队伍**共用同一个字段构造器** —— 以前电脑只有
+  index/species/zh/level,在页面上编辑电脑里的宝可梦时经验/亲密度/HP/昵称
+  全是 undefined。
+
+**测试** 347 → 349:
+- `test_web_responses_never_use_toplevel_data_key`:遍历所有 GET 接口,断言
+  返回里**不许有顶层 `data` 键**(这类"字段名撞信封"的坑锁住);
+- `test_mon_rows_have_uniform_fields_for_party_and_box`:队伍与电脑的行字段
+  必须完全一致。
+ruff 全绿;版本 1.10.2。
+
+
 ## 1.10.1
 
 ### 修复:插件页面「总览无数据 / 编辑无法保存」

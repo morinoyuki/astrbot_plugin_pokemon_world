@@ -127,7 +127,8 @@ def test_overview_and_selfcheck():
         p = _plugin(tmp)
         ov = run(p._web_overview())
         assert ov["ok"] and ov["players"] == 1 and ov["scopes"] >= 1
-        assert ov["data"]["species"] > 1000 and ov["data"]["tms"] >= 25
+        # 统计字段叫 catalog(顶层叫 data 会被 dashboard 当信封解包掉)
+        assert ov["catalog"]["species"] > 1000 and ov["catalog"]["tms"] >= 25
         ck = run(p._web_selfcheck())
         assert ck["ok"]
         assert ck["passed"], f"自检不应有失败项:{[c for c in ck['checks'] if not c['ok']]}"
@@ -348,3 +349,68 @@ def test_unknown_scope_lists_everything():
         r = run(p._web_players())
         assert r["total"] == 1, r
         assert json.dumps(r, ensure_ascii=False)      # 可序列化(能直接返回给前端)
+
+
+# ── 响应形状:dashboard 会解包顶层 data / 字段必须齐 ─────────────────
+def test_web_responses_never_use_toplevel_data_key():
+    """任何 Web 接口的返回**不能有顶层 `data` 键**。
+
+    dashboard 拿到插件响应后会做 `r.data.data ?? r.data` —— 顶层 `data`
+    会被当成信封载荷解包掉。总览曾经把统计数据放在 `data` 里,于是整页
+    字段全变 undefined(玩家 undefined · 世界 undefined · 数据目录 -),
+    查半天才发现是**字段名撞上了信封约定**。
+    """
+    import asyncio
+
+    with tempfile.TemporaryDirectory() as tmp:
+        p = _plugin(tmp)
+        scope = "g10086"
+        got = {
+            "overview": asyncio.run(p._web_overview()),
+            "scopes": asyncio.run(p._web_scopes()),
+            "players": asyncio.run(p._web_players()),
+            "player": asyncio.run(p._web_player(scope, "u1")),
+            "world": asyncio.run(p._web_world(scope)),
+            "selfcheck": asyncio.run(p._web_selfcheck()),
+            "maintenance": asyncio.run(p._web_maintenance()),
+        }
+        for name, res in got.items():
+            assert isinstance(res, dict), f"{name} 不是 dict:{type(res)}"
+            assert res.get("ok") is not True or "data" not in res, \
+                f"{name} 用了顶层 data 键,会被 dashboard 解包掉"
+        # 统计数据的字段名(前端读 catalog)
+        assert "catalog" in got["overview"] and got["overview"]["catalog"]["species"] > 0
+        assert got["overview"]["db"]["trainers"] >= 1
+        assert got["overview"]["data_dir"]
+
+
+def test_mon_rows_have_uniform_fields_for_party_and_box():
+    """队伍与电脑里的宝可梦必须给出**同一套字段**。
+
+    以前电脑只有 index/species/zh/level —— 在页面上编辑电脑里的宝可梦时,
+    经验/亲密度/HP/昵称全是 undefined。
+    """
+    import asyncio
+
+    from pw.engine import create_pokemon
+
+    with tempfile.TemporaryDirectory() as tmp:
+        p = _plugin(tmp)
+        t = p._load(_Event(""))
+        spare = create_pokemon("ponyta", 12).to_dict()
+        spare["id"] = "box1"
+        spare["nickname"] = "小火马"
+        t.data["box"].append(spare)
+        p._save(t)
+        d = asyncio.run(p._web_player("g10086", "u1"))
+        want = {"index", "id", "species", "zh", "nickname", "level", "exp",
+                "cur_hp", "max_hp", "friendship", "item", "item_zh", "moves",
+                "pending", "pending_zh"}
+        for group in ("party", "box"):
+            assert d[group], group
+            for row in d[group]:
+                missing = want - set(row)
+                assert not missing, f"{group} 行缺字段 {missing}:{row}"
+        box_row = d["box"][0]
+        assert box_row["nickname"] == "小火马"
+        assert box_row["exp"] and box_row["max_hp"], box_row

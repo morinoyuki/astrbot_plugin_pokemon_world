@@ -4436,7 +4436,10 @@ class PokemonWorldPlugin(Star):
             "players": players,
             "db": self.trainers.scope_stats(),
             "temp": self._tmp_stats(),
-            "data": {
+            # 注意**不能**叫 `data`:dashboard 会把响应当信封解包
+            # (`r.data.data ?? r.data`),顶层只要有 `data` 键,页面收到的就是它 ——
+            # 实测表现是"总览每个字段都 undefined"。
+            "catalog": {
                 "species": len(dex.species),
                 "moves": len(dex.moves),
                 "abilities": len(getattr(dex, "abilities", {}) or {}),
@@ -4506,28 +4509,7 @@ class PokemonWorldPlugin(Star):
         d = self.trainers.load(scope, uid)
         if d is None:
             return _web_error(f"存档不存在或已损坏:{scope}/{uid}", status_code=404)
-        party = []
-        for i, raw in enumerate(d.get("party") or [], 1):
-            mon = B.dict_to_mon(raw)
-            party.append({
-                "index": i,
-                "id": str(raw.get("id") or ""),
-                "species": mon.species,
-                "zh": _sp_zh(mon.species),
-                "nickname": mon.nickname,
-                "level": int(mon.level),
-                "exp": int(mon.exp),
-                "cur_hp": int(mon.cur_hp),
-                "max_hp": int(mon.max_hp),
-                "friendship": int(mon.friendship),
-                "item": mon.item,
-                "item_zh": _item_zh(mon.item),
-                "moves": [{"key": k, "zh": get_dex().moves.get(k, {}).get("zh", k)}
-                          for k in mon.moves],
-                "pending": list(raw.get("pending") or []),
-                "pending_zh": [_move_zh(m) for m in (raw.get("pending") or [])],
-                "pending_tm": dict(raw.get("pending_tm") or {}),
-            })
+        party = [_web_mon_row(raw, i) for i, raw in enumerate(d.get("party") or [], 1)]
         return {
             "ok": True,
             "scope": scope,
@@ -4558,12 +4540,9 @@ class PokemonWorldPlugin(Star):
                 ],
             },
             "party": party,
-            "box": [
-                {"index": i, "species": m.get("species"),
-                 "zh": _sp_zh(str(m.get("species") or "")),
-                 "level": int(m.get("level") or 0)}
-                for i, m in enumerate(d.get("box") or [], 1)
-            ],
+            # 电脑里的宝可梦也给**完整字段**:否则页面上编辑它时经验/亲密度/HP
+            # 全是 undefined(两边用同一个构造器)
+            "box": [_web_mon_row(raw, i) for i, raw in enumerate(d.get("box") or [], 1)],
         }
 
     # ── 修改存档 ──
@@ -5271,3 +5250,27 @@ def _web_edit_mon(d: dict, act: dict) -> str:
                     mon.pp.pop(k, None)
     rows[idx - 1] = B.mon_to_dict(mon, raw)
     return f"修改{where}[{idx}] {_sp_zh(mon.species)} → Lv{mon.level}"
+
+
+def _web_mon_row(raw: dict, index: int) -> dict:
+    """页面用的单只宝可梦字段(队伍与电脑共用,保证字段一致)。"""
+    mon = B.dict_to_mon(raw or {})
+    dex = get_dex()
+    return {
+        "index": int(index),
+        "id": str((raw or {}).get("id") or ""),
+        "species": mon.species,
+        "zh": _sp_zh(mon.species),
+        "nickname": mon.nickname,
+        "level": int(mon.level),
+        "exp": int(mon.exp),
+        "cur_hp": int(mon.cur_hp),
+        "max_hp": int(mon.max_hp),
+        "friendship": int(mon.friendship),
+        "item": mon.item,
+        "item_zh": _item_zh(mon.item),
+        "moves": [{"key": k, "zh": (dex.moves.get(k) or {}).get("zh", k)}
+                  for k in mon.moves],
+        "pending": list((raw or {}).get("pending") or []),
+        "pending_zh": [_move_zh(m) for m in ((raw or {}).get("pending") or [])],
+    }

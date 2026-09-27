@@ -113,7 +113,8 @@
       card("库大小", fmtSize(db.size), `玩家 ${db.trainers} · 世界 ${db.worlds}`),
       card("临时界面图", o.temp?.count ?? 0, fmtSize(o.temp?.size)),
     ].join("");
-    const d = o.data || {};
+    // 后端字段名是 catalog 而不是 data:顶层 data 会被 dashboard 当信封解包
+    const d = o.catalog || {};
     $("#ov-data").innerHTML = [
       card("图鉴形态", d.species),
       card("招式", d.moves),
