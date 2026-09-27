@@ -98,6 +98,12 @@ REWARD_ITEMS: dict[str, dict] = {
     "antidote": {"zh": "解毒药", "weight": 4, "max": 2},
     "paralyze-heal": {"zh": "解麻药", "weight": 4, "max": 2},
     "revive": {"zh": "活力碎片", "weight": 2, "max": 1},
+    # 招式机作为稀有奖励(获取途径之一;另外两条是道馆首次通关与商店)
+    "tm-protect": {"zh": "招式机·守住", "weight": 3, "max": 1},
+    "tm-aerialace": {"zh": "招式机·燕返", "weight": 3, "max": 1},
+    "tm-shadowball": {"zh": "招式机·影子球", "weight": 2, "max": 1},
+    "tm-icebeam": {"zh": "招式机·冰冻光束", "weight": 2, "max": 1},
+    "tm-thunderbolt": {"zh": "招式机·十万伏特", "weight": 2, "max": 1},
     "ether": {"zh": "元气之粉", "weight": 3, "max": 2},
     "oran-berry": {"zh": "橙橙果", "weight": 5, "max": 3},
     "sitrus-berry": {"zh": "文柚果", "weight": 3, "max": 2},

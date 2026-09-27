@@ -1131,7 +1131,16 @@ def test_shop_stock_grows_with_badges_and_covers_items():
     assert not bad, f"货架包含不存在的道具:{bad}"
 
     # 每件道具都必须有获取途径(PP 上限提升与特性切换已实现,不再有"拿不到"的例外)
-    avail = set(world.shop_stock("pewter-city", 8)) | set(REWARD_ITEMS) | {"master-ball"}
+    from pw.items import TM_GYM_BY_TYPE, tm_key
+
+    # 道馆首次通关会送该馆属性的招牌招式机 —— 那几台不在商店货架上
+    gym_tms = {tm_key(m) for m in TM_GYM_BY_TYPE.values()}
+    avail = (
+        set(world.shop_stock("pewter-city", 8))
+        | set(REWARD_ITEMS)
+        | gym_tms
+        | {"master-ball"}
+    )
     unreachable = [k for k in BAG_ITEMS if k not in avail]
     assert not unreachable, f"这些道具没有任何获取途径:{unreachable}"
 

@@ -843,7 +843,7 @@ def test_learn_handles_a_batch_of_pending_moves():
         ev2 = _Event("/学招 1")
         run_cmd(p, ev2, p.cmd_learn)
         panel = "".join(ev2.outputs)
-        assert f"学到了 {len(res.pending)} 个新招式" in panel, panel
+        assert f"有 {len(res.pending)} 个新招式等着决定" in panel, panel
         assert "挨个决定" in panel, panel
 
         # 挨个决定:先替换第 1 条,再放弃第 1 条(列表会前移),直到清空

@@ -305,6 +305,96 @@ for _k, (_zh, _tag) in _STONES.items():
         "effect": {"evolve_stone": _tag},
     }
 
+# ══════════════════════════════════════════════════════════════════
+# 招式机(TM)
+# ══════════════════════════════════════════════════════════════════
+# 兼容性不做第二套数据:直接复用图鉴学习表里的 **"M" 码**(某世代可用招式机学会),
+# 所以"这台机器能教谁"与 `/图鉴` 显示的学习途径永远一致。
+#
+# 获取途径(经典设计):
+#   ① 首次打倒每个道馆馆主 → 送**该馆属性**的招牌招式机;
+#   ② 商店按徽章档位出售常用招式机;
+#   ③ 委托奖励池里也会出现。
+TM_GYM_BY_TYPE: dict[str, str] = {
+    "Normal": "bodyslam",        # 泰山压顶
+    "Fire": "flamethrower",      # 喷射火焰
+    "Water": "surf",             # 冲浪
+    "Electric": "thunderbolt",   # 十万伏特
+    "Grass": "energyball",       # 能量球
+    "Ice": "icebeam",            # 冰冻光束
+    "Fighting": "brickbreak",    # 劈瓦
+    "Poison": "sludgebomb",      # 污泥炸弹
+    "Ground": "earthquake",      # 地震
+    "Flying": "aerialace",       # 燕返
+    "Psychic": "psychic",        # 精神强念
+    "Bug": "xscissor",           # 十字剪
+    "Rock": "rockslide",         # 岩崩
+    "Ghost": "shadowball",       # 影子球
+    "Dragon": "dragonclaw",      # 龙爪
+    "Dark": "darkpulse",         # 恶之波动
+    "Steel": "flashcannon",      # 加农光炮
+    "Fairy": "dazzlinggleam",    # 魔法闪耀
+}
+
+# 商店档位:徽章越多解锁越强的招式机(与 SHOP_TIERS 同一套档位语义)
+TM_SHOP: list[tuple[int, list[str]]] = [
+    (2, ["protect", "substitute", "aerialace", "swift", "rocktomb", "thief",
+         "bulldoze", "lowsweep"]),
+    (4, ["icebeam", "thunderbolt", "flamethrower", "energyball", "shadowball",
+         "brickbreak", "sludgebomb", "dragonclaw", "psychic", "uturn"]),
+    (6, ["earthquake", "surf", "hyperbeam", "closecombat", "flashcannon",
+         "dazzlinggleam", "darkpulse", "xscissor", "rockslide", "airslash",
+         "stoneedge", "thunderwave"]),
+]
+
+TM_MOVES: list[str] = sorted(
+    {*TM_GYM_BY_TYPE.values(), *(m for _t, ks in TM_SHOP for m in ks)}
+)
+
+
+def tm_key(move: str) -> str:
+    """招式 key → 招式机道具 key。"""
+    return f"tm-{move}"
+
+
+def tm_move(key: str | None) -> str:
+    """招式机道具 key → 招式 key(不是招式机则返回空串)。"""
+    k = str(key or "")
+    return k[3:] if k.startswith("tm-") else ""
+
+
+def is_tm(key: str | None) -> bool:
+    return str(key or "").startswith("tm-") and tm_move(key) in TM_MOVES
+
+
+# 招式 key 必须都在招式表里 —— 写错一个字母就会"少一台机器",很难发现。
+# 这里在导入时对一遍,缺的记在 TM_MISSING 里(测试会断言它是空的)。
+TM_MISSING: list[str] = []
+
+
+def _build_tm_items() -> dict[str, dict]:
+    """把 TM_MOVES 展开成背包条目(名字/说明都带上招式本身的信息)。"""
+    dex = get_dex()
+    out: dict[str, dict] = {}
+    for mv in TM_MOVES:
+        m = dex.moves.get(mv) or {}
+        if not m:
+            TM_MISSING.append(mv)          # 数据里没有这个招式:别发机器
+            continue
+        zh = m.get("zh") or mv
+        tlabel = dex.type_label(str(m.get("type") or ""))
+        cat = dex.move_category_zh(str(m.get("category") or ""))
+        power = int(m.get("basePower") or 0)
+        tag = f"威力{power}" if power else "变化招式"
+        out[tm_key(mv)] = {
+            "zh": f"招式机·{zh}",
+            "kind": "tm",
+            "desc": f"教兼容的宝可梦学会「{zh}」({tlabel}系/{cat}·{tag})。机器用掉即消失。",
+            "effect": {"teaches": mv},
+        }
+    return out
+
+
 BAG_ITEMS: dict[str, dict] = _BAG
 # 持有道具(ITEMS)也要并进 BAG_ITEMS:
 # 背包/商店/委托奖励/事件发奖这些流程一律走 BAG_ITEMS,原来的实现只给 ITEMS
@@ -314,12 +404,15 @@ BAG_ITEMS: dict[str, dict] = _BAG
 for _ik, _ientry in list(ITEMS.items()):
     if _ik not in BAG_ITEMS:
         BAG_ITEMS[_ik] = {**_ientry, "kind": _ientry.get("kind") or "held"}
+# 招式机(必须在持有道具之后合并,顺序反过来会被覆盖掉)
+BAG_ITEMS.update(_build_tm_items())
 _BAG_IDX: dict[str, str] = {}
 for _key, _v in BAG_ITEMS.items():
     for _alias in (_key, _v["zh"]):
         _BAG_IDX.setdefault(_norm(_alias), _key)
 
 KIND_ZH = {
+    "tm": "招式机",
     "ball": "精灵球",
     "medicine": "回复",
     "status": "状态回复",
@@ -542,6 +635,9 @@ def effect_text(key: str | None) -> str:
             bits.append("战斗中提升会心率")
         elif field == "guard_spec":
             bits.append("战斗中提升特防")
+        elif field == "teaches":
+            zh = (get_dex().moves.get(str(val)) or {}).get("zh") or val
+            bits.append(f"教会「{zh}」")
         elif field == "level_up":
             bits.append(f"提升 {int(val)} 级" if isinstance(val, (int, float)) and val
                         else "提升等级")

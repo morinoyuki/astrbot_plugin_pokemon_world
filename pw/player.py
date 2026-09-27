@@ -15,7 +15,9 @@ START_MONEY = 3000
 START_BAG = {"poke-ball": 5, "potion": 3, "antidote": 1}
 
 # 队伍字典里由本层维护、`Pokemon.to_dict()` 不认识的附加字段
-EXTRA_KEYS = ("id", "pending", "met_at", "met_level", "box_at")
+# pending_tm:待决定的招式如果是招式机教的,记住是哪台机器 ——
+# 决定"替换"时才真正消耗它,决定"放弃"则留在背包里(不浪费)
+EXTRA_KEYS = ("id", "pending", "pending_tm", "met_at", "met_level", "box_at")
 
 
 def dict_to_mon(d: dict) -> Pokemon:

@@ -912,6 +912,8 @@ class WorldMap:
         for tier, keys in SHOP_TIERS:
             if tier <= int(badges or 0):
                 out.extend(keys)
+        # 招式机与道具同一份货架(按同一套徽章档位解锁)
+        out.extend(tm_stock(badges))
         return out
 
 
@@ -1004,6 +1006,17 @@ EVO_STONE_STOCK = [
 ]
 
 
+def tm_stock(badges: int = 0) -> list[str]:
+    """按徽章数解锁的招式机货架(与道具货架同一套档位语义)。"""
+    from .items import TM_SHOP, tm_key
+
+    out: list[str] = []
+    for tier, moves in TM_SHOP:
+        if tier <= int(badges or 0):
+            out.extend(tm_key(m) for m in moves)
+    return out
+
+
 def item_price(key: str, *, badge_count: int = 0, discount: float = 1.0) -> int:
     """道具价格:基础价按类别 + 徽章折扣 + 世界事件折扣。"""
     r = resolve_item(key)
@@ -1036,6 +1049,13 @@ def item_price(key: str, *, badge_count: int = 0, discount: float = 1.0) -> int:
         base = 2500
     else:
         base = 1000 if kind == "held" else None
+    if kind == "tm":
+        # 招式机按招式强度定价:威力越高越贵(变化招式按固定价)
+        from .items import tm_move
+
+        mv = tm_move(k)
+        power = int((get_dex().moves.get(mv) or {}).get("basePower") or 0)
+        base = 1500 + power * 50
     base = base or tier.get(k) or {
         "ball": 200,
         "medicine": 600,

@@ -1905,7 +1905,7 @@ class PokemonWorldPlugin(Star):
         if not pending:
             yield event.plain_result(
                 f"ℹ️ {mon.display} 现在没有要决定的招式。\n"
-                "新招式**只在升级时**出现:招式栏没满会自动学会,满了会留在这里"
+                "新招式来自**升级、进化或招式机**:招式栏没满会自动学会,满了会留在这里"
                 "等你选择「替换」一个旧招式或「放弃」。"
             )
             return
@@ -1919,7 +1919,7 @@ class PokemonWorldPlugin(Star):
             elif rest:
                 target_arg = rest[0]
             if not target_arg:
-                yield event.plain_result(self._pending_panel(mon, pending, idx))
+                yield event.plain_result(self._pending_panel(mon, md, pending, idx))
                 return
             pno = min(max(1, which), len(pending))
             want = pending[pno - 1]
@@ -1943,18 +1943,38 @@ class PokemonWorldPlugin(Star):
             pno = min(max(1, which), len(pending))
             want = pending[pno - 1]
             md["pending"] = [m for i, m in enumerate(pending, 1) if i != pno]
+            # 招式机教的:放弃不消耗机器(留在背包里),只清掉"待决定"记录
+            pt = dict(md.get("pending_tm") or {})
+            kept_tm = str(pt.pop(want, "") or "")
+            entry_label = (BAG_ITEMS.get(kept_tm) or {}).get("zh") or kept_tm
+            md["pending_tm"] = pt
             self._save(t)
             yield event.plain_result(
-                f"🗑️ {mon.display} 放弃了「{growth.move_brief(want)}」(以后不会再出现)。"
+                f"🗑️ {mon.display} 放弃了「{growth.move_brief(want)}」"
+                + (
+                    f"(「{entry_label}」还在背包里,可以留给别人用)"
+                    if kept_tm
+                    else "(以后不会再出现)"
+                )
+                + "。"
                 + self._pending_tail(pno, len(md["pending"]), idx)
             )
             return
-        yield event.plain_result(self._pending_panel(mon, pending, idx))
+        yield event.plain_result(self._pending_panel(mon, md, pending, idx))
 
-    def _pending_panel(self, mon, pending: list[str], idx: int) -> str:
-        """待决定面板:列出每条待定招式(带效果)与现有招式,以及决定方式。"""
-        head = [f"📘 {mon.display} 升级时学到了 {len(pending)} 个新招式:"]
-        head += [f"　{i}. {growth.move_brief(mv)}" for i, mv in enumerate(pending, 1)]
+    def _pending_panel(self, mon, md: dict, pending: list[str], idx: int) -> str:
+        """待决定面板:列出每条待定招式(带效果)与现有招式,以及决定方式。
+
+        来源(升级/进化/招式机)会标出来 —— 招式机教的还会说明"放弃不浪费机器"。
+        """
+        tm_map = dict((md or {}).get("pending_tm") or {})
+        head = [f"📘 {mon.display} 有 {len(pending)} 个新招式等着决定:"]
+        head += [
+            f"　{i}. {growth.move_brief(mv)}"
+            + (f"  ← 来自「{(BAG_ITEMS.get(tm_map.get(mv)) or {}).get('zh') or tm_map.get(mv)}」"
+               if tm_map.get(mv) else "")
+            for i, mv in enumerate(pending, 1)
+        ]
         head.append("现有招式:")
         head += [
             f"　{i}. {growth.move_brief(m)}" for i, m in enumerate(mon.moves, 1)
@@ -2010,8 +2030,16 @@ class PokemonWorldPlugin(Star):
                 old = r2[0]
         if not old:
             return ""
+        # 这条待决定是招式机教的话:确认机器还在,学完才消耗(放弃则不消耗)
+        pt = dict(md.get("pending_tm") or {})
+        tm_item = str(pt.pop(want, "") or "")
+        if tm_item and t.count(tm_item) <= 0:
+            return ""            # 机器已经没了(卖/丢了):拒绝,别凭空学会
         if not growth.replace_move(mon, old, want):
             return ""
+        if tm_item:
+            t.take_item(tm_item, 1)
+        md["pending_tm"] = pt
         md["pending"] = [m for m in (md.get("pending") or []) if m != want]
         t.commit(idx - 1, mon)
         self._save(t)
@@ -2485,6 +2513,50 @@ class PokemonWorldPlugin(Star):
         eff = entry.get("effect") or {}
         num = coerce_int(nums[0], 1) if nums else 0
         move_idx = coerce_int(nums[1], 0) if len(nums) > 1 else 0
+
+        # ⓪ 招式机:教兼容的宝可梦学招(招式栏满了要玩家先决定,机器先不消耗)
+        tm_mv = str(eff.get("teaches") or "")
+        if tm_mv:
+            if not num:
+                yield event.plain_result(
+                    f"❌ 用法:`/使用 {entry['zh']} <队伍序号>`(对兼容的宝可梦使用)。"
+                )
+                return
+            mon = t.mon(num - 1)
+            if mon is None:
+                yield event.plain_result(f"❌ 队伍里没有第 {num} 只。")
+                return
+            brief = growth.move_brief(tm_mv)
+            if tm_mv in mon.moves:
+                yield event.plain_result(f"❌ {mon.display} 已经会「{growth.move_zh(tm_mv)}」了。")
+                return
+            if not get_dex().tm_compatible(mon.species, tm_mv):
+                yield event.plain_result(
+                    f"❌ {mon.display} 用不了这台招式机 —— 它学不会「"
+                    f"{growth.move_zh(tm_mv)}」。"
+                )
+                return
+            if len(mon.moves) < 4:
+                growth.learn_move(mon, tm_mv)
+                t.take_item(key, 1)          # 学到了,机器用掉
+                t.commit(num - 1, mon)
+                self._save(t)
+                yield event.plain_result(
+                    f"📀 {mon.display} 学会了「{brief}」!(招式机已用掉)"
+                )
+                return
+            # 招式栏满了:进"待决定",机器**先留着** —— 玩家选"放弃"就不浪费
+            growth.set_pending(t.party[num - 1], [tm_mv])
+            pt = dict(t.party[num - 1].get("pending_tm") or {})
+            pt[tm_mv] = key
+            t.party[num - 1]["pending_tm"] = pt
+            self._save(t)
+            yield event.plain_result(
+                f"📀 招式栏满了 —— {mon.display} 想学「{brief}」。\n"
+                f"用 `/学招 {num}` 决定替换哪一招或放弃;"
+                "放弃的话招式机会留在背包里。"
+            )
+            return
 
         # ① 神奇糖果:直接补足到下一级所需经验
         if eff.get("level_up"):

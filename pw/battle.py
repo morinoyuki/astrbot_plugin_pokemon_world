@@ -13,7 +13,7 @@ from . import growth
 from .dex import get_dex
 from .encounter import roll_level, roll_location_encounter
 from .engine import Pokemon, battle_from_dict, create_pokemon, start_battle
-from .items import resolve_bag_item
+from .items import BAG_ITEMS, TM_GYM_BY_TYPE, resolve_bag_item, tm_key
 from .player import Trainer, dict_to_mon, mon_to_dict
 from .util import clamp, hash_int, stable_rng
 from .world import WorldMap
@@ -491,6 +491,15 @@ def _finish_win(
         if trainer.add_badge(region, int(gym.get("order", 1))):
             label = gym.get("badge") or gym.get("title") or "徽章"
             res.rewards.append(f"🏅 获得「{label}」!(共 {trainer.badge_count(region)} 枚)")
+            # 首次通关送**该馆属性**的招牌招式机(经典设计:打完馆主给 TM)
+            tm = tm_for_gym(gym)
+            if tm:
+                trainer.add_item(tm, 1)
+                entry = BAG_ITEMS.get(tm) or {}
+                res.rewards.append(
+                    f"📀 馆主送了你「{entry.get('zh') or tm}」——"
+                    "对兼容的宝可梦用 `/使用 <招式机> <队伍序号>` 就能学会。"
+                )
     if kind == "elite" and meta.get("elite"):
         e = meta["elite"]
         trainer.set_flag(f"elite:{region}:{int(e.get('order', 1))}")
@@ -719,3 +728,24 @@ def view(trainer: Trainer) -> dict:
     out["title"] = str(meta.get("title") or "")
     out["kind"] = str(data.get("kind") or "")
     return out
+"""对战会话:野生 / 训练家 / 道馆 / 四天王 / 冠军 / 火箭队。
+
+一切数值(伤害、经验、金钱、徽章、捕获)都由本地内核给出,LLM 只负责
+把这些事实写成文字。存档里只保留一份 `Battle` 快照,便于随时中断/续战。
+"""
+
+
+def tm_for_gym(gym: dict | None) -> str:
+    """道馆属性 → 该馆送的招牌招式机 key(没有对应属性就返回空串)。"""
+    if not isinstance(gym, dict):
+        return ""
+    types = gym.get("types") or []
+    if isinstance(types, str):
+        types = [types]
+    # 属性名大小写要容错("ghost"/"Ghost" 都认):否则某一馆的招牌招会静默不发
+    lookup = {k.lower(): v for k, v in TM_GYM_BY_TYPE.items()}
+    for t in types:
+        mv = lookup.get(str(t).strip().lower())
+        if mv:
+            return tm_key(mv)
+    return ""

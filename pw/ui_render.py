@@ -1115,7 +1115,24 @@ _ITEM_ICONS = {
 }
 
 # 大类型兜底图标(旧界面只传 kind 时的退路)
+def _tm_disc(color=(96, 176, 232)):
+    """招式机图标:一张小光盘(圆盘 + 中心孔 + 高光)。"""
+
+    def draw(d, x, y, size):
+        s = float(size)
+        cx, cy = x + s / 2, y + s / 2
+        d.ellipse([cx - s / 2, cy - s / 2, cx + s / 2, cy + s / 2],
+                  fill=color, outline=(40, 56, 72))
+        d.ellipse([cx - s / 6, cy - s / 6, cx + s / 6, cy + s / 6],
+                  fill=(240, 246, 250), outline=(40, 56, 72))
+        d.line([cx - s / 3, cy - s / 3, cx - s / 8, cy - s / 8],
+               fill=(220, 238, 250), width=max(1, int(max(1, s / 9))))
+
+    return draw
+
+
 _KIND_ICONS = {
+    "tm": _tm_disc(),
     "ball": _ball((224, 64, 56)),
     "medicine": _bottle((120, 200, 168)),
     "pp": _bottle((120, 150, 230), marks=1),

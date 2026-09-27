@@ -584,6 +584,28 @@ class Dex:
                 return self.learnsets.get(r[0], {}) or {}
         return {}
 
+    def tm_moves(self, species: str) -> set[str]:
+        """该物种**能用招式机学会**的招式集合。
+
+        判据是学习表里的 **M 码**(Pokémon Showdown 的学习表把"某世代可用招式机
+        学会"标成 M),所以与 `/图鉴` 展示的学习途径天然一致。
+        排除非标准招式(当前世代已无法使用的那 147 个)。
+        """
+        codes = self._own_learnset(str(species or "")) or {}
+        out: set[str] = set()
+        for mv, cd in codes.items():
+            if "M" not in str(cd):
+                continue
+            entry = self.moves.get(str(mv)) or {}
+            if entry.get("isNonstandard"):
+                continue
+            out.add(str(mv))
+        return out
+
+    def tm_compatible(self, species: str, move: str) -> bool:
+        """能否用这台招式机。"""
+        return str(move or "") in self.tm_moves(species)
+
     def level_up_moves(self, species_key: str, old_level: int, new_level: int) -> list[str]:
         """返回在 (old_level, new_level] 区间内新学会的等级招(按等级升序)。"""
         row = self._own_learnset(species_key)
