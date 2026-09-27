@@ -236,6 +236,10 @@ PVP_A_BAR = (27, 24, 75, 6)
 PVP_B_BAR = (138, 24, 75, 6)
 PVP_A_GROUND = (64, 100)
 PVP_B_GROUND = (176, 100)
+# 两只站在**同一水平线**上,所以站台要对称地放在各自脚下(不能沿用 PvE 的
+# 斜对布局坐标,否则椭圆会和精灵错位)
+PVP_A_PLATFORM = (10, 84, 118, 116)
+PVP_B_PLATFORM = (122, 84, 230, 116)
 PVP_MSG_TOP_MAX = 104
 
 
@@ -270,7 +274,7 @@ def render_pvp_battle(
 
         small = Image.new("RGB", (LOGICAL_W, LOGICAL_H), BG_TOP)
         d = ImageDraw.Draw(small)
-        _draw_scene(d, weather)
+        _draw_scene(d, weather, platforms=(PVP_A_PLATFORM, PVP_B_PLATFORM))
 
         # 左侧用正面图**水平翻转**,与右侧面对面
         _paste_small(small, left, PVP_A_GROUND, factor=MY_SCALE, bounds=(92, 50),
@@ -607,7 +611,7 @@ def render_battle(
         return b""
 
 
-def _draw_scene(d, weather: str) -> None:
+def _draw_scene(d, weather: str, platforms=None) -> None:
     """场地背景:天气配色 + 地平线 + 竞技场椭圆 + 站台 + 天气粒子。"""
     key = str(weather or "")
     sky, ground, arena, plat = WEATHER_PALETTE.get(
@@ -618,7 +622,7 @@ def _draw_scene(d, weather: str) -> None:
     d.line([0, 78, LOGICAL_W, 78], fill=tuple(max(0, c - 26) for c in ground))
     d.ellipse([-26, 30, LOGICAL_W + 26, 132], fill=arena,
               outline=tuple(max(0, c - 34) for c in arena))
-    for box in (FOE_PLATFORM, MY_PLATFORM):
+    for box in (platforms if platforms is not None else (FOE_PLATFORM, MY_PLATFORM)):
         d.ellipse(box, fill=plat, outline=tuple(max(0, c - 40) for c in plat))
     if key == "rain":
         for i in range(52):
