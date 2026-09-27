@@ -89,7 +89,12 @@ h3 { margin: 18px 0 8px; font-size: 14px; }
 .drawer-mask, .modal-mask {
   position: fixed; inset: 0; background: rgba(0,0,0,.42); z-index: 20; display: none;
 }
-.drawer-mask.show, .modal-mask.show { display: block; }
+/* 注意:两个遮罩的"显示"方式**不一样** ——
+   抽屉靠 fixed + right 定位,block 就行;
+   弹窗靠 flex 的 align-items/justify-content 居中,必须 flex,
+   写成 block 会把居中一起废掉 → 弹窗跑到左上角(用户反馈过)。 */
+.drawer-mask.show { display: block; }
+.modal-mask.show { display: flex; }
 .drawer {
   position: fixed; top: 0; right: -720px; width: min(720px, 94vw); height: 100vh;
   background: var(--panel); z-index: 21; transition: right .22s ease;
@@ -134,11 +139,20 @@ textarea { resize: vertical; font-family: ui-monospace, Consolas, monospace; fon
 .msg-list .ops { float: right; }
 
 /* 弹窗 */
-.modal-mask { align-items: center; justify-content: center; }
+.modal-mask {
+  align-items: center; justify-content: center;
+  padding: 4vh 12px; overflow-y: auto;   /* 矮屏幕上也能滚到按钮 */
+}
 .modal {
   background: var(--panel); border-radius: 14px; width: min(680px, 92vw);
   max-height: 84vh; display: flex; flex-direction: column;
+  margin: auto;                    /* flex 容器里再兜一层居中 */
   box-shadow: 0 12px 48px rgba(0,0,0,.35);
+  animation: modal-in .16s ease-out;
+}
+@keyframes modal-in {
+  from { opacity: 0; transform: translateY(8px) scale(.985); }
+  to { opacity: 1; transform: none; }
 }
 .modal-head { padding: 12px 16px; border-bottom: 1px solid var(--line); }
 .modal-body { padding: 12px 16px; overflow-y: auto; }

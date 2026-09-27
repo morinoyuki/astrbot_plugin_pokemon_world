@@ -1,5 +1,28 @@
 # Changelog
 
+## 1.10.4
+
+### 修复:插件页面「编辑宝可梦弹窗跑到左上角」
+
+**根因**(纯 CSS):`.drawer-mask.show, .modal-mask.show { display: block }` 把
+`.modal-mask` 的 `display: flex` **覆盖掉了** —— 而弹窗居中靠的正是 flex 的
+`align-items/justify-content`,所以弹窗贴在左上角。抽屉的显示方式与弹窗不同
+(它靠 `fixed` + `right` 定位,block 就够),所以两者不能共用一条 `.show` 规则。
+
+**改法**:
+- `.drawer-mask.show { display: block }` 与 `.modal-mask.show { display: flex }` 拆开;
+- 遮罩加 `padding: 4vh 12px` + `overflow-y:auto`(矮屏幕也能滚到按钮),
+  弹窗本体 `margin:auto` 再兜一层居中,并加了 0.16s 的出现动画。
+
+**测试** 353 → 355:
+- `test_modal_is_centered_by_flex`:写了个**极简 CSS 级联解析**(匹配 → 比特异度 →
+  后写覆盖)算出最终生效的 `display`,断言弹窗是 `flex` 且遮罩有居中属性、
+  抽屉仍是 `block`;
+- `test_modal_markup_is_nested_inside_mask`:`.modal` 必须在遮罩内。
+  (两条都做过反向验证:把 `flex` 改回 `block` 后确实会红。)
+ruff 全绿;版本 1.10.4。
+
+
 ## 1.10.3
 
 ### 修复:插件页面「编辑宝可梦等级无法保存」

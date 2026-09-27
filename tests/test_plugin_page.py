@@ -17,6 +17,7 @@ import tempfile
 from pathlib import Path
 
 _ROOT = Path(__file__).resolve().parent.parent
+_PAGE = _ROOT / "pages" / "manage"
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 sys.path.insert(0, str(_ROOT / "tests"))
@@ -520,3 +521,87 @@ def test_edit_other_fields_do_not_touch_level():
         assert after["level"] == before["level"] and after["exp"] == before["exp"]
         assert after["friendship"] == 200 and after["nickname"] == "小水"
         assert after["cur_hp"] == 7
+
+
+# ── 页面样式:弹窗必须真的居中 ─────────────────────────────────────
+def _css_rules(path):
+    """极简 CSS 解析:返回 [(选择器, {属性: 值})],跳过 @ 规则。"""
+    import re
+
+    css = re.sub(r"/\*.*?\*/", "", Path(path).read_text(encoding="utf-8"), flags=re.S)
+    out = []
+    for block in re.finditer(r"([^{}@]+)\{([^{}]*)\}", css):
+        sels, body = block.group(1).strip(), block.group(2)
+        decls = {}
+        for part in body.split(";"):
+            if ":" in part:
+                k, v = part.split(":", 1)
+                decls[k.strip()] = v.strip()
+        if decls:
+            out.append((sels, decls))
+    return out
+
+
+def _css_value(rules, classes, prop):
+    """按"匹配 → 比特异度 → 后写覆盖"算出某个属性最终生效的值。"""
+    def matches(sel):
+        sel = sel.strip()
+        if sel.startswith("@"):
+            return False
+        tokens = sel.replace(">", " ").split()
+        if not tokens:
+            return False
+        for tok in tokens:
+            # 复合选择器(.modal-mask.show)要**同时**满足:按 "." 拆开后逐个查 ——
+            # 只判断 tok[1:] 会把它当成一个叫 "modal-mask.show" 的类,永远匹配不上
+            if tok.startswith("."):
+                for cls in [p for p in tok.split(".") if p]:
+                    if cls not in classes:
+                        return False
+            elif tok.startswith("#") or tok not in ("*",):
+                return False
+        return True
+
+    def specificity(sel):
+        return (sel.count("."), sel.count("#"), 0)
+
+    best = None
+    for order, (sels, decls) in enumerate(rules):
+        for sel in sels.split(","):
+            if prop in decls and matches(sel):
+                key = (specificity(sel), order)
+                if best is None or key >= best[0]:
+                    best = (key, decls[prop])
+    return best[1] if best else None
+
+
+def test_modal_is_centered_by_flex():
+    """弹窗必须靠 flex 居中。
+
+    实测反馈:"点开宝可梦编辑窗口,窗口一直在左上角"。根因是
+    `.drawer-mask.show, .modal-mask.show { display: block }` 把
+    `.modal-mask` 的 `display:flex` 覆盖掉了 —— 居中靠的正是 flex 的
+    align-items/justify-content,于是弹窗贴在左上角。
+    抽屉和弹窗的显示方式本来就不一样,这里按 CSS 级联算出**最终生效**的值。
+    """
+    rules = _css_rules(_PAGE / "style.css")
+    # 弹窗:flex 居中
+    assert _css_value(rules, {"modal-mask", "show"}, "display") == "flex"
+    assert _css_value(rules, {"modal-mask"}, "align-items") == "center"
+    assert _css_value(rules, {"modal-mask"}, "justify-content") == "center"
+    # 抽屉:fade 遮罩用 block(它靠 fixed + right 定位,不需要 flex)
+    assert _css_value(rules, {"drawer-mask", "show"}, "display") == "block"
+    # 弹窗本体在 flex 容器里再兜一层居中
+    assert _css_value(rules, {"modal"}, "margin") == "auto"
+
+
+def test_modal_markup_is_nested_inside_mask():
+    """`.modal` 必须在遮罩**里**:否则 `inset:0` 的遮罩盖不住它。"""
+
+    html = (_PAGE / "index.html").read_text(encoding="utf-8")
+    start = html.find('class="modal-mask"')
+    assert start >= 0, "找不到 modal-mask"
+    tail = html.find('class="toast"', start)      # 弹窗区块后面就是 toast
+    block = html[start:tail if tail > 0 else len(html)]
+    assert 'class="modal"' in block, "modal 不在遮罩内(遮罩盖不住它)"
+    assert 'id="modal-body"' in block and 'id="modal-foot"' in block
