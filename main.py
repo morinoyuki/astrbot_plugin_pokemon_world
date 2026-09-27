@@ -1361,15 +1361,34 @@ class PokemonWorldPlugin(Star):
                 wild_p += 0.2
             wild_p = min(0.85, wild_p)
 
-            # ── 只想捡道具 ──
+            # ── 只想捡道具(受"每节点每月上限"约束)──
             if mode == "item":
+                cap = _item_cap(self)
+                used = _item_finds(t, loc)
+                if cap and used >= cap:
+                    self._save(t)
+                    yield event.plain_result(
+                        "\n".join(
+                            [*notice,
+                             f"🍂 这附近能捡的都被你捡完了({_month_key()} 已捡 "
+                             f"{used}/{cap} 个)。",
+                             "换个地方 `/前往 <地点>`,或下个月再来。"]
+                        )
+                    )
+                    return
                 item = rng.choice(EXPLORE_ITEM_POOL)
                 n = rng.randint(1, 2)
+                if cap:
+                    n = max(1, min(n, cap - used))     # 不许超过当月上限
                 t.add_item(item, n)
+                got = _note_item_finds(t, loc, n)
                 self._save(t)
                 zh = (BAG_ITEMS.get(item) or {}).get("zh", item)
+                tail = f"(本月此地 {got}/{cap})" if cap else ""
                 yield event.plain_result(
-                    "\n".join([*notice, f"🔍 你在草丛里发现了 {zh} ×{n}!"])
+                    "\n".join(
+                        [*notice, f"🔍 你在草丛里发现了 {zh} ×{n}!{tail}"]
+                    )
                 )
                 return
 
@@ -1437,13 +1456,29 @@ class PokemonWorldPlugin(Star):
                         f"\n用 `/训练家战` 发起挑战。"
                     )
                     return
+            cap = _item_cap(self)
+            used = _item_finds(t, loc)
+            if cap and used >= cap:
+                self._save(t)
+                yield event.plain_result(
+                    "\n".join(
+                        [*notice,
+                         f"🍂 你在附近转了一圈 —— 能捡的都被你捡完了"
+                         f"({_month_key()} 已捡 {used}/{cap} 个),只遇到了风声。"]
+                    )
+                )
+                return
             item = rng.choice(EXPLORE_ITEM_POOL)
             n = rng.randint(1, 2)
+            if cap:
+                n = max(1, min(n, cap - used))
             t.add_item(item, n)
+            got = _note_item_finds(t, loc, n)
             self._save(t)
             zh = (BAG_ITEMS.get(item) or {}).get("zh", item)
+            tail = f"(本月此地 {got}/{cap})" if cap else ""
             yield event.plain_result(
-                "\n".join([*notice, f"🔍 你在草丛里发现了 {zh} ×{n}!"])
+                "\n".join([*notice, f"🔍 你在草丛里发现了 {zh} ×{n}!{tail}"])
             )
 
     def _roll_wild_typed(self, t: Trainer, rng, environment: str,
@@ -3650,11 +3685,19 @@ class PokemonWorldPlugin(Star):
             for i, m in enumerate(mon.moves, 1)
         ) or "无"
         out = [f"🔵 {zh} Lv{mon.level} [{types}] 招式:{moves}"]
-        out.append(
-            f"行动:`/对战 <1-{max(1, len(mon.moves))}>` 出招、`/捕捉 精灵球`、"
-            f"`/对战 switch <1-{max(1, len(t.party))}>` 换人、"
-            "`/对战 item <道具>`、`/对战 run`"
-        )
+        # 逃跑只在野生对战可用 —— 非野生要提示"认输"(否则玩家会白试一次)
+        wild = bool(b.get("wild"))
+        acts = [
+            f"`/对战 <1-{max(1, len(mon.moves))}>` 出招",
+            f"`/对战 switch <1-{max(1, len(t.party))}>` 换人",
+            "`/对战 item <道具>`",
+        ]
+        if wild:
+            acts.append("`/捕捉 精灵球`")
+            acts.append("`/对战 run` 逃跑")
+        else:
+            acts.append("认输:`/对战 forfeit`")
+        out.append("行动:" + "、".join(acts))
         out.append("(看威力与效果:`/招式 <序号>` —— 查招式不消耗回合)")
         if len(t.party) > 1:
             out.append(f"(出战:队伍第 {active + 1} 只)")
@@ -5290,6 +5333,50 @@ def _badges_by_region(t: Trainer) -> list[str]:
 
         out.append(f"{world.region_zh(region)}({len(ids)}):" + "、".join(names))
     return out
+
+
+# ── `/探索` 捡道具的"每节点每月"上限 ─────────────────────────────
+# 一个地方能捡到的东西是有限的:某节点当月捡满 DEFAULT_ITEM_CAP 个之后,
+# 再探索只会得到"这里已经没东西了" —— 避免无限刷道具(配置 `explore_item_cap`
+# 可调,设 0 表示不限)。
+DEFAULT_ITEM_CAP = 10
+
+
+def _month_key() -> str:
+    """当前月份键(跟随系统时钟,与游戏内天数同源)。"""
+    return time.strftime("%Y-%m")
+
+
+def _item_finds(t: Trainer, location: str) -> int:
+    """本月在该节点已捡到多少个道具。"""
+    box = (t.data.get("item_finds") or {}).get(str(location)) or {}
+    if str(box.get("month") or "") != _month_key():
+        return 0
+    return int(box.get("n") or 0)
+
+
+def _item_cap(self) -> int:
+    """上限(0 = 不限)。"""
+    return max(0, coerce_int(self._cfg("explore_item_cap", DEFAULT_ITEM_CAP),
+                             DEFAULT_ITEM_CAP))
+
+
+def _note_item_finds(t: Trainer, location: str, n: int) -> int:
+    """记录在该节点捡到 n 个道具,返回本月累计。"""
+    finds = dict(t.data.get("item_finds") or {})
+    key = str(location)
+    box = finds.get(key)
+    month = _month_key()
+    if not isinstance(box, dict) or str(box.get("month") or "") != month:
+        box = {"month": month, "n": 0}
+    box["n"] = int(box.get("n") or 0) + max(0, int(n))
+    finds[key] = box
+    # 只留最近 40 个节点,免得存档无限膨胀
+    if len(finds) > 40:
+        for k in sorted(finds, key=lambda x: str((finds[x] or {}).get("month") or ""))[:-40]:
+            finds.pop(k, None)
+    t.data["item_finds"] = finds
+    return int(box["n"])
 
 # ── 插件页面用的小工具 ────────────────────────────────────────────
 def _trainer_view(d: dict) -> Trainer:

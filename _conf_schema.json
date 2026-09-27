@@ -90,5 +90,11 @@
     "type": "bool",
     "hint": "用仿 GBA 的界面展示队伍、背包、训练家卡、图鉴(以及后续的地图/商店/道馆等)。渲染失败自动回退文字",
     "default": true
+  },
+  "explore_item_cap": {
+    "description": "探索捡道具的每节点每月上限",
+    "type": "int",
+    "hint": "同一地点一个月内最多能捡到的道具数;0 表示不限",
+    "default": 10
   }
 }

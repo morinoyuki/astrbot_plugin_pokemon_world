@@ -230,6 +230,14 @@ def parse_action(raw: str, trainer: Trainer, battle) -> dict:
         low = s.lower()
 
     if low in ("run", "flee", "逃跑", "逃走"):
+        # 只有野生对战能逃跑:训练家/道馆/联盟/大赛/火箭队一律禁止。
+        # 在这里拦住(而不是交给引擎),失败时**不消耗回合** ——
+        # 引擎里也有一道同样的保险,双保险。
+        if battle is not None and not getattr(battle, "wild", False):
+            raise BattleError(
+                "❌ 训练家对战不能逃跑!想退出只能认输:`/对战 forfeit`"
+                "(会掉一半金钱、被送回宝可梦中心)。"
+            )
         return {"type": "run"}
     if low in ("forfeit", "giveup", "投降", "认输"):
         return {"type": "forfeit"}
