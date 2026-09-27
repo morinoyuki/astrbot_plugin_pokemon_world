@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from .dex import _norm
+from .dex import _norm, get_dex
 
 # effect 支持的键(engine 读取):
 #   stat_mult: {stat: 倍率}              常驻数值倍率(如讲究系列 / 突击背心)
@@ -247,10 +247,10 @@ _BAG: dict[str, dict] = {
     "revive": {"zh": "活力碎片", "kind": "revive", "desc": "复活并回复一半 HP。", "effect": {"revive": 0.5}},
     "max-revive": {"zh": "活力块", "kind": "revive", "desc": "复活并完全回复 HP。", "effect": {"revive_full": True}},
     # ── PP 回复 ──
-    "ether": {"zh": "元气之粉", "kind": "pp", "desc": "回复一个招式 10 点 PP。", "effect": {"pp_restore": 10}},
-    "max-ether": {"zh": "特攻之粉", "kind": "pp", "desc": "完全回复一个招式的 PP。", "effect": {"pp_restore_all": 1}},
-    "elixir": {"zh": "秘药", "kind": "pp", "desc": "回复全部招式各 10 点 PP。", "effect": {"pp_restore": 10, "pp_all": True}},
-    "max-elixir": {"zh": "厉害秘药", "kind": "pp", "desc": "完全回复全部招式的 PP。", "effect": {"pp_restore_all": 1, "pp_all": True}},
+    "ether": {"zh": "PP 单项小补剂", "kind": "pp", "desc": "回复一个招式 10 点 PP。", "effect": {"pp_restore": 10}},
+    "max-ether": {"zh": "PP 单项全补剂", "kind": "pp", "desc": "完全回复一个招式的 PP。", "effect": {"pp_restore_all": 1}},
+    "elixir": {"zh": "PP 多项小补剂", "kind": "pp", "desc": "回复全部招式各 10 点 PP。", "effect": {"pp_restore": 10, "pp_all": True}},
+    "max-elixir": {"zh": "PP 多项全补剂", "kind": "pp", "desc": "完全回复全部招式的 PP。", "effect": {"pp_restore_all": 1, "pp_all": True}},
     # ── 战斗强化道具(仅战斗中使用) ──
     "x-attack": {"zh": "力量强化", "kind": "battle", "desc": "战斗中提升攻击。", "effect": {"stat_boost": {"atk": 1}}},
     "x-defense": {"zh": "防御强化", "kind": "battle", "desc": "战斗中提升防御。", "effect": {"stat_boost": {"def": 1}}},
@@ -306,6 +306,14 @@ for _k, (_zh, _tag) in _STONES.items():
     }
 
 BAG_ITEMS: dict[str, dict] = _BAG
+# 持有道具(ITEMS)也要并进 BAG_ITEMS:
+# 背包/商店/委托奖励/事件发奖这些流程一律走 BAG_ITEMS,原来的实现只给 ITEMS
+# 里的条目补了个 kind 镜像,**没进 BAG_ITEMS** —— 结果 47 件纯携带道具
+# (剩饭/讲究头带/进化奇石/气势披带…)一件都拿不到,`/持有` 等于空的。
+# kind 维持原样(进化石/进化道具/树果在 BAG 里已有条目,不受影响)。
+for _ik, _ientry in list(ITEMS.items()):
+    if _ik not in BAG_ITEMS:
+        BAG_ITEMS[_ik] = {**_ientry, "kind": _ientry.get("kind") or "held"}
 _BAG_IDX: dict[str, str] = {}
 for _key, _v in BAG_ITEMS.items():
     for _alias in (_key, _v["zh"]):
@@ -329,13 +337,6 @@ KIND_ORDER = [
     "rare", "held",
 ]
 
-# 持有道具(ITEMS)补齐 kind:这些条目不在 BAG_ITEMS 里,只补本表镜像项。
-# 注意:kind 只能取 "held" —— item_price 对未知 kind 都落到默认 500 档,而 BAG 里
-# 已有的进化石 / 进化道具 / 树果若在此改写成 stone/evo/berry 会连带改变售价
-# (resolve_item 优先查 ITEMS),所以这里只给 BAG 里没有的条目补 kind。
-for _ik, _ientry in ITEMS.items():
-    if _ik not in BAG_ITEMS:
-        _ientry.setdefault("kind", "held")
 
 
 def resolve_bag_item(query: str) -> tuple[str, dict] | None:
@@ -384,11 +385,99 @@ _TYPE_ZH = {
 }
 # 这些效果目前**没有消费方**(引擎里没人读) —— 说明里要如实标出来,
 # 免得玩家买了/用了却什么都没发生
-_UNIMPLEMENTED = {
-    "pp_up": "⚠️ 本插件暂未实现(PP 上限提升)",
-    "ability_switch": "⚠️ 本插件暂未实现(切换特性)",
-    "ability_patch": "⚠️ 本插件暂未实现(改为隐藏特性)",
+# 效果 → 人话(这三个以前是"未实现",现在 `/使用` 里真的能用了)
+_IMPLEMENTED_SPECIAL = {
+    "pp_up": "提升一个招式的 PP 上限(每招最多 +3)",
+    "ability_switch": "切换成另一个普通特性",
+    "ability_patch": "切换成隐藏特性",
 }
+
+
+# PP 提升剂对单个招式的最大加成(原版:最多 3 次,每次 +1/5 基数;这里简化为 +3 点)
+PP_UP_MAX = 3
+
+
+def max_pp(mon, move: str) -> int:
+    """招式 PP 上限(基础值 + `/使用 PP提升剂` 的加成)。"""
+    base = int((get_dex().moves.get(str(move)) or {}).get("pp", 10) or 10)
+    bonus = int((getattr(mon, "pp_bonus", None) or {}).get(str(move), 0) or 0)
+    return max(1, base + bonus)
+
+
+def item_needed(mon, eff: dict) -> bool:
+    """这只宝可梦"用得上"这件道具吗(战斗外判定的依据)。"""
+    if eff.get("revive") or eff.get("revive_full"):
+        return mon.cur_hp <= 0
+    if mon.cur_hp <= 0:
+        return False                       # 濒死的只能靠复活类
+    if eff.get("heal_hp") or eff.get("heal_hp_frac") or eff.get("heal_full"):
+        return mon.cur_hp < mon.max_hp
+    cure = eff.get("cure_status")
+    if cure:
+        if not mon.status:
+            return False
+        if cure is True:
+            return True
+        if isinstance(cure, (list, tuple)):
+            return str(mon.status) in {str(x) for x in cure}
+        return str(mon.status) == str(cure)
+    if eff.get("pp_restore") or eff.get("pp_restore_all"):
+        return any(
+            int(mon.pp.get(m, 0)) < max_pp(mon, m) for m in (mon.moves or [])
+        )
+    return False
+
+
+def apply_out_of_battle(mon, key: str, *, move: str | None = None) -> tuple[bool, str]:
+    """战斗外使用回复/状态/复活/PP 类道具,返回 `(是否生效, 给玩家看的一行)`。
+
+    优先用能被消费掉的字段:`pp_up`/`ability_*`/`level_up` 这些在 main.py 里另走
+    专用分支,这里只处理"回复类"。
+    """
+    entry = BAG_ITEMS.get(str(key or "")) or ITEMS.get(str(key or "")) or {}
+    eff = entry.get("effect") if isinstance(entry.get("effect"), dict) else {}
+    if not eff or not item_needed(mon, eff):
+        return False, ""
+    name = mon.display
+    if eff.get("revive") or eff.get("revive_full"):
+        frac = 1.0 if eff.get("revive_full") else float(eff.get("revive") or 0.5)
+        mon.cur_hp = max(1, int(mon.max_hp * frac))
+        mon.status = ""
+        return True, f"💗 {name} 复活了(HP {mon.cur_hp}/{mon.max_hp})!"
+    if eff.get("heal_full"):
+        mon.cur_hp = mon.max_hp
+        return True, f"💚 {name} 的 HP 完全回复了!"
+    if eff.get("heal_hp") or eff.get("heal_hp_frac"):
+        before = mon.cur_hp
+        heal = int(eff.get("heal_hp") or 0)
+        if eff.get("heal_hp_frac"):
+            heal += int(mon.max_hp * float(eff["heal_hp_frac"]))
+        mon.cur_hp = min(mon.max_hp, mon.cur_hp + max(1, heal))
+        return True, f"💚 {name} 回复了 {mon.cur_hp - before} HP(HP {mon.cur_hp}/{mon.max_hp})。"
+    cure = eff.get("cure_status")
+    if cure:
+        mon.status = ""
+        return True, f"💊 {name} 的异常状态治愈了。"
+    if eff.get("pp_restore") or eff.get("pp_restore_all"):
+        full = bool(eff.get("pp_restore_all"))
+        all_moves = bool(eff.get("pp_all")) or full
+        amount = 0 if full else int(eff.get("pp_restore") or 0)
+        if move and move in (mon.moves or []) and not all_moves:
+            targets = [move]
+        else:
+            targets = list(mon.moves or [])
+        fixed = 0
+        for mv in targets:
+            mx = max_pp(mon, mv)
+            cur = int(mon.pp.get(mv, mx))
+            if cur >= mx:
+                continue
+            mon.pp[mv] = mx if full else min(mx, cur + amount)
+            fixed += 1
+        if not fixed:
+            return False, ""
+        return True, f"⚙️ {name} 回复了招式的 PP({fixed} 个招式)。"
+    return False, ""
 
 
 def effect_text(key: str | None) -> str:
@@ -399,8 +488,8 @@ def effect_text(key: str | None) -> str:
         return ""
     bits: list[str] = []
     for field, val in eff.items():
-        if field in _UNIMPLEMENTED:
-            bits.append(_UNIMPLEMENTED[field])
+        if field in _IMPLEMENTED_SPECIAL:
+            bits.append(_IMPLEMENTED_SPECIAL[field])
         elif field == "heal_hp":
             bits.append(f"回复 {int(val)} HP")
         elif field == "heal_hp_frac":
@@ -421,9 +510,14 @@ def effect_text(key: str | None) -> str:
         elif field == "revive_full":
             bits.append("完全复活并回满 HP")
         elif field == "pp_restore":
-            bits.append(f"回复 {int(val)} 点 PP")
-        elif field in ("pp_restore_all", "pp_all"):
-            bits.append("回复全部 PP")
+            where = "全部招式各" if eff.get("pp_all") else "一个招式"
+            bits.append(f"{where}回复 {int(val)} 点 PP")
+        elif field == "pp_restore_all":
+            where = "全部招式" if eff.get("pp_all") else "一个招式"
+            bits.append(f"完全回复{where}的 PP")
+        elif field == "pp_all":
+            if "pp_restore" not in eff and "pp_restore_all" not in eff:
+                bits.append("回复所有招式的 PP")
         elif field == "ball_master":
             bits.append("必定捕获")
         elif field == "ball_bonus":

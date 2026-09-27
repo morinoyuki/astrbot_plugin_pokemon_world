@@ -651,9 +651,10 @@ def test_item_effect_text_is_human_readable():
         assert want in got, f"{key} 的效果文本缺少「{want}」:{got}"
     # 基础捕获率不该写成"捕获率 ×1"
     assert "捕获率" not in effect_text("poke-ball")
-    # 引擎里没有消费方的效果要如实标出来
-    for key in ("pp-up", "ability-capsule"):
-        assert "暂未实现" in effect_text(key), key
+    # PP 上限提升 / 特性切换现在已经真的能用了(`/使用` 里有对应分支)
+    assert "PP 上限" in effect_text("pp-up")
+    assert "特性" in effect_text("ability-capsule")
+    assert "隐藏特性" in effect_text("ability-patch")
 
 
 def test_bag_text_fallback_lists_effects():
@@ -666,7 +667,7 @@ def test_bag_text_fallback_lists_effects():
         out = _run(p, "/背包", "cmd_bag")
         assert "回复 20 HP" in out
         assert "捕获率 ×1.5" in out
-        assert "暂未实现" in out
+        assert "PP 上限" in out
 
 
 # ══════════════════════════════════════════════════════════════════

@@ -927,10 +927,23 @@ SHOP_TIERS: list[tuple[int, list[str]]] = [
     (2, ["burn-heal", "ice-heal", "lemonade", "ether", "x-attack", "x-defense",
          "x-sp-defense", "guard-spec", "premier-ball"]),
     (3, ["ultra-ball", "hyper-potion", "revive", "max-ether", "x-speed", "x-special", "dire-hit",
-         "net-ball", "nest-ball", "repeat-ball"]),
+         "net-ball", "nest-ball", "repeat-ball",
+         # 属性增强类持有道具(×1.2)
+         "silk-scarf", "charcoal", "mystic-water", "miracle-seed", "magnet",
+         "never-melt-ice", "black-belt", "poison-barb", "soft-sand", "sharp-beak",
+         "twisted-spoon", "silver-powder", "hard-stone", "spell-tag", "dragon-fang",
+         "black-glasses", "fairy-feather"]),
     (4, ["full-heal", "max-potion", "max-revive", "full-restore", "elixir",
          "dusk-ball", "quick-ball", "timer-ball", "level-ball", "heavy-ball",
-         "beast-ball"]),
+         "beast-ball",
+         # 中档持有道具
+         "muscle-band", "wise-glasses", "expert-belt", "light-clay", "heat-rock",
+         "damp-rock", "smooth-rock", "icy-rock", "terrain-extender",
+         "safety-goggles", "air-balloon", "covert-cloak", "clear-amulet",
+         "loaded-dice", "throat-spray", "toxic-orb", "flame-orb",
+         "eviolite", "assault-vest",
+         # 树果(同时是可携带道具:文柚果回 1/4、木子果解全状态)
+         "sitrus-berry", "lum-berry"]),
     (5, ["max-elixir", "rare-candy", "metal-coat", "kings-rock", "dragon-scale",
          "deep-sea-scale", "deep-sea-tooth", "up-grade", "protector",
          "electirizer", "magmarizer", "reaper-cloth", "razor-claw", "razor-fang",
@@ -939,8 +952,12 @@ SHOP_TIERS: list[tuple[int, list[str]]] = [
          "unremarkable-teacup", "auspicious-armor", "malicious-armor", "metal-alloy",
          "fire-stone", "water-stone", "thunder-stone", "leaf-stone", "moon-stone",
          "sun-stone", "shiny-stone", "dusk-stone", "dawn-stone", "ice-stone"]),
-    # 大师球 / 究极球 / 特性胶囊 / 膏药 / PP 提升:不进普通商店(大赛奖励或事件获取),
-    # 特性切换与 PP 上限尚未实现,不会发给玩家。
+    (6, ["leftovers", "choice-band", "choice-specs", "choice-scarf", "life-orb",
+         "focus-sash", "rocky-helmet", "heavy-duty-boots", "weakness-policy",
+         "booster-energy", "black-sludge",
+         # PP 上限提升与特性切换(见 /使用)
+         "pp-up", "pp-max", "ability-capsule", "ability-patch"]),
+    # 大师球 / 究极球 / 特性胶囊 / 膏药 / PP 提升:不进普通商店(大赛奖励或事件获取)
 ]
 
 SHOP_STOCK = [
@@ -1006,7 +1023,20 @@ def item_price(key: str, *, badge_count: int = 0, discount: float = 1.0) -> int:
         "ether": 600, "max-ether": 1200, "elixir": 600, "max-elixir": 1200,
         "energy-powder": 500, "energy-root": 800, "heal-powder": 300,
     }
-    base = tier.get(k) or {
+    # 持有道具按强度定价(以前 kind="held" 一律 500₽,剩饭和丝绸围巾一个价)
+    if k in ("leftovers", "choice-band", "choice-specs", "choice-scarf", "life-orb",
+             "focus-sash", "rocky-helmet", "heavy-duty-boots", "weakness-policy",
+             "booster-energy"):
+        base = 4000
+    elif k in ("muscle-band", "wise-glasses", "expert-belt", "light-clay", "heat-rock",
+               "damp-rock", "smooth-rock", "icy-rock", "terrain-extender",
+               "safety-goggles", "air-balloon", "covert-cloak", "clear-amulet",
+               "loaded-dice", "throat-spray", "toxic-orb", "flame-orb",
+               "eviolite", "assault-vest"):
+        base = 2500
+    else:
+        base = 1000 if kind == "held" else None
+    base = base or tier.get(k) or {
         "ball": 200,
         "medicine": 600,
         "status": 300,

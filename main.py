@@ -46,7 +46,7 @@ from .pw import ui_menu as UIM
 from .pw import ui_quest as UIQ
 from .pw import ui_render as UI
 from .pw.dex import get_dex
-from .pw.items import BAG_ITEMS, effect_text
+from .pw.items import BAG_ITEMS, effect_text, max_pp
 from .pw.narrate import Narrator
 from .pw.player import Trainer, TrainerStore, mon_to_dict, new_trainer
 from .pw.sqlite_store import SqliteBackend
@@ -731,7 +731,7 @@ class PokemonWorldPlugin(Star):
         for i, key in enumerate(mon.moves[:4], 1):
             lines.append(self._move_line(
                 key, index=i, pp=int(mon.pp.get(key, 0) or 0),
-                pp_max=int((dex.moves.get(key) or {}).get("pp") or 0),
+                pp_max=max_pp(mon, key),
             ))
         yield event.plain_result("\n".join(lines))
 
@@ -2198,7 +2198,12 @@ class PokemonWorldPlugin(Star):
 
     @filter.command("使用", alias={"use", "用道具"})
     async def cmd_use(self, event: AstrMessageEvent):
-        """/使用 <道具> <队伍序号> —— 在战斗外使用道具(如神奇糖果)"""
+        """`/使用 <道具> [队伍序号] [招式序号]` —— 战斗外使用道具。
+
+        以前这里**只认神奇糖果**(`effect.level_up`),于是伤药/万灵药/活力碎片/
+        PP 恢复/树果这些在战斗外一律被拒绝 —— 玩家只能跑宝可梦中心才能回血,
+        背包里的 38 种回复类道具等于废纸。
+        """
         t, err = self._require(event)
         if err:
             yield event.plain_result(err)
@@ -2208,45 +2213,221 @@ class PokemonWorldPlugin(Star):
             return
         arg = self._args(event, ("使用", "use", "用道具")).strip()
         tokens = arg.split()
-        if len(tokens) < 2:
-            yield event.plain_result("用法:`/使用 神奇糖果 1`(对战中用药请用 `/对战 item`)")
+        if not tokens:
+            yield event.plain_result(
+                "用法:`/使用 <道具> [队伍序号] [招式序号]`\n"
+                "· 回复/状态/复活/PP:`/使用 伤药 1`、`/使用 万灵药 2`\n"
+                "· 神奇糖果:`/使用 神奇糖果 1`\n"
+                "· 其余:`/持有 <道具> [序号]` 装备、`/进化 <序号> <道具>` 进化、"
+                "`/对战 item <道具>` 战斗中用药"
+            )
             return
-        num = coerce_int(tokens[-1], 1) or 1
-        name = " ".join(tokens[:-1])
-        from .pw.items import resolve_bag_item
+        from .pw.items import (
+            ITEMS,
+            apply_out_of_battle,
+            item_needed,
+            resolve_bag_item,
+        )
 
+        # 参数:名字 + (可选)序号 + (可选)招式序号
+        nums = [p for p in tokens if p.isdigit()]
+        name = " ".join(p for p in tokens if not p.isdigit())
+        if not name:
+            yield event.plain_result("❌ 请写道具名字,例如 `/使用 伤药 1`。")
+            return
         r = resolve_bag_item(name)
         if not r or t.count(r[0]) <= 0:
             yield event.plain_result(f"❌ 背包里没有「{name}」。")
             return
         key, entry = r
         eff = entry.get("effect") or {}
-        mon = t.mon(num - 1)
-        if mon is None:
-            yield event.plain_result("❌ 队伍序号不对。")
+        num = coerce_int(nums[0], 1) if nums else 0
+        move_idx = coerce_int(nums[1], 0) if len(nums) > 1 else 0
+
+        # ① 神奇糖果:直接补足到下一级所需经验
+        if eff.get("level_up"):
+            num = num or 1
+            mon = t.mon(num - 1)
+            if mon is None:
+                yield event.plain_result(f"❌ 队伍里没有第 {num} 只。")
+                return
+            dex = get_dex()
+            if mon.level >= 100:
+                yield event.plain_result(f"⚠️ {mon.display} 已经是 Lv100 了。")
+                return
+            rate = dex.growth_of(mon.species)
+            need = max(1, dex.exp_for_level(rate, mon.level + 1) - mon.exp)
+            res = growth.gain_exp(mon, need, daytime=B.daytime_of())
+            t.take_item(key, 1)
+            t.commit(num - 1, mon)
+            self._save(t)
+            lines = [f"🍬 {mon.display} 使用了 {entry['zh']},升到了 Lv{mon.level}!"]
+            lines.extend(f"　└ 学会了「{growth.move_zh(mv)}」!" for mv in res.learned)
+            if res.evolved_to:
+                lines.append(f"　└ ✨ 进化成了 {growth.species_zh(res.evolved_to)}!")
+            yield event.plain_result("\n".join(lines))
             return
-        if not eff.get("level_up"):
+
+        # ② 回复 / 状态 / 复活 / PP(战斗外也能用)
+        healable = {
+            "heal_hp", "heal_hp_frac", "heal_full", "cure_status",
+            "revive", "revive_full", "pp_restore", "pp_restore_all", "pp_all",
+        }
+        if set(eff) & healable:
+            # 没写序号时自动挑"最该治"的一只(记下标,后面要写回存档)
+            picked: tuple[int, Pokemon] | None = None
+            if num:
+                cand = t.mon(num - 1)
+                if cand is not None and item_needed(cand, eff):
+                    picked = (num - 1, cand)
+            else:
+                for i in range(len(t.party)):
+                    cand = t.mon(i)
+                    if cand is not None and item_needed(cand, eff):
+                        picked = (i, cand)
+                        break
+            if picked is None:
+                wt = f"第 {num} 只" if num else "队伍里的宝可梦都"
+                yield event.plain_result(
+                    f"⚠️ {wt}用不上 {entry['zh']} —— 满血且状态正常时不必用。"
+                )
+                return
+            slot, target = picked
+            mv = ""
+            if move_idx:
+                if not target.moves or not 1 <= move_idx <= len(target.moves):
+                    yield event.plain_result(
+                        f"❌ {target.display} 没有第 {move_idx} 个招式。"
+                    )
+                    return
+                mv = target.moves[move_idx - 1]
+            ok, line = apply_out_of_battle(target, key, move=mv or None)
+            if not ok:
+                yield event.plain_result(f"⚠️ 现在用不了 {entry['zh']}。")
+                return
+            # **必须写回存档**:t.mon() 每次都是新解析出来的对象,
+            # 只改这个临时对象等于没治(这个坑我今天已经踩第二次了)。
+            t.commit(slot, target)
+            t.take_item(key, 1)
+            self._save(t)
             yield event.plain_result(
-                f"⚠️ {entry['zh']} 不能在战斗外这样使用"
-                "(回复/球类请在 `/对战` 里用,进化石用 `/进化 <序号> <道具>`)。"
+                f"{line}\n　└ 用掉了 {entry['zh']} ×1,还剩 {t.count(key)} 个。"
             )
             return
-        # 神奇糖果:直接补足到下一级所需的经验
-        dex = get_dex()
-        rate = dex.growth_of(mon.species)
-        if mon.level >= 100:
-            yield event.plain_result(f"⚠️ {mon.display} 已经是 Lv100 了。")
+
+        # ③ PP 上限提升(PP 提升剂 / PP 极限提升剂)
+        if eff.get("pp_up"):
+            num = num or 1
+            mon = t.mon(num - 1)
+            if mon is None:
+                yield event.plain_result(f"❌ 队伍里没有第 {num} 只。")
+                return
+            if not mon.moves:
+                yield event.plain_result(f"⚠️ {mon.display} 还没有招式。")
+                return
+            if not move_idx:
+                yield event.plain_result(
+                    f"❓ 要给哪个招式提升?用法:`/使用 {entry['zh']} {num} <招式序号>`"
+                    "(先 `/招式 " + str(num) + "` 看序号)"
+                )
+                return
+            if not 1 <= move_idx <= len(mon.moves):
+                yield event.plain_result(f"❌ {mon.display} 没有第 {move_idx} 个招式。")
+                return
+            from .pw.items import PP_UP_MAX
+
+            mv = mon.moves[move_idx - 1]
+            bonus = int((mon.pp_bonus or {}).get(mv, 0) or 0)
+            base = max_pp(mon, mv) - bonus
+            want_max = bool(eff.get("pp_up_all")) or int(eff.get("pp_up") or 1) > 1
+            # PP 极限提升剂直接顶到 +3(上限),普通提升剂 +1
+            step = PP_UP_MAX - bonus if want_max else 1
+            if step <= 0 or (not want_max and bonus >= PP_UP_MAX):
+                yield event.plain_result(
+                    f"⚠️ {growth.move_zh(mv)} 的 PP 上限已经提升到极限了"
+                    f"({base} → {base + bonus})。"
+                )
+                return
+            add = min(step, PP_UP_MAX - bonus)
+            mon.pp_bonus = dict(mon.pp_bonus or {})
+            mon.pp_bonus[mv] = bonus + add
+            mon.pp[mv] = int(mon.pp.get(mv, 0) or 0) + add   # 加的上限立刻可用
+            t.take_item(key, 1)
+            t.commit(num - 1, mon)
+            self._save(t)
+            yield event.plain_result(
+                f"⚙️ {mon.display} 的「{growth.move_zh(mv)}」PP 上限 "
+                f"{base + bonus} → {base + bonus + add}!"
+                + (f"(已到上限 +{PP_UP_MAX})" if bonus + add >= PP_UP_MAX else "")
+            )
             return
-        need = max(1, dex.exp_for_level(rate, mon.level + 1) - mon.exp)
-        res = growth.gain_exp(mon, need, daytime=B.daytime_of())
-        t.take_item(key, 1)
-        t.commit(num - 1, mon)
-        self._save(t)
-        lines = [f"🍬 {mon.display} 使用了 {entry['zh']},升到了 Lv{mon.level}!"]
-        lines.extend(f"　└ 学会了「{growth.move_zh(mv)}」!" for mv in res.learned)
-        if res.evolved_to:
-            lines.append(f"　└ ✨ 进化成了 {growth.species_zh(res.evolved_to)}!")
-        yield event.plain_result("\n".join(lines))
+
+        # ④ 特性切换(特性胶囊 = 换成另一个普通特性 / 特性膏药 = 换成隐藏特性)
+        if eff.get("ability_switch") or eff.get("ability_patch"):
+            num = num or 1
+            mon = t.mon(num - 1)
+            if mon is None:
+                yield event.plain_result(f"❌ 队伍里没有第 {num} 只。")
+                return
+            dex = get_dex()
+            slots = dex.ability_options(mon.species)
+
+            def _ab_key(name: str) -> str:
+                """特性槽位存的是**显示名**(Run Away),而 mon.ability 是 key(runaway),
+                不归一化的话"换个普通特性"会挑到同一个。"""
+                r = dex.resolve_ability(name) if name else None
+                return str(r[0]) if r else ""
+
+            cur_raw = str(mon.ability or _ab_key(slots.get("0") or "") or "")
+            cur = _ab_key(cur_raw) or cur_raw
+            want_hidden = bool(eff.get("ability_patch"))
+            if want_hidden:
+                target_ab = _ab_key(slots.get("H") or "")
+                if not target_ab:
+                    yield event.plain_result(
+                        f"⚠️ {mon.display}({dex.species.get(mon.species, {}).get('zh')})"
+                        "没有隐藏特性。"
+                    )
+                    return
+            else:
+                normals = [_ab_key(slots[k]) for k in ("0", "1") if slots.get(k)]
+                others = [a for a in normals if a and a != cur]
+                if not others:
+                    yield event.plain_result(
+                        f"⚠️ {mon.display} 没有另一个普通特性可换。"
+                    )
+                    return
+                target_ab = others[0]
+            if target_ab == cur:
+                yield event.plain_result(f"⚠️ {mon.display} 已经是这个特性了。")
+                return
+            old_ab, old_zh = cur, self._ability_zh(cur)
+            mon.ability = target_ab
+            t.take_item(key, 1)
+            t.commit(num - 1, mon)
+            self._save(t)
+            yield event.plain_result(
+                f"🧬 {mon.display} 的特性:{old_zh or old_ab} → "
+                f"{self._ability_zh(target_ab) or target_ab}!"
+            )
+            return
+
+        # ⑤ 其余:给出正确入口,而不是含糊地说"不能这样用"
+        tips = []
+        if set(eff) & {"evolve_stone", "evolve_item"}:
+            tips.append("进化用 `/进化 <序号> <道具>`")
+        if set(eff) & {"ball_master", "ball_bonus"} or str(entry.get("kind")) == "ball":
+            tips.append("球类在 `/对战` 里用 `/捕捉 <球>` 投出")
+        if set(eff) & {"stat_boost", "focus_energy", "guard_spec"}:
+            tips.append("强化剂只能在战斗中 `/对战 item <道具>` 使用")
+        if set(eff) & {"pp_up", "ability_switch", "ability_patch"}:
+            tips.append("这件道具的效果本插件还没实现")
+        if key in ITEMS:
+            tips.append("这是持有道具,用 `/持有 <道具> [序号]` 装备")
+        yield event.plain_result(
+            f"⚠️ {entry.get('zh', key)} 不能在战斗外这样使用。"
+            + ("(" + ";".join(tips) + ")" if tips else "")
+        )
 
     @filter.command("持有", alias={"携带", "装备", "hold", "item", "持有物"})
     async def cmd_hold(self, event: AstrMessageEvent):
@@ -3237,6 +3418,15 @@ class PokemonWorldPlugin(Star):
         if body:
             yield event.plain_result(body)
 
+    def _ability_zh(self, key: str) -> str:
+        """特性的中文名(查不到就返回空串)。"""
+        if not key:
+            return ""
+        try:
+            return str((get_dex().resolve_ability(key)[1] or {}).get("zh") or "")
+        except Exception:
+            return ""
+
     def _held_zh(self, key: str) -> str:
         """持有物中文名(持有道具不在 BAG_ITEMS 里,要走 resolve_item)。"""
         if not key:
@@ -3266,14 +3456,15 @@ class PokemonWorldPlugin(Star):
         moves = []
         for key in mon.moves[:4]:
             mv = dex.moves.get(key) or {}
-            mx = int((mv.get("pp") or 0) or 0)
             moves.append(
                 {
                     "key": key,
                     "zh": growth.move_zh(key),
                     "type": str(mv.get("type") or ""),
                     "pp": int(mon.pp.get(key, 0) or 0),
-                    "pp_max": mx or int(mon.pp.get(key, 0) or 0),
+                    # 上限要含 PP 提升剂的加成
+                    "pp_max": max_pp(mon, key),
+                    "pp_bonus": int((mon.pp_bonus or {}).get(key, 0) or 0),
                 }
             )
         evo = dex.evolution_options(

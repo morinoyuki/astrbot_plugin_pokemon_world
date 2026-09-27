@@ -702,6 +702,12 @@ class Dex:
     def _norm_item(s: str | None) -> str:
         return "".join(ch for ch in str(s or "").lower() if ch.isalnum())
 
+    def ability_options(self, species_key: str) -> dict[str, str]:
+        """该物种的特性槽位:`{"0":..., "1":..., "H":...}`(没有的槽位不出现)。"""
+        entry = self.species.get(str(species_key)) or {}
+        ab = entry.get("abilities")
+        return {str(k): str(v) for k, v in ab.items()} if isinstance(ab, dict) else {}
+
     def item_matches(self, user_item: str | None, evo_item: str | None) -> bool:
         if not user_item or not evo_item:
             return False

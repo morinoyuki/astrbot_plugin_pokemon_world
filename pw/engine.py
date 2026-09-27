@@ -151,6 +151,8 @@ class Pokemon:
     terastallized: bool = False
     fainted: bool = False
     pp: dict = field(default_factory=dict)
+    # `/使用 PP提升剂` 的加成:{招式 key: 加了几点}(原版最多 +3 次)
+    pp_bonus: dict = field(default_factory=dict)
     used_focus_sash: bool = False
     last_move: str = ""
     choice_locked: str = ""
@@ -243,6 +245,7 @@ class Pokemon:
             "terastallized": self.terastallized,
             "fainted": self.fainted,
             "pp": dict(self.pp),
+            "pp_bonus": dict(self.pp_bonus),
             "used_focus_sash": self.used_focus_sash,
             "last_move": self.last_move,
             "choice_locked": self.choice_locked,
@@ -284,6 +287,7 @@ class Pokemon:
         p.stages = dict(d.get("stages") or {})
         p.volatiles = dict(d.get("volatiles") or {})
         p.pp = dict(d.get("pp") or {})
+        p.pp_bonus = dict(d.get("pp_bonus") or {})
         return p
 
     # ── 数值(战斗中)──
@@ -1094,8 +1098,10 @@ class Battle:
                         < int((get_dex().moves.get(m) or {}).get("pp", 10) or 10)
                     ][:1] or mon.moves[:1]
             amount = 0 if full else int(eff.get("pp_restore") or 0)
+            from .items import max_pp
+
             for mv in targets:
-                mx = int((get_dex().moves.get(mv) or {}).get("pp", 10) or 10)
+                mx = max_pp(mon, mv)
                 mon.pp[mv] = mx if full else min(mx, int(mon.pp.get(mv, mx)) + amount)
             self.log.append(
                 f"{mon.display} 的全部招式 PP 完全回复了!"

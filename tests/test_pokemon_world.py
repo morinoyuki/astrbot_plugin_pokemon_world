@@ -1130,12 +1130,10 @@ def test_shop_stock_grows_with_badges_and_covers_items():
     bad = [(t, k) for t, keys in SHOP_TIERS for k in keys if k not in BAG_ITEMS]
     assert not bad, f"货架包含不存在的道具:{bad}"
 
-    # 除了"效果尚未实现"的 4 个,其余道具都必须有获取途径
+    # 每件道具都必须有获取途径(PP 上限提升与特性切换已实现,不再有"拿不到"的例外)
     avail = set(world.shop_stock("pewter-city", 8)) | set(REWARD_ITEMS) | {"master-ball"}
     unreachable = [k for k in BAG_ITEMS if k not in avail]
-    assert set(unreachable) <= {"pp-up", "pp-max", "ability-capsule", "ability-patch"}, (
-        f"这些道具没有任何获取途径:{unreachable}"
-    )
+    assert not unreachable, f"这些道具没有任何获取途径:{unreachable}"
 
 
 def test_every_form_resolves_a_sprite():
@@ -1406,3 +1404,151 @@ def test_lock_message_shows_remaining_days():
     assert not ok
     assert "还有" in msg and "天" in msg, msg
     assert str(game_day() + 2) not in msg, f"不该出现绝对天数:{msg}"
+
+
+def test_held_items_are_all_obtainable_and_equippable():
+    """47 件"纯携带效果"道具以前一件都拿不到(BAG_ITEMS 里根本没有)。
+
+    后果:引擎里已实现的剩饭/讲究头带/进化奇石/气势披带等效果**永远拿不到**,
+    `/持有` 也等于空的。这里保证:凡是"携带后有用"的道具都能在货架上买到。
+    """
+    from pw.items import BAG_ITEMS, ITEMS
+
+    world = WorldMap()
+    stock = set(world.shop_stock("pewter-city", 8))
+    missing = [ITEMS[k]["zh"] for k in ITEMS if k not in stock]
+    assert not missing, f"这些持有道具买不到:{missing}"
+    # 而且必须真的进了 BAG_ITEMS(否则商店/背包流程认不出它)
+    assert all(k in BAG_ITEMS for k in ITEMS)
+
+
+def test_out_of_battle_healing_items_work_and_persist():
+    """战斗外 `/使用` 以前只认神奇糖果 —— 伤药/万灵药/活力碎片全被拒绝。"""
+    import sys
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from test_commands import _Cmd, _Event, run_cmd
+
+    with tempfile.TemporaryDirectory() as tmp:
+        p = _Cmd(tmp)
+        p.config = {"ui_image": False, "quest_enable": False}
+        ev = _Event("/开始 小智 新叶喵")
+        run_cmd(p, ev, p.cmd_start)
+        t = p._load(ev)
+        t.data["bag"] = {"potion": 2, "antidote": 1, "revive": 1, "max-ether": 1}
+        t.data["party"][0]["cur_hp"] = 5
+        hurt = dict(t.data["party"][0])
+        hurt.update({"id": "m2", "species": "pidgey", "cur_hp": 10, "status": "psn"})
+        dead = dict(t.data["party"][0])
+        dead.update({"id": "m3", "species": "rattata", "cur_hp": 0, "status": ""})
+        t.data["party"] += [hurt, dead]
+        p._save(t)
+
+        ev = _Event("/使用 伤药")
+        run_cmd(p, ev, p.cmd_use)
+        assert "回复" in "".join(ev.outputs)
+        t = p._load(ev)
+        assert t.party[0]["cur_hp"] > 5, "回复必须写回存档"
+        assert t.count("potion") == 1, "用掉要从背包扣除"
+
+        ev = _Event("/使用 解毒药 2")
+        run_cmd(p, ev, p.cmd_use)
+        t = p._load(ev)
+        assert t.party[1]["status"] == "", "异常状态要治愈并存档"
+
+        ev = _Event("/使用 活力碎片")
+        run_cmd(p, ev, p.cmd_use)
+        t = p._load(ev)
+        assert t.party[2]["cur_hp"] > 0, "活力碎片要复活濒死的"
+
+        # 都用完/不需要时,拒绝而不是白扣
+        ev = _Event("/使用 全复药")
+        run_cmd(p, ev, p.cmd_use)
+        assert "背包里没有" in "".join(ev.outputs)
+
+        # 球/进化石/持有道具要给出正确入口
+        t = p._load(ev)
+        t.data["bag"] = {"master-ball": 1, "fire-stone": 1, "leftovers": 1}
+        p._save(t)
+        for cmd, want in (("/使用 大师球 1", "/捕捉"), ("/使用 火之石 1", "/进化"),
+                          ("/使用 吃剩的东西 1", "/持有")):
+            ev = _Event(cmd)
+            run_cmd(p, ev, p.cmd_use)
+            assert want in "".join(ev.outputs), (cmd, ev.outputs)
+
+
+def test_pp_up_and_ability_items_work():
+    """PP 提升剂 / PP 极限提升剂 / 特性胶囊 / 特性膏药 —— 以前效果未实现。"""
+    import sys
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from test_commands import _Cmd, _Event, run_cmd
+
+    with tempfile.TemporaryDirectory() as tmp:
+        p = _Cmd(tmp)
+        p.config = {"ui_image": False, "quest_enable": False}
+        ev = _Event("/开始 小智 新叶喵")
+        run_cmd(p, ev, p.cmd_start)
+        t = p._load(ev)
+        t.data["bag"] = {"pp-up": 2, "pp-max": 1, "ability-capsule": 2}
+        eevee = dict(t.data["party"][0])
+        eevee.update({"species": "eevee", "ability": "run-away", "moves": ["tackle"]})
+        t.data["party"][0] = eevee
+        p._save(t)
+
+        base = 35
+
+        def use(cmd):
+            ev = _Event(cmd)
+            run_cmd(p, ev, p.cmd_use)
+            return "".join(ev.outputs)
+
+        assert "招式序号" in use("/使用 PP提升剂 1")      # 没写招式序号要先问
+        assert "36" in use("/使用 PP提升剂 1 1")
+        assert "37" in use("/使用 PP提升剂 1 1")
+        assert "38" in use("/使用 PP极限提升剂 1 1"), "极限提升剂要一次顶到上限"
+        t = p._load(ev)
+        assert t.party[0]["pp_bonus"]["tackle"] == 3, t.party[0]["pp_bonus"]
+        assert base + 3 == 38
+        # 已到上限 → 拒绝
+        assert "极限" in use("/使用 PP极限提升剂 1 1")
+
+        # 特性胶囊:换成"另一个"普通特性(不能换成同一个)
+        assert "适应力" in use("/使用 特性胶囊 1")
+        t = p._load(ev)
+        assert t.party[0]["ability"] == "adaptability", t.party[0]["ability"]
+        ev = _Event("/使用 特性胶囊 1")
+        run_cmd(p, ev, p.cmd_use)
+        t = p._load(ev)
+        assert t.party[0]["ability"] == "run-away", "再换一次应该换回另一个普通特性"
+
+
+def test_ability_patch_only_for_species_with_hidden_ability():
+    import sys
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from test_commands import _Cmd, _Event, run_cmd
+
+    with tempfile.TemporaryDirectory() as tmp:
+        p = _Cmd(tmp)
+        p.config = {"ui_image": False, "quest_enable": False}
+        ev = _Event("/开始 小智 新叶喵")
+        run_cmd(p, ev, p.cmd_start)
+        t = p._load(ev)
+        t.data["bag"] = {"ability-patch": 1}
+        # 皮卡丘有隐藏特性 → 能换
+        mon = dict(t.data["party"][0])
+        mon.update({"species": "pikachu", "ability": "static"})
+        t.data["party"][0] = mon
+        p._save(t)
+        ev = _Event("/使用 特性膏药 1")
+        run_cmd(p, ev, p.cmd_use)
+        t = p._load(ev)
+        assert t.party[0]["ability"] == "lightning-rod", t.party[0]["ability"]
+        # 没有隐藏特性的物种 → 明确拒绝
+        t.data["bag"] = {"ability-patch": 1}
+        slots = get_dex().ability_options("torkoal")
+        if "H" not in slots:
+            t.data["party"][0]["species"] = "torkoal"
+            t.data["party"][0]["ability"] = get_dex().resolve_ability(slots["0"])[0]
+            p._save(t)
+            ev = _Event("/使用 特性膏药 1")
+            run_cmd(p, ev, p.cmd_use)
+            assert "没有隐藏特性" in "".join(ev.outputs)
