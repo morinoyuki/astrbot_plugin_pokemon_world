@@ -134,14 +134,36 @@ _EVO_ITEMS: dict[str, tuple[str, str]] = {
     "sachet": ("香袋", "携带后交换进化。"),
     "whipped-dream": ("泡沫奶油", "携带后交换进化。"),
     "prism-scale": ("美丽鳞片", "携带后交换进化。"),
+    "dubious-disc": ("可疑补丁", "携带后交换进化(多边兽２型专用)。"),
     "up-grade": ("升级数据", "携带后交换进化。"),
 }
 for _ek, (_ezh, _edesc) in _EVO_ITEMS.items():
     _ITEMS.setdefault(_ek, {"zh": _ezh, "desc": _edesc, "effect": {}})
 
+# 俗称/旧译名:玩家常按习惯叫法找道具(`/持有 剩饭` 这类)
+_ALIASES: dict[str, str] = {
+    "剩饭": "leftovers",
+    "专爱头巾": "choice-band",
+    "专爱围巾": "choice-scarf",
+    "专爱眼镜": "choice-specs",
+    "讲究头巾": "choice-band",
+    "讲究眼镜": "choice-specs",
+    "气势头带": "focus-band",
+    "气势腰带": "focus-sash",
+    "弱点保险": "weakness-policy",
+    "讲究护目镜": "safety-goggles",
+    "生命宝珠": "life-orb",
+    "突击背心": "assault-vest",
+    "进化奇石": "eviolite",
+    "黑色污泥": "blacksludge",
+}
+
 _ITEM_IDX: dict[str, str] = {}
 for _key, _v in ITEMS.items():
     for _alias in (_key, _v["zh"]):
+        _ITEM_IDX.setdefault(_norm(_alias), _key)
+for _alias, _key in _ALIASES.items():
+    if _key in ITEMS:
         _ITEM_IDX.setdefault(_norm(_alias), _key)
 
 

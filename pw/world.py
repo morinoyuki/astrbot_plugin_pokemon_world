@@ -934,7 +934,7 @@ SHOP_TIERS: list[tuple[int, list[str]]] = [
     (5, ["max-elixir", "rare-candy", "metal-coat", "kings-rock", "dragon-scale",
          "deep-sea-scale", "deep-sea-tooth", "up-grade", "protector",
          "electirizer", "magmarizer", "reaper-cloth", "razor-claw", "razor-fang",
-         "sachet", "whipped-dream", "prism-scale", "oval-stone"]),
+         "sachet", "whipped-dream", "prism-scale", "oval-stone", "dubious-disc"]),
     (6, ["sweet-apple", "tart-apple", "syrupy-apple", "cracked-pot",
          "unremarkable-teacup", "auspicious-armor", "malicious-armor", "metal-alloy",
          "fire-stone", "water-stone", "thunder-stone", "leaf-stone", "moon-stone",

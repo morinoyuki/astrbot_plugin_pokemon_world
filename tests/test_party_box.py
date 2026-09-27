@@ -667,3 +667,154 @@ def test_bag_text_fallback_lists_effects():
         assert "回复 20 HP" in out
         assert "捕获率 ×1.5" in out
         assert "暂未实现" in out
+
+
+# ══════════════════════════════════════════════════════════════════
+# /持有 —— 让宝可梦携带道具(此前 mon.item 只被读取,永远拿不到)
+# ══════════════════════════════════════════════════════════════════
+def _hold_setup(p, ev, species="onix", item="", bag=None, level=40):
+    from pw.engine import create_pokemon
+
+    t = p._load(ev)
+    t.data["location"] = "pewter-city"
+    mon = create_pokemon(species, level).to_dict()
+    mon["id"] = "mH"
+    mon["item"] = item
+    t.data["party"] = [t.party[0], mon]
+    t.data["bag"] = dict(bag or {})
+    p._save(t)
+
+
+def test_hold_equip_and_take_off():
+    with tempfile.TemporaryDirectory() as tmp:
+        p, ev = _start(tmp)
+        _hold_setup(p, ev, bag={"leftovers": 1, "potion": 2})
+        out = _run(p, "/持有", "cmd_hold")
+        assert "携带情况" in out and "持有:" in out
+
+        out = _run(p, "/持有 吃剩的东西 2", "cmd_hold")
+        t = p._load(ev)
+        assert "开始携带" in out and t.party[1]["item"] == "leftovers"
+        assert t.count("leftovers") == 0, "装上去要真的从背包里扣掉"
+        # 已携带时不重复装
+        assert "已经携带" in _run(p, "/持有 吃剩的东西 2", "cmd_hold")
+        # 换别的道具要先取下
+        t.data["bag"]["metal-coat"] = 1
+        p._save(t)
+        assert "先 `/持有 取下" in _run(p, "/持有 金属膜 2", "cmd_hold")
+        # 取下要放回背包
+        out = _run(p, "/持有 取下 2", "cmd_hold")
+        t = p._load(ev)
+        assert "取下" in out and not t.party[1]["item"] and t.count("leftovers") == 1
+        # 俗称也能解析
+        assert "开始携带" in _run(p, "/持有 剩饭 2", "cmd_hold")
+
+
+def test_hold_rejects_consumables_and_wrong_args():
+    with tempfile.TemporaryDirectory() as tmp:
+        p, ev = _start(tmp)
+        _hold_setup(p, ev, bag={"potion": 2})
+        assert "是消耗品" in _run(p, "/持有 伤药 2", "cmd_hold")
+        assert "没有找到道具" in _run(p, "/持有 不存在的东西 2", "cmd_hold")
+        t = p._load(ev)
+        t.data["bag"]["metal-coat"] = 1
+        p._save(t)
+        assert "没有第 9 只" in _run(p, "/持有 金属膜 9", "cmd_hold")
+        # 背包里没有(在别人身上)要提示
+        _hold_setup(p, ev, item="leftovers", bag={})
+        out = _run(p, "/持有 吃剩的东西 1", "cmd_hold")
+        assert "背包里没有" in out
+
+
+def test_levelHold_evolution_becomes_reachable():
+    """携带升级进化(浑圆之石/锋锐之爪…)此前不可达,现在装上去就能进化。"""
+    from pw import growth
+
+    with tempfile.TemporaryDirectory() as tmp:
+        p, ev = _start(tmp)
+        # 狃拉 + 锋锐之爪 + 夜晚 → 玛狃拉(evoType=levelHold)
+        _hold_setup(p, ev, species="sneasel", bag={"razor-claw": 1}, level=40)
+        assert "开始携带" in _run(p, "/持有 锋锐之爪 2", "cmd_hold")
+        mon = B.dict_to_mon(p._load(ev).party[1])
+        assert growth.auto_evolve(mon, daytime="night") == "weavile", "带着锋锐之爪在夜晚升级应进化成玛狃拉"
+        # 不带道具就不该进化
+        _hold_setup(p, ev, species="sneasel", bag={}, level=40)
+        mon2 = B.dict_to_mon(p._load(ev).party[1])
+        assert growth.auto_evolve(mon2, daytime="night") == ""
+        # 带了道具但时机不对(白天)也不该进化
+        _hold_setup(p, ev, species="sneasel", item="razor-claw", level=40)
+        mon3 = B.dict_to_mon(p._load(ev).party[1])
+        assert growth.auto_evolve(mon3, daytime="day") == ""
+
+
+def test_trade_evolution_requires_and_consumes_held_item():
+    """需要携带道具的 16 种通信进化:空手不能进化,带了要消耗掉。"""
+    from pw.dex import get_dex
+
+    dex = get_dex()
+    with tempfile.TemporaryDirectory() as tmp:
+        p, ev = _start(tmp)
+        # 空手 → 拒绝,并说清要带什么
+        _hold_setup(p, ev, species="onix", bag={"metal-coat": 1})
+        out = _run(p, "/交换 2", "cmd_trade")
+        assert "金属膜" in out and "大钢蛇" not in out, out
+        # 装上再交换 → 进化 + 道具被消耗
+        assert "开始携带" in _run(p, "/持有 金属膜 2", "cmd_hold")
+        out = _run(p, "/交换 2", "cmd_trade")
+        t = p._load(ev)
+        assert dex.species[t.party[1]["species"]]["zh"] == "大钢蛇", out
+        assert not t.party[1]["item"], "通信进化要消耗携带道具"
+
+
+def test_trade_evolution_branches_follow_the_held_item():
+    """珍珠贝两条分支必须按携带道具走(以前永远只给猎斑鱼)。"""
+    from pw.dex import get_dex
+
+    dex = get_dex()
+    for item, want in (("deep-sea-tooth", "猎斑鱼"), ("deep-sea-scale", "樱花鱼")):
+        with tempfile.TemporaryDirectory() as tmp:
+            p, ev = _start(tmp)
+            _hold_setup(p, ev, species="clamperl", item=item, level=40)
+            out = _run(p, "/交换 2", "cmd_trade")
+            t = p._load(ev)
+            got = dex.species[t.party[1]["species"]]["zh"]
+            assert got == want, f"带 {item} 应进化成 {want},实际 {got}({out})"
+
+
+def test_plain_trade_evolution_still_works_without_item():
+    from pw.dex import get_dex
+
+    dex = get_dex()
+    with tempfile.TemporaryDirectory() as tmp:
+        p, ev = _start(tmp)
+        for species, want in (("kadabra", "胡地"), ("haunter", "耿鬼"),
+                              ("machoke", "怪力"), ("graveler", "隆隆岩")):
+            _hold_setup(p, ev, species=species, level=40)
+            out = _run(p, "/交换 2", "cmd_trade")
+            t = p._load(ev)
+            assert dex.species[t.party[1]["species"]]["zh"] == want, out
+
+
+def test_trade_requires_pokemon_center():
+    with tempfile.TemporaryDirectory() as tmp:
+        p, ev = _start(tmp)
+        _hold_setup(p, ev, species="kadabra")
+        t = p._load(ev)
+        t.data["location"] = "kanto-route-1"      # 野外没有宝可梦中心
+        p._save(t)
+        out = _run(p, "/交换 2", "cmd_trade")
+        assert "宝可梦中心" in out, out
+
+
+def test_dubious_disc_exists_and_is_buyable():
+    """多边兽乙型需要的可疑补丁以前在数据里根本不存在。"""
+    from pw.items import BAG_ITEMS, effect_text
+    from pw.world import WorldMap
+
+    assert "dubious-disc" in BAG_ITEMS
+    assert effect_text("dubious-disc")
+    stock: list[str] = []
+    world = WorldMap()
+    for badge in range(9):
+        stock += world.shop_stock("pewter-city", badge)
+    assert "dubious-disc" in stock, "满徽章商店都买不到可疑补丁"

@@ -893,7 +893,7 @@ class PokemonWorldPlugin(Star):
                 selected=payload["selected"], scale=self._img_scale(),
             ),
             text="\n".join(lines),
-            hint="使用:`/使用 <道具> [队伍序号]`、`/交换 <队伍序号>`(需通信设备)",
+            hint="使用:`/使用 <道具> [序号]` · 携带:`/持有 <道具> [序号]` · 交换:`/交换`",
         ):
             yield r
 
@@ -1907,23 +1907,48 @@ class PokemonWorldPlugin(Star):
                 yield event.plain_result("❌ 队伍序号不对。")
                 return
             dex = get_dex()
+            # **必须把携带物传进去**:以前漏了 item 又没看 met,导致"需要携带道具"
+            # 的 16 种通信进化(大岩蛇→大钢蛇要金属膜等)空手也能进化,道具要求形同虚设;
+            # 珍珠贝那种双分支也永远只走第一个(只能拿猎斑鱼,拿不到樱花鱼)。
             opts = [
                 o
                 for o in dex.evolution_options(
                     mon.species, level=mon.level, moves=set(mon.moves),
+                    item=mon.item or None,
                     friendship=mon.friendship, gender=mon.gender, stats=mon.stats,
                     trade=True,
                 )
                 if o.get("kind") == "trade"
             ]
+            ready = [o for o in opts if o.get("met")]
             if not opts:
                 yield event.plain_result(
                     f"⚠️ {mon.display} 通过连接交换也不会进化"
                     "(通信进化只对胡地/耿鬼/怪力/大岩蛇这类有效)。"
                 )
                 return
+            if not ready:
+                # 差携带道具:直接告诉玩家要带什么(商店 5 徽章档有卖)
+                needs: list[str] = []
+                for o in opts:
+                    req = str((dex.species.get(str(o.get("target"))) or {}).get("evoItem") or "")
+                    if req:
+                        zh = self._held_zh(req) or req
+                        if zh not in needs:
+                            needs.append(zh)
+                tip = "或".join(needs) if needs else "特定道具"
+                yield event.plain_result(
+                    f"⚠️ {mon.display} 要携带 {tip} 才能通过连接交换进化"
+                    f"(用 `/持有 {tip.split('或')[0]} {idx}` 装上再 `/交换 {idx}`)。"
+                )
+                return
             old = mon.species
-            target = str(opts[0]["target"])
+            target = str(ready[0]["target"])
+            # 通信进化会消耗掉那件携带道具(和原作一致)
+            used_item = str(mon.item or "")
+            req_item = str((dex.species.get(target) or {}).get("evoItem") or "")
+            if used_item and req_item and dex.item_matches(used_item, req_item):
+                mon.item = ""
             growth.apply_evolution(mon, target)
             t.commit(idx - 1, mon)
             self._save(t)
@@ -1983,6 +2008,97 @@ class PokemonWorldPlugin(Star):
         if res.evolved_to:
             lines.append(f"　└ ✨ 进化成了 {growth.species_zh(res.evolved_to)}!")
         yield event.plain_result("\n".join(lines))
+
+    @filter.command("持有", alias={"携带", "装备", "hold", "item", "持有物"})
+    async def cmd_hold(self, event: AstrMessageEvent):
+        """`/持有 <道具> [序号]` / `/持有 取下 [序号]` —— 给宝可梦携带道具。
+
+        在此之前 `mon.item` **只被读取、从来没有被写入**:剩饭/讲究头带/
+        进化奇石/气势披带这些持有道具效果引擎里都实现了,玩家却拿不到,
+        `levelHold`(携带升级进化)也永远不可达。
+        """
+        t, err = self._require(event)
+        if err:
+            yield event.plain_result(err)
+            return
+        from .pw.items import ITEMS, resolve_bag_item, resolve_item
+
+        arg = self._args(event, ("持有", "携带", "装备", "hold", "item", "持有物")).strip()
+        parts = arg.split()
+        if not arg:
+            lines = ["🎒 队伍携带情况(用 `/持有 <道具> <序号>` 装备、`/持有 取下 <序号>` 取下)"]
+            for i, p in enumerate(t.party, 1):
+                mon = B.dict_to_mon(p)
+                held = self._held_zh(str(mon.item or "")) or "无"
+                lines.append(f"{i}. {mon.display} Lv{mon.level} —— 持有:{held}")
+            yield event.plain_result("\n".join(lines))
+            return
+        async with self._lock(t.scope):
+            # 取下
+            if parts[0] in ("取下", "卸下", "无", "拿掉", "none", "remove"):
+                num = coerce_int(parts[1], self._current_mon_index(t) + 1) if len(parts) > 1 \
+                    else self._current_mon_index(t) + 1
+                mon = t.mon(num - 1)
+                if mon is None:
+                    yield event.plain_result("❌ 队伍序号不对。")
+                    return
+                if not mon.item:
+                    yield event.plain_result(f"⚠️ {mon.display} 没有携带任何道具。")
+                    return
+                back = str(mon.item)
+                mon.item = ""
+                t.commit(num - 1, mon)
+                t.add_item(back, 1)
+                self._save(t)
+                yield event.plain_result(
+                    f"🎒 已从 {mon.display} 取下 {self._held_zh(back)},放回背包。"
+                )
+                return
+            r = resolve_bag_item(parts[0]) or resolve_item(parts[0])
+            if not r:
+                yield event.plain_result(f"❌ 没有找到道具「{parts[0]}」。")
+                return
+            key, entry = r
+            # 只有"携带后真的有作用"的道具才允许装(持有类效果 / 携带进化)
+            if key not in ITEMS:
+                yield event.plain_result(
+                    f"⚠️ {entry.get('zh', key)} 是消耗品,携带没有效果。"
+                    "(回复/球类请在 `/对战` 里用,进化石用 `/进化 <序号> <道具>`)"
+                )
+                return
+            num = coerce_int(parts[1], self._current_mon_index(t) + 1) if len(parts) > 1 \
+                else self._current_mon_index(t) + 1
+            mon = t.mon(num - 1)
+            if mon is None:
+                yield event.plain_result(f"❌ 队伍里没有第 {num} 只。")
+                return
+            if str(mon.item or "") == key:
+                yield event.plain_result(f"⚠️ {mon.display} 已经携带了 {entry['zh']}。")
+                return
+            if mon.item:
+                old_zh = self._held_zh(str(mon.item))
+                yield event.plain_result(
+                    f"⚠️ {mon.display} 正携带 {old_zh},先 `/持有 取下 {num}` 再换。"
+                )
+                return
+            if not t.take_item(key, 1):
+                # 不在背包里:可能在别的宝可梦身上
+                holder = next(
+                    (i for i, p in enumerate(t.party, 1)
+                     if str(p.get("item") or "") == key),
+                    None,
+                )
+                tip = f"(第 {holder} 只正携带它)" if holder else ""
+                yield event.plain_result(f"❌ 背包里没有 {entry['zh']}{tip}。")
+                return
+            mon.item = key
+            t.commit(num - 1, mon)
+            self._save(t)
+            eff = effect_text(key)
+            yield event.plain_result(
+                f"✅ {mon.display} 开始携带 {entry['zh']}"
+                + (f" —— {eff}" if eff else "") + "。"
+            )
 
     @filter.command("图鉴", alias={"dex", "宝可梦图鉴"})
     async def cmd_dex(self, event: AstrMessageEvent):
