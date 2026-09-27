@@ -1516,7 +1516,14 @@ class PokemonWorldPlugin(Star):
                 day=state.day,
             )
             self._save(t)
-            yield event.plain_result(self._battle_intro(meta, log))
+            _hint = self._battle_hint(t)
+            async for r in self._emit_battle(
+                event, t, meta, log,
+                text=self._battle_intro(meta, log) + "\n" + _hint,
+                keep=self._battle_intro(meta, log) + "\n" + _hint,
+                status=True,
+            ):
+                yield r
 
     @filter.command("道馆", alias={"gym", "馆主"})
     async def cmd_gym(self, event: AstrMessageEvent):
@@ -1576,7 +1583,14 @@ class PokemonWorldPlugin(Star):
                     day=state.day,
                 )
                 self._save(t)
-                yield event.plain_result(self._battle_intro(meta, log))
+                _hint = self._battle_hint(t)
+                async for r in self._emit_battle(
+                    event, t, meta, log,
+                    text=self._battle_intro(meta, log) + "\n" + _hint,
+                    keep=self._battle_intro(meta, log) + "\n" + _hint,
+                    status=True,
+                ):
+                    yield r
             return
         done = f"{t.region}:{int(gym.get('order', 0))}" in t.badges
         text = (
@@ -1705,7 +1719,14 @@ class PokemonWorldPlugin(Star):
                 day=state.day,
             )
             self._save(t)
-            yield event.plain_result(self._battle_intro(meta, log))
+            _hint = self._battle_hint(t)
+            async for r in self._emit_battle(
+                event, t, meta, log,
+                text=self._battle_intro(meta, log) + "\n" + _hint,
+                keep=self._battle_intro(meta, log) + "\n" + _hint,
+                status=True,
+            ):
+                yield r
 
     @filter.command("商店", alias={"shop", "购买"})
     async def cmd_shop(self, event: AstrMessageEvent):
