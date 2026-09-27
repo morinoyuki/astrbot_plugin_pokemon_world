@@ -1577,7 +1577,7 @@ def render_party(
 # 界面:背包(FRLG 背包 + 口袋页签)
 # ══════════════════════════════════════════════════════════════════
 # 背包每页条目数(与 main.py 的翻页换算共用,别各写各的)
-BAG_PER_PAGE = 5
+BAG_PER_PAGE = 4
 
 
 def render_bag(
@@ -1632,11 +1632,16 @@ def render_bag(
             if idx == sel:
                 sc.highlight((7, y0, 233, y0 + row_h - 1))
             sc.item_icon(str(it.get("key") or it.get("kind") or ""), 10, y0 + 1.5, 9)
-            sc.text(23, y0 + row_h / 2 - 5.2,
+            sc.text(23, y0 + 1.5,
                     _fit(sc, str(it.get("zh") or it.get("key") or ""), 120, 8.4),
                     size=8.4, fill=TEXT)
-            sc.text_right(228, y0 + row_h / 2 - 5.2, f"×{int(it.get('count') or 0)}",
+            sc.text_right(228, y0 + 1.5, f"×{int(it.get('count') or 0)}",
                           size=8.4, fill=TEXT)
+            # 每行都写自己的效果:以前只有"被选中那一件"有说明,
+            # 默认选中第 0 件 ⇒ 玩家看到的永远只有第一件的说明
+            eff = _fit(sc, str(it.get("effect") or it.get("desc") or ""), 208, 6.4)
+            if eff:
+                sc.text(23, y0 + row_h - 7.6, eff, size=6.4, fill=TEXT_DIM)
         # 说明框:选中那一件的效果 + 说明(标题行右侧放页码,避免压住列表)
         cur = items[sel] if total else {}
         sc.window((5, 106, 235, sc.content_bottom), radius=2)
@@ -1649,16 +1654,18 @@ def render_bag(
                           f"{page + 1}/{pages} 页 · {page * per + 1}-"
                           f"{min(total, (page + 1) * per)}/共 {total}",
                           size=6.6, fill=TEXT_DIM)
-        # 效果与说明合并成一个换行流:效果在前(更该看),总行数按剩余高度封顶
-        body = ""
-        if cur.get("effect"):
-            body += f"⚙️ {cur['effect']}\n"
-        body += str(cur.get("desc") or "—")
+        # 效果与说明**分块**绘制:`Screen.wrap()` 不认 `\n`(逐字符折行),
+        # 拼在一起会被连成一行。
         y = 117.5
         room = max(1, int((sc.content_bottom - y - 0.5) // 8.6))
-        for ln in sc.wrap(body, 220, size=7.8, limit=room):
-            sc.text(10, y, ln, size=7.8,
-                    fill=(40, 96, 56) if ln.startswith("⚙️") else TEXT)
+        eff = str(cur.get("effect") or "")
+        if eff:
+            for ln in sc.wrap(f"⚙️ {eff}", 220, size=7.8, limit=1):
+                sc.text(10, y, ln, size=7.8, fill=(40, 96, 56))
+                y += 8.6
+                room -= 1
+        for ln in sc.wrap(str(cur.get("desc") or "—"), 220, size=7.8, limit=max(1, room)):
+            sc.text(10, y, ln, size=7.8, fill=TEXT)
             y += 8.6
         tail = "◆ 使用:`/使用 <道具> [序号]`"
         if pages > 1:

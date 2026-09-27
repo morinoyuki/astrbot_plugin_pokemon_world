@@ -818,3 +818,55 @@ def test_dubious_disc_exists_and_is_buyable():
     for badge in range(9):
         stock += world.shop_stock("pewter-city", badge)
     assert "dubious-disc" in stock, "满徽章商店都买不到可疑补丁"
+
+
+def test_every_visible_bag_row_shows_its_own_effect(monkeypatch):
+    """用户:背包/商店"只能看见第一个物品的说明"。
+
+    说明框跟着选中项只是第一步 —— 默认选中的仍是第 0 件,玩家什么都不敲就只看到
+    第一件的说明。现在**每一行都画出自己的效果**,所以看得到的每件道具都有说明。
+    """
+    from pw import ui_render as UI
+
+    items = _many_items(12)
+    texts = _drawn_texts(monkeypatch, UI.render_bag, items, money=3000,
+                         active_pocket="items", selected=0, scale=1)
+    blob = "\n".join(texts)
+    # 第 1 页可见的 4 件,每件的效果都要画出来(而不只是第 0 件)
+    for it in items[:UI.BAG_PER_PAGE]:
+        eff = str(it.get("effect") or it.get("desc") or "")
+        if not eff:
+            continue
+        assert any(eff[:8] in t for t in texts), (
+            f"{it['zh']} 这一行没有画出效果(只画了第 0 件?):\n{blob[:400]}"
+        )
+
+
+def test_every_visible_shop_row_shows_its_own_effect(monkeypatch):
+    from pw import ui_menu as UIM
+
+    entries = _many_items(12)
+    for i, it in enumerate(entries):
+        it["price"] = 100 * (i + 1)
+    texts = _drawn_texts(monkeypatch, UIM.render_shop, entries, money=3000,
+                         location_zh="深灰市", selected=0, scale=1)
+    for it in entries[:UIM.SHOP_PER_PAGE]:
+        eff = str(it.get("effect") or it.get("desc") or "")
+        if not eff:
+            continue
+        assert any(eff[:8] in t for t in texts), (
+            f"{it['zh']} 这一行没有画出效果:\n{chr(10).join(texts)[:400]}"
+        )
+
+
+def test_bag_payload_carries_structured_effect():
+    """行内展示要的是**结构化效果**,而不是只有一句 flavor 说明。"""
+    with tempfile.TemporaryDirectory() as tmp:
+        p, ev = _start(tmp)
+        t = p._load(ev)
+        t.data["bag"] = {"potion": 1, "great-ball": 1, "x-attack": 1}
+        p._save(t)
+        rows = {x["key"]: x for x in p._bag_payload(t, "回复")["items"]}
+        assert "回复 20 HP" in rows["potion"]["effect"]
+        rows = {x["key"]: x for x in p._bag_payload(t, "精灵球")["items"]}
+        assert "捕获率" in rows["great-ball"]["effect"]

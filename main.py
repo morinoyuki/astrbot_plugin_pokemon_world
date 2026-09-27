@@ -16,9 +16,11 @@ import asyncio
 import contextlib
 import glob
 import os
+import re
 import tempfile
 import time
 from datetime import datetime
+from typing import TYPE_CHECKING
 from uuid import uuid4
 
 from astrbot.api import logger
@@ -46,7 +48,7 @@ from .pw import ui_render as UI
 from .pw.dex import get_dex
 from .pw.items import BAG_ITEMS, effect_text
 from .pw.narrate import Narrator
-from .pw.player import Trainer, TrainerStore, new_trainer
+from .pw.player import Trainer, TrainerStore, mon_to_dict, new_trainer
 from .pw.sqlite_store import SqliteBackend
 from .pw.util import (
     bar,
@@ -60,6 +62,9 @@ from .pw.util import (
     now_ts,
     stable_rng,
 )
+
+if TYPE_CHECKING:  # 仅用于类型注解(运行时不需要)
+    from .pw.engine import Pokemon
 from .pw.world import (
     FLY_COST,
     WorldMap,
@@ -1882,9 +1887,71 @@ class PokemonWorldPlugin(Star):
             f"✨ 咦……?{growth.species_zh(old)} 进化成了 {growth.species_zh(target)}!"
         )
 
+    # ── 玩家间交换:报价的存与取 ──────────────────────────────
+    def _trade_box(self, state) -> dict:
+        """取出本群的交换报价表,顺手清掉过期/超量的。
+
+        存在**世界状态**里(同群的两个人共享一份),而不是某个玩家的存档里 ——
+        报价天然是"跨玩家"的数据。
+        """
+        box = state.data.setdefault("trades", {})
+        if not isinstance(box, dict):
+            box = {}
+            state.data["trades"] = box
+        now = time.time()
+        for k, v in list(box.items()):
+            if not isinstance(v, dict) or float(v.get("at") or 0) + TRADE_TTL < now:
+                box.pop(k, None)
+        if len(box) > TRADE_MAX_OFFERS:          # 只留最新的若干条,防刷
+            for k in sorted(box, key=lambda x: float(box[x].get("at") or 0))[
+                : len(box) - TRADE_MAX_OFFERS
+            ]:
+                box.pop(k, None)
+        return box
+
+    def _trade_offers_for(self, state, uid: str) -> list[dict]:
+        """待某人回应的报价(新的在前)。"""
+        box = self._trade_box(state)
+        return sorted(
+            [v for v in box.values() if isinstance(v, dict) and v.get("to") == uid],
+            key=lambda v: float(v.get("at") or 0),
+            reverse=True,
+        )
+
+    def _store_mon(self, trainer: Trainer, row: dict, mon: Pokemon) -> None:
+        """把(可能刚进化过的)宝可梦写回它在**队伍或电脑**里的槽位。"""
+        where, i = _find_mon_slot(trainer, str(row.get("id") or ""))
+        if i < 0:
+            return
+        if where == "party":
+            trainer.commit(i, mon)
+        else:
+            trainer.box[i] = mon_to_dict(mon, trainer.box[i])
+
+    def _trade_evo(self, mon: Pokemon, party=()) -> str:
+        """收到宝可梦时的通信进化(含消耗携带道具),返回新物种 key 或 ""。"""
+        dex = get_dex()
+        opts = [
+            o
+            for o in dex.evolution_options(
+                mon.species, level=mon.level, moves=set(mon.moves),
+                item=mon.item or None, friendship=mon.friendship,
+                gender=mon.gender, stats=mon.stats, trade=True, party=party,
+            )
+            if o.get("kind") == "trade" and o.get("met")
+        ]
+        if not opts:
+            return ""
+        target = str(opts[0]["target"])
+        req = str((dex.species.get(target) or {}).get("evoItem") or "")
+        if mon.item and req and dex.item_matches(str(mon.item), req):
+            mon.item = ""            # 通信进化消耗携带道具
+        return growth.apply_evolution(mon, target)
+
     @filter.command("交换", alias={"trade", "连接交换", "通讯交换"})
     async def cmd_trade(self, event: AstrMessageEvent):
-        """/交换 <队伍序号> —— 联网连接交换(触发通信进化)"""
+        """`/交换 <@对方> <序号>` 发起 · `/交换 接受 [序号]` · `/交换 拒绝` ·
+        `/交换 <序号>` 与远方训练家连接交换(自连,只触发通信进化)"""
         t, err = self._require(event)
         if err:
             yield event.plain_result(err)
@@ -1893,18 +1960,190 @@ class PokemonWorldPlugin(Star):
             yield event.plain_result("⚠️ 对战中不能交换,先结束当前对战。")
             return
         world = WorldMap()
-        if "center" not in world.services(t.location):
-            yield event.plain_result("❌ 连接交换要在宝可梦中心进行。")
-            return
         arg = self._args(event, ("交换", "trade", "连接交换", "通讯交换")).strip()
-        if not arg:
-            yield event.plain_result("用法:`/交换 <队伍序号>` —— 与远方训练家交换(通信进化)")
+        parts = arg.split()
+        ats = _at_users(event)
+        head = parts[0].lower() if parts else ""
+        state = self._state(t.scope)
+
+        # ── 接受 ──
+        if head in ("接受", "accept", "同意", "ok", "yes"):
+            async with self._lock(t.scope):
+                offers = self._trade_offers_for(state, t.uid)
+                if ats:
+                    offers = [o for o in offers if o.get("from") == ats[0][0]]
+                if not offers:
+                    yield event.plain_result(
+                        "❌ 没有等你回应的交换请求。"
+                        "(对方要用 `/交换 @你 <他的宝可梦序号>` 发起)"
+                    )
+                    return
+                offer = offers[0]
+                idx = coerce_int(parts[1], 1) if len(parts) > 1 else 1
+                if not 1 <= idx <= len(t.party):
+                    yield event.plain_result(f"❌ 队伍里没有第 {idx} 只。")
+                    return
+                if "center" not in world.services(t.location):
+                    yield event.plain_result(
+                        "❌ 回应交换要在宝可梦中心进行。"
+                    )
+                    return
+                box = self._trade_box(state)
+                key = _trade_key(str(offer.get("from")), t.uid)
+                box.pop(key, None)
+                other_data = self.trainers.load(t.scope, str(offer.get("from")))
+                if not other_data:
+                    self._save_state(state)
+                    yield event.plain_result("❌ 对方的存档已经不存在了,请求已取消。")
+                    return
+                other = Trainer(other_data, uid=str(offer.get("from")), scope=t.scope)
+                where, oi = _find_mon_slot(other, str(offer.get("mon_id")))
+                if oi < 0:
+                    self._save_state(state)
+                    yield event.plain_result(
+                        "❌ 对方要交换的宝可梦已经不在 TA 的队伍/电脑里了,请求已取消。"
+                    )
+                    return
+                their_rows = other.party if where == "party" else other.box
+                mine = B.dict_to_mon(t.party[idx - 1])
+                theirs = B.dict_to_mon(their_rows[oi])
+                my_label = f"{mine.display} Lv{mine.level}"
+                their_label = f"{theirs.display} Lv{theirs.level}"
+                del their_rows[oi]
+                del t.party[idx - 1]
+                # 入队(队伍满 6 自动进电脑);返回的是**新 dict**(id 是新分配的)
+                recv_for_me = t.add_pokemon(theirs, day=state.day)
+                recv_for_them = other.add_pokemon(mine, day=state.day)
+                # 通信进化要作用在**收到的那只 Pokemon 对象**上,再写回它所在的槽位 ——
+                # 之前这里进化的是临时对象,commit 的又是另一个临时对象,进化被丢掉了。
+                evo_mine = self._trade_evo(
+                    theirs, party=tuple(p.get("species") for p in t.party)
+                )
+                self._store_mon(t, recv_for_me, theirs)
+                evo_theirs = self._trade_evo(
+                    mine, party=tuple(p.get("species") for p in other.party)
+                )
+                self._store_mon(other, recv_for_them, mine)
+                my_slot = _find_mon_slot(t, str(recv_for_me.get("id") or ""))[0]
+                self._save(t)
+                self._save(other)
+                self._save_state(state)
+            lines = [f"🔁 交换成功!你送出了 {my_label},收到了 {their_label}。"]
+            if evo_mine:
+                lines.append(
+                    f"　└ ✨ 通信进化的力量让 {their_label} 进化成了 "
+                    f"{growth.species_zh(evo_mine)}!"
+                )
+            if evo_theirs:
+                lines.append(
+                    f"　└ ✨ 对方收到的 {my_label} 也进化成了 "
+                    f"{growth.species_zh(evo_theirs)}!"
+                )
+            if my_slot == "box":
+                lines.append("　└ 队伍满了,收到的宝可梦先进了电脑(`/队伍 取出`)。")
+            yield event.plain_result("\n".join(lines))
             return
-        idx = coerce_int(arg.split()[0], 1) or 1
+
+        # ── 拒绝 / 取消 ──
+        if head in ("拒绝", "reject", "no", "取消", "cancel", "撤回"):
+            async with self._lock(t.scope):
+                box = self._trade_box(state)
+                removed = []
+                for k, v in list(box.items()):
+                    if not isinstance(v, dict):
+                        continue
+                    mine_out = v.get("from") == t.uid
+                    mine_in = v.get("to") == t.uid
+                    if ats and not ((mine_out and v.get("to") == ats[0][0]) or
+                                    (mine_in and v.get("from") == ats[0][0])):
+                        continue
+                    if mine_out or mine_in:
+                        box.pop(k, None)
+                        removed.append(v)
+                self._save_state(state)
+            if not removed:
+                yield event.plain_result("❌ 没有可取消的交换请求。")
+                return
+            who = removed[0].get("from_name") or removed[0].get("from")
+            act = "撤销了发给" if removed[0].get("from") == t.uid else "回绝了"
+            yield event.plain_result(f"🚫 你已{act} {who} 的交换请求。")
+            return
+
+        # ── 发起:必须 @ 到人 ──
+        if ats:
+            nums = [p for p in parts if p.isdigit()]
+            idx = coerce_int(nums[0], 0) if nums else 0
+            target_uid, target_name = ats[0]
+            if target_uid == t.uid:
+                yield event.plain_result("⚠️ 不能和自己交换(自己练不就好了)。")
+                return
+            if not 1 <= idx <= len(t.party):
+                yield event.plain_result(
+                    "❌ 用法:`/交换 @对方 <你的宝可梦序号>` —— 序号是**你自己的**队伍序号。"
+                )
+                return
+            if "center" not in world.services(t.location):
+                yield event.plain_result("❌ 连接交换要在宝可梦中心进行。")
+                return
+            if not self.trainers.exists(t.scope, target_uid):
+                yield event.plain_result(
+                    "❌ 对方还没有在玩(用 `/开始` 建过存档),或者不在本群。"
+                )
+                return
+            mon = t.mon(idx - 1)
+            if mon is None:
+                yield event.plain_result("❌ 队伍序号不对。")
+                return
+            async with self._lock(t.scope):
+                box = self._trade_box(state)
+                box[_trade_key(t.uid, target_uid)] = {
+                    "from": t.uid,
+                    "to": target_uid,
+                    "from_name": t.name,
+                    "mon_id": str(t.party[idx - 1].get("id") or ""),
+                    "zh": mon.display,
+                    "level": int(mon.level),
+                    "item": self._held_zh(str(mon.item or "")),
+                    "at": time.time(),
+                }
+                self._save_state(state)
+            held = self._held_zh(str(mon.item or ""))
+            yield event.plain_result(
+                f"📨 已向 {target_name or '对方'} (@{target_uid}) 发起交换:"
+                f"送出你的 **{mon.display} Lv{mon.level}**"
+                + (f"(携带 {held})" if held else "")
+                + f"。\n对方用 `/交换 接受 <TA 的宝可梦序号>` 即可完成"
+                f"(请在宝可梦中心)。{TRADE_TTL // 60} 分钟内有效。"
+            )
+            return
+
+        # ── 自连:纯序号,触发通信进化(老行为) ──
+        if not arg:
+            pending = self._trade_offers_for(state, t.uid)
+            lines = [
+                "用法:",
+                "· `/交换 @对方 <你的序号>` 向同群玩家发起交换",
+                "· `/交换 接受 <你的序号>` 回应请求、`/交换 拒绝` 回绝",
+                "· `/交换 <序号>` 与远方训练家连接交换(只触发通信进化)",
+            ]
+            if pending:
+                o = pending[0]
+                lines.insert(
+                    0,
+                    f"📨 {o.get('from_name') or o.get('from')} 想用 "
+                    f"{o.get('zh')} Lv{o.get('level')} 换你的宝可梦 —— "
+                    f"`/交换 接受 <你的序号>`",
+                )
+            yield event.plain_result("\n".join(lines))
+            return
+        idx = coerce_int(parts[0], 1) or 1
         async with self._lock(t.scope):
             mon = t.mon(idx - 1)
             if mon is None:
                 yield event.plain_result("❌ 队伍序号不对。")
+                return
+            if "center" not in world.services(t.location):
+                yield event.plain_result("❌ 连接交换要在宝可梦中心进行。")
                 return
             dex = get_dex()
             # **必须把携带物传进去**:以前漏了 item 又没看 met,导致"需要携带道具"
@@ -3194,6 +3433,8 @@ class PokemonWorldPlugin(Star):
                     "zh": entry.get("zh") or key,
                     "count": n,
                     "desc": entry.get("desc") or "",
+                    # 结构化效果:每行都要展示"这件道具到底做什么"
+                    "effect": effect_text(key),
                     "kind": entry.get("kind") or "",
                 }
             )
@@ -3579,6 +3820,62 @@ def _team_brief(team) -> str:
         if isinstance(m, dict) and m.get("species")
     ]
     return "、".join(out) or "?"
+
+
+# 玩家间交换报价的有效期(秒)与单次可持有的报价数上限
+TRADE_TTL = 300
+TRADE_MAX_OFFERS = 6
+
+
+def _at_users(event) -> list[tuple[str, str]]:
+    """从消息里取出被 @ 的玩家 `(uid, 昵称)`。
+
+    AstrBot 的 At 组件在不同适配器上形态不一(属性 `.qq` / `.data["qq"]`),
+    部分适配器还会把 CQ 码留在 message_str 里 —— 三种都兜住,
+    并且忽略 @全体成员(qq=all/0)。
+    """
+    out: list[tuple[str, str]] = []
+    msg = getattr(getattr(event, "message_obj", None), "message", None) or []
+    if isinstance(msg, (list, tuple)):
+        for comp in msg:
+            data = getattr(comp, "data", None)
+            is_at = str(getattr(comp, "type", "") or "").lower() == "at" or \
+                "At" in type(comp).__name__
+            if not is_at:
+                continue
+            uid = ""
+            name = ""
+            if isinstance(data, dict):
+                uid = str(data.get("qq") or data.get("user_id") or data.get("target") or "")
+                name = str(data.get("name") or data.get("nickname") or "")
+            uid = uid or str(getattr(comp, "qq", "") or "")
+            name = name or str(getattr(comp, "name", "") or "")
+            if uid and uid not in ("all", "0"):
+                out.append((uid, name))
+    raw = str(getattr(event, "message_str", "") or "")
+    for m in re.finditer(r"\[CQ:at,qq=(\d+)(?:,name=([^\]]+))?\]", raw):
+        uid, name = m.group(1), m.group(2) or ""
+        if (uid, name) not in out:
+            out.append((uid, name))
+    return out
+
+
+def _trade_key(frm: str, to: str) -> str:
+    """交换报价的键。
+
+    写成模块级函数而不是 `@staticmethod`:测试宿主是把方法直接 setattr 到对象上的,
+    `@staticmethod` 会被重绑成实例方法,调用时凭空多一个 self。
+    """
+    return f"{frm}->{to}"
+
+
+def _find_mon_slot(trainer, mon_id: str) -> tuple[str, int]:
+    """按 id 在队伍/电脑里定位宝可梦,返回 ("party"|"box", 下标) 或 ("", -1)。"""
+    for where, rows in (("party", trainer.party), ("box", trainer.box)):
+        for i, p in enumerate(rows):
+            if str(p.get("id")) == str(mon_id):
+                return where, i
+    return "", -1
 
 
 def _parse_page_args(arg: str, *, numeric_is_page: bool = False) -> tuple[str, int, int]:

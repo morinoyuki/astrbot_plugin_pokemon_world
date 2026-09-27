@@ -319,7 +319,7 @@ def render_map(
 # 2. 商店(FRLG 友好商店)
 # ══════════════════════════════════════════════════════════════════
 # 商店每页条目数(满徽章时货架有 80+ 种,必须分页)
-SHOP_PER_PAGE = 5
+SHOP_PER_PAGE = 4
 
 
 def render_shop(
@@ -378,8 +378,8 @@ def render_shop(
                 sc.highlight((7, y0, 233, y0 + row_h - 1))
             # 传 key 而不是大类:否则 15 种球、9 种药在货架上长得一模一样
             icon = str(it.get("key") or it.get("kind") or "")
-            sc.item_icon(icon, 11, y0 + row_h / 2 - 4.5, 9)
-            sc.text(24, y0 + row_h / 2 - 5,
+            sc.item_icon(icon, 11, y0 + 1.5, 9)
+            sc.text(24, y0 + 1.5,
                     _fit(sc, str(it.get("zh") or it.get("key") or "?"), 96, 8.4),
                     size=8.4, fill=TEXT)
             try:
@@ -388,12 +388,16 @@ def render_shop(
                 price = 0
             ptxt = f"{price:,}₽"
             pcolor = (48, 140, 64) if disc < 0.999 else TEXT
-            sc.text_right(228, y0 + row_h / 2 - 5, ptxt, size=8.4, fill=pcolor)
+            sc.text_right(228, y0 + 1.5, ptxt, size=8.4, fill=pcolor)
             pw = sc.tw(ptxt, 8.4)
             count = int(it.get("count") or 0)
             if count:
-                sc.text_right(226 - pw, y0 + row_h / 2 - 4, f"×{count}", size=7.4,
+                sc.text_right(226 - pw, y0 + 2.5, f"×{count}", size=7.4,
                               fill=TEXT_DIM)
+            # 每行都写效果 —— 否则玩家只看得到"选中那一件"的说明
+            eff = _fit(sc, str(it.get("effect") or it.get("desc") or ""), 208, 6.4)
+            if eff:
+                sc.text(24, y0 + row_h - 7.6, eff, size=6.4, fill=TEXT_DIM)
         if not shown:
             sc.text(14, list_top + 6, "这里暂时没有商品。", size=8.5, fill=TEXT_DIM)
 
@@ -415,15 +419,17 @@ def render_shop(
                           f"{page + 1}/{pages} 页 · {page * per + 1}-"
                           f"{min(total, (page + 1) * per)}/共 {total}",
                           size=6.6, fill=TEXT_DIM)
-        body = ""
-        if cur.get("effect"):
-            body += f"⚙️ {cur['effect']}\n"
-        body += str(cur.get("desc") or "—")
+        # 分块绘制(理由同背包:wrap 不认换行符)
         y = 117.5
         room = max(1, int((sc.content_bottom - y - 0.5) // 8.6))
-        for ln in sc.wrap(body, 220, size=7.8, limit=room):
-            sc.text(10, y, ln, size=7.8,
-                    fill=(40, 96, 56) if ln.startswith("⚙️") else TEXT)
+        eff = str(cur.get("effect") or "")
+        if eff:
+            for ln in sc.wrap(f"⚙️ {eff}", 220, size=7.8, limit=1):
+                sc.text(10, y, ln, size=7.8, fill=(40, 96, 56))
+                y += 8.6
+                room -= 1
+        for ln in sc.wrap(str(cur.get("desc") or "—"), 220, size=7.8, limit=max(1, room)):
+            sc.text(10, y, ln, size=7.8, fill=TEXT)
             y += 8.6
 
         tail = "◆ /商店 买 <道具> [数量] · /商店 卖 <道具> [数量]"
