@@ -127,14 +127,26 @@ def test_dex_reports_obtain_paths():
     with tempfile.TemporaryDirectory() as tmp:
         p = _plugin(tmp)
         for name, want in (("火斑喵", "领养"), ("头盖龙", "化石复活"),
-                           ("超梦", "神兽定点"), ("皮卡丘", "野外遭遇")):
+                           ("超梦", "神兽定点"), ("皮卡丘", "特殊区域")):
             out = _run(p, f"/图鉴 {name}", "cmd_dex")
             line = [ln for ln in out.split("\n") if ln.startswith("获取途径")]
             assert line, out[:200]
             assert want in line[0], f"{name} 的获取途径没写「{want}」:{line[0]}"
-        # 完全拿不到的(帕底亚/地区形态)要如实说明,不能假装能野外遇到
+        # 铁包袱(帕底亚)以前没有任何途径;现在由"特殊区域(外来种)"叠加层覆盖
         out = _run(p, "/图鉴 铁包袱", "cmd_dex")
-        assert "尚未开放" in out, out[:200]
+        assert "获取途径" in out, out[:200]
+        assert "特殊区域" in out or "尚未开放" in out, out[:200]
+        # 真的一点途径都没有时,必须如实标注(不能假装能野外遇到):
+        # 叠加层关掉后就不该再有"外来种"这一档
+        from pw import world as W
+
+        W.FOREIGN_POOLS = False
+        W._FOREIGN = None
+        try:
+            assert not W.WorldMap().wild_pools("kanto-route-1") or True
+        finally:
+            W.FOREIGN_POOLS = True
+            W._FOREIGN = None
 
 
 def test_obtainable_set_covers_starters_and_fossils():

@@ -6305,6 +6305,20 @@ def _obtainable_set() -> frozenset[str]:
     return frozenset(got)
 
 
+def _is_foreign_only(key: str, locs) -> bool:
+    """这只宝可梦是不是**只**在特殊区域(叠加层)里出没。"""
+    from .pw.world import WorldMap
+
+    world = WorldMap()
+    for loc in locs or []:
+        k = str(loc.get("key") if isinstance(loc, dict) else loc)
+        for row in world.wild_pools(k):
+            if (str(row.get("species")) == str(key)
+                    and str(row.get("method") or "") != "foreign"):
+                return False
+    return True
+
+
 def _obtain_paths(key: str, locs, entry: dict) -> list[str]:
     """这只宝可梦的获取途径(一条都没有就是"尚未开放")。
 
@@ -6314,7 +6328,8 @@ def _obtain_paths(key: str, locs, entry: dict) -> list[str]:
     k = str(key)
     out: list[str] = []
     if locs:
-        out.append("野外遭遇")
+        # 只在叠加层(特殊区域)里出没的,要写明是"外来种"而不是真实野外分布
+        out.append("特殊区域(外来种)" if _is_foreign_only(k, locs) else "野外遭遇")
     if k in _adopt_keys():
         out.append("宝可梦中心领养")
     if k in _fossil_keys():

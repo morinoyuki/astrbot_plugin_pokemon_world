@@ -1,0 +1,1438 @@
+{
+ "alola-berry-fields": [
+  {
+   "max": 10,
+   "min": 7,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "machamp"
+  }
+ ],
+ "alola-route-4": [
+  {
+   "max": 14,
+   "min": 11,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "sirfetchd"
+  }
+ ],
+ "alola-route-5": [
+  {
+   "max": 16,
+   "min": 13,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "sneasler"
+  }
+ ],
+ "celestial-tower": [
+  {
+   "max": 33,
+   "min": 27,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "fluttermane"
+  },
+  {
+   "max": 33,
+   "min": 27,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "mismagius"
+  }
+ ],
+ "cerulean-cave": [
+  {
+   "max": 56,
+   "min": 51,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "poipole"
+  }
+ ],
+ "challengers-cave": [
+  {
+   "max": 55,
+   "min": 25,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "toedscool"
+  }
+ ],
+ "chargestone-cave": [
+  {
+   "max": 31,
+   "min": 25,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "irontreads"
+  }
+ ],
+ "clay-tunnel": [
+  {
+   "max": 60,
+   "min": 45,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "toedscruel"
+  }
+ ],
+ "dark-cave": [
+  {
+   "max": 25,
+   "min": 2,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "garganacl"
+  },
+  {
+   "max": 25,
+   "min": 2,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "nacli"
+  }
+ ],
+ "desert-resort": [
+  {
+   "max": 21,
+   "min": 18,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "greattusk"
+  }
+ ],
+ "digletts-cave": [
+  {
+   "max": 18,
+   "min": 13,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "naganadel"
+  }
+ ],
+ "fiery-path": [
+  {
+   "max": 8,
+   "min": 8,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "armarouge"
+  },
+  {
+   "max": 8,
+   "min": 8,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "charcadet"
+  },
+  {
+   "max": 8,
+   "min": 8,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "gougingfire"
+  },
+  {
+   "max": 8,
+   "min": 8,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "magmortar"
+  },
+  {
+   "max": 8,
+   "min": 8,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "talonflame"
+  }
+ ],
+ "four-island": [
+  {
+   "max": 35,
+   "min": 5,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "tatsugiri"
+  }
+ ],
+ "galar-mine": [
+  {
+   "max": 14,
+   "min": 11,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "klawf"
+  }
+ ],
+ "giant-chasm": [
+  {
+   "max": 52,
+   "min": 35,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "aromatisse"
+  },
+  {
+   "max": 52,
+   "min": 35,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "florges"
+  },
+  {
+   "max": 52,
+   "min": 35,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "slurpuff"
+  },
+  {
+   "max": 52,
+   "min": 35,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "tinkaton"
+  }
+ ],
+ "glimwood-tangle": [
+  {
+   "max": 36,
+   "min": 34,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "honchkrow"
+  },
+  {
+   "max": 36,
+   "min": 34,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "ironjugulis"
+  },
+  {
+   "max": 36,
+   "min": 34,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "mabosstiff"
+  },
+  {
+   "max": 36,
+   "min": 34,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "maschiff"
+  },
+  {
+   "max": 36,
+   "min": 34,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "weavile"
+  }
+ ],
+ "granite-cave": [
+  {
+   "max": 6,
+   "min": 6,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "shroodle"
+  }
+ ],
+ "hauoli-cemetery": [
+  {
+   "max": 9,
+   "min": 6,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "gimmighoul"
+  },
+  {
+   "max": 9,
+   "min": 6,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "palossand"
+  }
+ ],
+ "ice-path": [
+  {
+   "max": 24,
+   "min": 21,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "cetitan"
+  },
+  {
+   "max": 24,
+   "min": 21,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "froslass"
+  },
+  {
+   "max": 24,
+   "min": 21,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "ironbundle"
+  }
+ ],
+ "ilex-forest": [
+  {
+   "max": 20,
+   "min": 5,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "buzzwole"
+  },
+  {
+   "max": 20,
+   "min": 5,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "mothim"
+  },
+  {
+   "max": 20,
+   "min": 5,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "rellor"
+  },
+  {
+   "max": 20,
+   "min": 5,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "spidops"
+  }
+ ],
+ "jagged-pass": [
+  {
+   "max": 10,
+   "min": 10,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "conkeldurr"
+  }
+ ],
+ "johto-sea-route-40": [
+  {
+   "max": 25,
+   "min": 10,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "vaporeon"
+  }
+ ],
+ "johto-sea-route-41": [
+  {
+   "max": 25,
+   "min": 10,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "veluza"
+  }
+ ],
+ "kalos-route-4": [
+  {
+   "max": 8,
+   "min": 6,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "dachsbun"
+  },
+  {
+   "max": 8,
+   "min": 6,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "ironvaliant"
+  },
+  {
+   "max": 8,
+   "min": 6,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "sylveon"
+  },
+  {
+   "max": 8,
+   "min": 6,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "tinkatuff"
+  }
+ ],
+ "kalos-victory-road": [
+  {
+   "max": 59,
+   "min": 57,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "ironhands"
+  }
+ ],
+ "kanto-altering-cave": [
+  {
+   "max": 29,
+   "min": 3,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "grafaiai"
+  }
+ ],
+ "kanto-power-plant": [
+  {
+   "max": 42,
+   "min": 37,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "ampharos"
+  },
+  {
+   "max": 42,
+   "min": 37,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "blitzle"
+  },
+  {
+   "max": 42,
+   "min": 37,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "electivire"
+  },
+  {
+   "max": 42,
+   "min": 37,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "jolteon"
+  },
+  {
+   "max": 42,
+   "min": 37,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "luxray"
+  },
+  {
+   "max": 42,
+   "min": 37,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "pawmo"
+  },
+  {
+   "max": 42,
+   "min": 37,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "ragingbolt"
+  },
+  {
+   "max": 42,
+   "min": 37,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "tadbulb"
+  },
+  {
+   "max": 42,
+   "min": 37,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "wattrel"
+  }
+ ],
+ "kanto-route-1": [
+  {
+   "max": 4,
+   "min": 3,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "arctibax"
+  },
+  {
+   "max": 4,
+   "min": 3,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "dudunsparce"
+  }
+ ],
+ "kanto-route-10": [
+  {
+   "max": 23,
+   "min": 18,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "snorlax"
+  }
+ ],
+ "kanto-route-11": [
+  {
+   "max": 18,
+   "min": 13,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "squawkabilly"
+  }
+ ],
+ "kanto-route-12": [
+  {
+   "max": 36,
+   "min": 31,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "staraptor"
+  }
+ ],
+ "kanto-route-13": [
+  {
+   "max": 38,
+   "min": 33,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "tandemaus"
+  }
+ ],
+ "kanto-route-14": [
+  {
+   "max": 38,
+   "min": 33,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "wyrdeer"
+  }
+ ],
+ "kanto-route-2": [
+  {
+   "max": 8,
+   "min": 3,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "cyclizar"
+  }
+ ],
+ "kanto-route-3": [
+  {
+   "max": 8,
+   "min": 3,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "dragapult"
+  },
+  {
+   "max": 8,
+   "min": 3,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "exploud"
+  }
+ ],
+ "kanto-route-4": [
+  {
+   "max": 12,
+   "min": 7,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "farigiraf"
+  },
+  {
+   "max": 12,
+   "min": 7,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "flamigo"
+  }
+ ],
+ "kanto-route-5": [
+  {
+   "max": 16,
+   "min": 11,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "frigibax"
+  },
+  {
+   "max": 16,
+   "min": 11,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "lechonk"
+  }
+ ],
+ "kanto-route-6": [
+  {
+   "max": 16,
+   "min": 11,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "maushold"
+  }
+ ],
+ "kanto-route-7": [
+  {
+   "max": 27,
+   "min": 22,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "oinkologne"
+  }
+ ],
+ "kanto-route-8": [
+  {
+   "max": 27,
+   "min": 22,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "porygon2"
+  }
+ ],
+ "kanto-route-9": [
+  {
+   "max": 22,
+   "min": 17,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "porygonz"
+  }
+ ],
+ "kanto-sea-route-19": [
+  {
+   "max": 42,
+   "min": 37,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "ludicolo"
+  }
+ ],
+ "kanto-sea-route-20": [
+  {
+   "max": 42,
+   "min": 37,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "palafin"
+  }
+ ],
+ "kanto-victory-road-2": [
+  {
+   "max": 48,
+   "min": 32,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "annihilape"
+  }
+ ],
+ "lake-acuity": [
+  {
+   "max": 41,
+   "min": 20,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "wiglett"
+  }
+ ],
+ "lake-of-rage": [
+  {
+   "max": 20,
+   "min": 5,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "simipour"
+  }
+ ],
+ "lake-valor": [
+  {
+   "max": 41,
+   "min": 20,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "walkingwake"
+  }
+ ],
+ "lost-cave": [
+  {
+   "max": 52,
+   "min": 15,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "chandelure"
+  },
+  {
+   "max": 52,
+   "min": 15,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "gourgeist"
+  },
+  {
+   "max": 52,
+   "min": 15,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "polteageist"
+  }
+ ],
+ "lost-tower": [
+  {
+   "max": 22,
+   "min": 17,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "cursola"
+  },
+  {
+   "max": 22,
+   "min": 17,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "greavard"
+  }
+ ],
+ "maniac-tunnel": [
+  {
+   "max": 26,
+   "min": 23,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "ironthorns"
+  }
+ ],
+ "mirage-spot-cave": [
+  {
+   "max": 38,
+   "min": 36,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "bellibolt"
+  },
+  {
+   "max": 38,
+   "min": 36,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "eelektross"
+  },
+  {
+   "max": 38,
+   "min": 36,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "heliolisk"
+  },
+  {
+   "max": 38,
+   "min": 36,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "kilowattrel"
+  },
+  {
+   "max": 38,
+   "min": 36,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "pawmi"
+  },
+  {
+   "max": 38,
+   "min": 36,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "pawmot"
+  },
+  {
+   "max": 38,
+   "min": 36,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "sandyshocks"
+  },
+  {
+   "max": 38,
+   "min": 36,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "toxtricity"
+  },
+  {
+   "max": 38,
+   "min": 36,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "xurkitree"
+  }
+ ],
+ "mirage-spot-forest": [
+  {
+   "max": 38,
+   "min": 36,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "arboliva"
+  },
+  {
+   "max": 38,
+   "min": 36,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "bellossom"
+  },
+  {
+   "max": 38,
+   "min": 36,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "brambleghast"
+  },
+  {
+   "max": 38,
+   "min": 36,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "bramblin"
+  },
+  {
+   "max": 38,
+   "min": 36,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "brutebonnet"
+  },
+  {
+   "max": 38,
+   "min": 36,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "capsakid"
+  },
+  {
+   "max": 38,
+   "min": 36,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "dipplin"
+  },
+  {
+   "max": 38,
+   "min": 36,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "dolliv"
+  },
+  {
+   "max": 38,
+   "min": 36,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "hydrapple"
+  },
+  {
+   "max": 38,
+   "min": 36,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "ironleaves"
+  },
+  {
+   "max": 38,
+   "min": 36,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "kartana"
+  },
+  {
+   "max": 38,
+   "min": 36,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "leafeon"
+  },
+  {
+   "max": 38,
+   "min": 36,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "lurantis"
+  },
+  {
+   "max": 38,
+   "min": 36,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "poltchageist"
+  },
+  {
+   "max": 38,
+   "min": 36,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "scovillain"
+  },
+  {
+   "max": 38,
+   "min": 36,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "simisage"
+  },
+  {
+   "max": 38,
+   "min": 36,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "sinistcha"
+  },
+  {
+   "max": 38,
+   "min": 36,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "smoliv"
+  },
+  {
+   "max": 38,
+   "min": 36,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "sunflora"
+  },
+  {
+   "max": 38,
+   "min": 36,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "tsareena"
+  }
+ ],
+ "mistralton-cave": [
+  {
+   "max": 30,
+   "min": 27,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "krookodile"
+  }
+ ],
+ "mount-lanakila": [
+  {
+   "max": 51,
+   "min": 30,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "guzzlord"
+  },
+  {
+   "max": 51,
+   "min": 30,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "hydreigon"
+  },
+  {
+   "max": 51,
+   "min": 30,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "kingambit"
+  },
+  {
+   "max": 51,
+   "min": 30,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "malamar"
+  },
+  {
+   "max": 51,
+   "min": 30,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "overqwil"
+  }
+ ],
+ "mt-coronet": [
+  {
+   "max": 41,
+   "min": 13,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "crabominable"
+  }
+ ],
+ "mt-moon": [
+  {
+   "max": 10,
+   "min": 5,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "alcremie"
+  },
+  {
+   "max": 10,
+   "min": 5,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "fidough"
+  },
+  {
+   "max": 10,
+   "min": 5,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "goodra"
+  },
+  {
+   "max": 10,
+   "min": 5,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "screamtail"
+  },
+  {
+   "max": 10,
+   "min": 5,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "tinkatink"
+  }
+ ],
+ "oreburgh-mine": [
+  {
+   "max": 9,
+   "min": 4,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "glimmet"
+  },
+  {
+   "max": 9,
+   "min": 4,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "nihilego"
+  }
+ ],
+ "pattern-bush": [
+  {
+   "max": 30,
+   "min": 6,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "garchomp"
+  }
+ ],
+ "petalburg-woods": [
+  {
+   "max": 3,
+   "min": 3,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "escavalier"
+  },
+  {
+   "max": 3,
+   "min": 3,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "nymble"
+  },
+  {
+   "max": 3,
+   "min": 3,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "scizor"
+  },
+  {
+   "max": 3,
+   "min": 3,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "tarountula"
+  }
+ ],
+ "reflection-cave": [
+  {
+   "max": 23,
+   "min": 21,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "flittle"
+  }
+ ],
+ "rock-tunnel": [
+  {
+   "max": 23,
+   "min": 18,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "roaringmoon"
+  }
+ ],
+ "ruin-maniac-cave": [
+  {
+   "max": 25,
+   "min": 21,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "ironboulder"
+  }
+ ],
+ "ruins-of-alph": [
+  {
+   "max": 25,
+   "min": 5,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "alakazam"
+  },
+  {
+   "max": 25,
+   "min": 5,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "gallade"
+  }
+ ],
+ "santalune-forest": [
+  {
+   "max": 4,
+   "min": 2,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "kleavor"
+  },
+  {
+   "max": 4,
+   "min": 2,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "pheromosa"
+  },
+  {
+   "max": 4,
+   "min": 2,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "shedinja"
+  },
+  {
+   "max": 4,
+   "min": 2,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "wormadam"
+  }
+ ],
+ "seaside-cave": [
+  {
+   "max": 42,
+   "min": 25,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "rhyperior"
+  }
+ ],
+ "sinnoh-route-211": [
+  {
+   "max": 30,
+   "min": 13,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "grapploct"
+  }
+ ],
+ "sinnoh-sea-route-220": [
+  {
+   "max": 40,
+   "min": 20,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "wugtrio"
+  }
+ ],
+ "snowslide-slope": [
+  {
+   "max": 65,
+   "min": 60,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "cetoddle"
+  },
+  {
+   "max": 65,
+   "min": 60,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "glaceon"
+  },
+  {
+   "max": 65,
+   "min": 60,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "mrrime"
+  }
+ ],
+ "solaceon-ruins": [
+  {
+   "max": 30,
+   "min": 20,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "espathra"
+  },
+  {
+   "max": 30,
+   "min": 20,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "swoobat"
+  }
+ ],
+ "stark-mountain": [
+  {
+   "max": 55,
+   "min": 51,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "ceruledge"
+  },
+  {
+   "max": 55,
+   "min": 51,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "flareon"
+  },
+  {
+   "max": 55,
+   "min": 51,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "ironmoth"
+  },
+  {
+   "max": 55,
+   "min": 51,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "simisear"
+  }
+ ],
+ "terminus-cave": [
+  {
+   "max": 46,
+   "min": 44,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "aegislash"
+  },
+  {
+   "max": 46,
+   "min": 44,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "aggron"
+  },
+  {
+   "max": 46,
+   "min": 44,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "archaludon"
+  },
+  {
+   "max": 46,
+   "min": 44,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "celesteela"
+  },
+  {
+   "max": 46,
+   "min": 44,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "gholdengo"
+  },
+  {
+   "max": 46,
+   "min": 44,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "ironcrown"
+  },
+  {
+   "max": 46,
+   "min": 44,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "orthworm"
+  },
+  {
+   "max": 46,
+   "min": 44,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "revavroom"
+  },
+  {
+   "max": 46,
+   "min": 44,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "varoom"
+  }
+ ],
+ "treasure-beach": [
+  {
+   "max": 40,
+   "min": 5,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "dondozo"
+  }
+ ],
+ "turnback-cave": [
+  {
+   "max": 48,
+   "min": 15,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "dusknoir"
+  },
+  {
+   "max": 48,
+   "min": 15,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "houndstone"
+  }
+ ],
+ "underground-ruins": [
+  {
+   "max": 57,
+   "min": 54,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "ursaluna"
+  }
+ ],
+ "union-cave": [
+  {
+   "max": 25,
+   "min": 4,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "gigalith"
+  },
+  {
+   "max": 25,
+   "min": 4,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "naclstack"
+  }
+ ],
+ "viridian-city": [
+  {
+   "max": 10,
+   "min": 5,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "bombirdier"
+  }
+ ],
+ "viridian-forest": [
+  {
+   "max": 6,
+   "min": 3,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "accelgor"
+  },
+  {
+   "max": 6,
+   "min": 3,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "baxcalibur"
+  },
+  {
+   "max": 6,
+   "min": 3,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "lokix"
+  },
+  {
+   "max": 6,
+   "min": 3,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "rabsca"
+  },
+  {
+   "max": 6,
+   "min": 3,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "slitherwing"
+  }
+ ],
+ "water-labyrinth": [
+  {
+   "max": 40,
+   "min": 5,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "basculegion"
+  }
+ ],
+ "water-path": [
+  {
+   "max": 50,
+   "min": 5,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "finizen"
+  }
+ ],
+ "wayward-cave": [
+  {
+   "max": 20,
+   "min": 17,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "glimmora"
+  },
+  {
+   "max": 20,
+   "min": 17,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "probopass"
+  }
+ ],
+ "wellspring-cave": [
+  {
+   "max": 60,
+   "min": 45,
+   "note": "外来种(特殊区域)",
+   "rarity": "rare",
+   "species": "runerigus"
+  }
+ ]
+}

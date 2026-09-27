@@ -23,6 +23,33 @@ from .util import clamp, game_day
 _STATIC = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
 
 # 地区顺序(解锁链):通关上一地区冠军后解锁下一地区
+# ── 特殊区域叠加层(可选,想移除整层只改这一个开关)───────────────
+# 图鉴里有一批宝可梦(伽勒尔/帕底亚与部分地区形态为主)在本作没有任何获取途径:
+# 既不在真实野外分布,也不是定点/化石/领养/进化链。构建脚本把它们按属性挂到
+# 主题最接近的现有地点,生成 pw/static/foreign_pools.json。
+# **这一层不改动真实分布** —— 去掉只需把 FOREIGN_POOLS 置 False(或删掉那个
+# JSON + 下面 _foreign_rows 的调用),`locations.json` 原封不动。
+FOREIGN_POOLS = True
+_FOREIGN: dict | None = None
+
+
+def _foreign_rows(key: str) -> list[dict]:
+    """该地点的叠加层遭遇([{species,min,max,method,rarity}])。"""
+    global _FOREIGN
+    if not FOREIGN_POOLS:
+        return []
+    if _FOREIGN is None:
+        path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                            "static", "foreign_pools.json")
+        try:
+            with open(path, encoding="utf-8") as f:
+                data = json.load(f)
+        except (OSError, ValueError):
+            data = {}
+        _FOREIGN = data if isinstance(data, dict) else {}
+    return [{**r, "method": "foreign"} for r in (_FOREIGN.get(key) or [])]
+
+
 REGION_ORDER = [
     "kanto",
     "johto",
@@ -596,6 +623,7 @@ class WorldMap:
         vg = dex.location_default_vg(key)
         rows = dex.location_pools(key, vg, include_special=True)
         rows = [r for r in rows if is_wild_method(str(r.get("method") or ""))]
+        rows = rows + _foreign_rows(key)      # 特殊区域叠加层(见文件头部说明)
         if methods is not None:
             rows = [r for r in rows if r["method"] in methods]
         if not rows:
