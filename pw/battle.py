@@ -716,6 +716,8 @@ def view(trainer: Trainer) -> dict:
             }
             for m in party
         ],
+        "foe_party": [],          # 敌方剩余宝可梦(非野生对战用来画小球)
+
         "turn": 0,
         "weather": "",
         "terrain": "",
@@ -728,6 +730,10 @@ def view(trainer: Trainer) -> dict:
     meta = data.get("meta") or {}
     out["my"] = _mon_view(battle.player.mon, exp_pct=exp_progress(battle.player.mon) if battle.player.mon else 0.0)
     out["foe"] = _mon_view(battle.enemy.mon)
+    out["foe_party"] = [
+        {"species": m.species, "cur_hp": int(m.cur_hp), "max_hp": int(max(1, m.max_hp))}
+        for m in battle.enemy.party
+    ]
     out["party"] = [
         {
             "species": m.species,

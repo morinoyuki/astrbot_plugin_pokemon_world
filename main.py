@@ -4784,6 +4784,13 @@ class PokemonWorldPlugin(Star):
                         terrain=v.get("terrain") or "",
                         location=WorldMap().node_zh(t.location),
                         my_party=v.get("party") or [],
+                        # 敌方剩余宝可梦:只用小球表示非野生对战的对手数量
+                        # (野生只有一只,玩家对战看双方,不画球)
+                        foe_party=(
+                            v.get("foe_party") or []
+                            if str(meta.get("kind") or "") != "wild"
+                            else []
+                        ),
                         turn=int(v.get("turn") or 0),
                         scale=int(coerce_int(self._cfg("battle_image_scale", 3), 3) or 3),
                     )

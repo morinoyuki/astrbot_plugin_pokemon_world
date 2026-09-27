@@ -298,8 +298,9 @@ def render_pvp_battle(
         mx0, mx1 = MSG_EDGE_X
         # 双方剩余宝可梦画在对话框左右两端(PvE 也是画在对话框里)
         lp, rp = list(left_party or [])[:6], list(right_party or [])[:6]
-        tx_pad = 8 + len(lp) * 9 + 4
-        tx_right = 8 + len(rp) * 9 + 4
+        # 对话框里不放球了,正文位置固定(原来随队伍数量右移)
+        tx_pad = 8
+        tx_right = 8
         maxw = (mx1 - mx0 - tx_pad - tx_right) * S
         src = []
         head = [str(location) if location else "",
@@ -341,24 +342,23 @@ def render_pvp_battle(
                 big, ((box[0] + 5) * S, (box[1] - 7) * S), lab, f_small.size,
                 (250, 250, 245), stroke_width=max(1, S // 2), stroke_fill=(40, 52, 40),
             )
-        # 「HP」标签文字(必须用真正的框中心:tag 是 (x0,y0,x1,y1),[2]/[3] 不是宽高)
-        # 双方球行(左端 / 右端):倒下的画灰殫并打叉
-        for row, at_left in ((lp, True), (rp, False)):
-            base = (mx0 + 6) if at_left else (mx1 - 6 - len(row) * 9)
-            by = my0 + max(2, int((my1 - my0 - 8) / 2) - 1)
-            for i, mon in enumerate(row):
-                bx = int((base + i * 9) * S)
-                ball_y = int(by * S)
-                if int(mon.get("cur_hp", 0) or 0) > 0:
-                    _draw_ball(d2, bx, ball_y, 3 * S)
-                else:
-                    fat = 6 * S
-                    d2.ellipse([bx, ball_y, bx + fat, ball_y + fat],
-                               fill=(126, 122, 110), outline=BOX_EDGE)
-                    d2.line([bx + 1, ball_y + 1, bx + fat - 1, ball_y + fat - 1],
-                            fill=(70, 68, 62))
-                    d2.line([bx + 1, ball_y + fat - 1, bx + fat - 1, ball_y + 1],
-                            fill=(70, 68, 62))
+        # 对话框里不再放精灵球(冗余)。双方**剩余数量**作为文字放在各自名字行右侧
+        # (玩家对战按需求不画球,但数量信息保留)。
+        for _nm, row, box in ((left_name, lp, PVP_A_BOX),
+                              (right_name, rp, PVP_B_BOX)):
+            if not row:
+                continue
+            alive = sum(1 for m in row if int((m or {}).get("cur_hp", 0) or 0) > 0)
+            txt = f"剩 {alive}/{len(row)}"
+            try:
+                tw = fonts.measure(txt, f_small.size)
+            except Exception:
+                tw = len(txt) * f_small.size
+            fonts.draw_text(
+                big, ((box[2] - 5) * S - tw, (box[1] - 7) * S), txt, f_small.size,
+                (250, 250, 245), stroke_width=max(1, S // 2),
+                stroke_fill=(40, 52, 40),
+            )
         # 状态章的汉字自己画:`_box_text` 里那套是按 PvE 的框坐标算的,这里位置不同
         for box, mon_row in ((PVP_A_BOX, left), (PVP_B_BOX, right)):
             style = STATUS_STYLE.get(str(mon_row.get("status") or ""))
@@ -459,6 +459,7 @@ def render_battle(
     terrain: str = "",
     location: str = "",
     my_party: list[dict] | None = None,
+    foe_party: list[dict] | None = None,
     turn: int = 0,
     out_path: str = "",
     scale: int = SCALE_DEFAULT,
@@ -471,7 +472,7 @@ def render_battle(
         my = dict(my or {})
         foe = dict(foe or {})
         log = [str(x) for x in (log or [])]
-        party = list(my_party or [])
+        foe_party = list(foe_party or [])
         W, H = LOGICAL_W * scale, LOGICAL_H * scale
         S = scale
 
@@ -504,10 +505,9 @@ def render_battle(
         f_msg = _font(int(9 * S))
 
         mx0, mx1 = MSG_EDGE_X
-        # 队伍球从 x=8 开始每只 +11,3 只就会压到正文(正文从 x=30 起)。
-        # 按队伍数量把正文起始位置右移,保证球与文字不重叠。
-        n_balls = min(6, max(1, len(my_party or [])))
-        tx_pad = max(28, int(8 + n_balls * 11 + 4))
+        # 对话框正文从固定位置开始 —— 原来为了避开左边的队伍球会右移,
+        # 现在对话框里不放球了(冗余),正文位置不再随队伍数量变化
+        tx_pad = 28
         tx_right = 6
         maxw = (mx1 - mx0 - tx_pad - tx_right) * S
         src_lines: list[str] = []
@@ -529,20 +529,18 @@ def render_battle(
                             outline=MSG_FRAME_HI)
         d.rounded_rectangle([mx0 + 4, my0 + 4, mx1 - 4, my1 - 4], radius=3, fill=MSG_FILL)
 
-        # ── 队伍球(跟随对话框左端垂直居中)──
-        bx = 8
-        ball_y = my0 + max(2, (box_h - 8) / 2 - 1)
-        for mon in party[:6]:
-            alive = int(mon.get("cur_hp", 0) or 0) > 0
-            _draw_ball(d, bx, ball_y, 4)
-            if not alive:
-                d.ellipse([bx, ball_y, bx + 8, ball_y + 8], fill=(120, 118, 108),
-                          outline=BOX_EDGE)
-                d.line([bx + 1, ball_y + 1, bx + 7, ball_y + 7], fill=(250, 250, 245),
-                       width=1)
-                d.line([bx + 7, ball_y + 1, bx + 1, ball_y + 7], fill=(250, 250, 245),
-                       width=1)
-            bx += 11
+        # 敌方**剩余宝可梦数量**用小球表示(野生/玩家对战不画)。
+        # 放在敌方信息框正下方:那里是空白场地,不会压到血条与精灵。
+        if foe_party:
+            nb = min(6, len(foe_party))
+            bx = FOE_BOX[2] - 4 - (nb - 1) * 8
+            for mon in list(foe_party)[:6]:
+                alive = int((mon or {{}}).get("cur_hp", 0) or 0) > 0
+                _draw_ball(d, bx, FOE_BOX[3] + 2, 3)
+                if not alive:
+                    d.ellipse([bx, FOE_BOX[3] + 2, bx + 6, FOE_BOX[3] + 8],
+                              fill=(120, 118, 108), outline=BOX_EDGE)
+                bx += 8
 
         # ── 放大(像素风)──
         big = small.resize((W, H), Image.NEAREST)
