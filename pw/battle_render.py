@@ -224,6 +224,156 @@ def _chip(big, d, x: int, y: int, text: str, bg, fg, font, scale: int,
     return w
 
 
+# ── 玩家对战(PvP)专用版式 ────────────────────────────────────────
+# 与 PvE 的区别:双方都是"我方",两只宝可梦都用**正面图**面对面站着
+# (左侧水平翻转),信息框左右对称,对话框在下方。
+PVP_A_BOX = (8, 12, 116, 46)
+PVP_B_BOX = (124, 12, 232, 46)
+# 注意:`_draw_hp_row` 的 tag_box 是 (x0,y0,x1,y1),bar_box 是 (x,y,w,h)
+PVP_A_TAG = (17, 29, 30, 39)
+PVP_B_TAG = (210, 29, 223, 39)
+PVP_A_BAR = (32, 31, 70, 6)
+PVP_B_BAR = (138, 31, 70, 6)
+PVP_A_BALL = (12, 30, 4)
+PVP_B_BALL = (224, 30, 4)
+PVP_A_GROUND = (64, 100)
+PVP_B_GROUND = (176, 100)
+PVP_MSG_TOP_MAX = 104
+
+
+def render_pvp_battle(
+    left: dict,
+    right: dict,
+    log: list[str],
+    *,
+    left_name: str = "",
+    right_name: str = "",
+    left_party: list[dict] | None = None,
+    right_party: list[dict] | None = None,
+    turn: int = 0,
+    wager: int = 0,
+    weather: str = "",
+    location: str = "",
+    scale: int = SCALE_DEFAULT,
+) -> bytes:
+    """玩家对战画面:两只正面宝可梦面对面 + 左右对称信息框 + 对话框。
+
+    失败返回 b""(调用方回退文本)。
+    """
+    try:
+        from PIL import Image, ImageDraw
+
+        scale = max(1, int(scale or SCALE_DEFAULT))
+        left = dict(left or {})
+        right = dict(right or {})
+        log = [str(x) for x in (log or [])]
+        W, H = LOGICAL_W * scale, LOGICAL_H * scale
+        S = scale
+
+        small = Image.new("RGB", (LOGICAL_W, LOGICAL_H), BG_TOP)
+        d = ImageDraw.Draw(small)
+        _draw_scene(d, weather)
+
+        # 左侧用正面图**水平翻转**,与右侧面对面
+        _paste_small(small, left, PVP_A_GROUND, factor=MY_SCALE, bounds=(92, 74),
+                     back=False, dim=not _alive(left), flip=True)
+        _paste_small(small, right, PVP_B_GROUND, factor=MY_SCALE, bounds=(92, 74),
+                     back=False, dim=not _alive(right))
+
+        # 左右对称的信息框
+        _draw_box(d, PVP_A_BOX)
+        _draw_box(d, PVP_B_BOX)
+        _draw_hp_row(d, PVP_A_BALL, PVP_A_TAG, PVP_A_BAR, _ratio(left))
+        _draw_hp_row(d, PVP_B_BALL, PVP_B_TAG, PVP_B_BAR, _ratio(right))
+        for mon, box, at_left in ((left, PVP_A_BOX, True), (right, PVP_B_BOX, False)):
+            st = str(mon.get("status") or "")
+            if st:
+                _status_chip(d, (box[0] + 4) if at_left else (box[2] - 18),
+                             box[3] - 12, st)
+
+        # 双方剩余宝可梦(球行)
+        f_ball = _font(int(6.5 * S))
+        for mon_row, box in ((left_party or [], PVP_A_BOX), (right_party or [], PVP_B_BOX)):
+            bx = box[0] + 5
+            by = box[3] - 9
+            for mon in list(mon_row)[:6]:
+                alive = int(mon.get("cur_hp", 0) or 0) > 0
+                _draw_ball(d, bx, by, 3)
+                if not alive:
+                    d.ellipse([bx, by, bx + 6, by + 6], fill=(120, 118, 108),
+                              outline=BOX_EDGE)
+                bx += 8
+
+        # 对话框(与 PvE 同一套配色/自适应高度)
+        f_name = _font(int(9.5 * S))
+        f_small = _font(int(8.5 * S))
+        f_msg = _font(int(9 * S))
+        mx0, mx1 = MSG_EDGE_X
+        tx_pad, tx_right = 6, 6
+        maxw = (mx1 - mx0 - tx_pad - tx_right) * S
+        src = []
+        head = [str(location) if location else "",
+                WEATHER_STYLE.get(weather, "")]
+        head = [x for x in head if x]
+        hp = [f"第 {int(turn)} 回合"] if turn else []
+        if wager:
+            hp.append(f"赌注 {int(wager):,}₽")
+        if hp:
+            src.append("◆ " + " · ".join(hp))
+        if head:
+            src.append("◆ " + " · ".join(head))
+        src.extend(log[-3:])
+        wrapped: list[str] = []
+        for line in src:
+            wrapped.extend(_wrap(f_msg, line, maxw, limit=MSG_MAX_LINES))
+        shown = wrapped[-MSG_MAX_LINES:] or [""]
+        box_h = 7 + len(shown) * MSG_LINE_H + 2
+        my1 = MSG_BOTTOM
+        my0 = max(int(my1 - box_h), PVP_MSG_TOP_MAX)
+
+        d.rounded_rectangle([mx0, my0, mx1, my1], radius=4, fill=MSG_FRAME)
+        d.rounded_rectangle([mx0 + 2, my0 + 2, mx1 - 2, my1 - 2], radius=3,
+                            outline=MSG_FRAME_HI)
+        d.rounded_rectangle([mx0 + 4, my0 + 4, mx1 - 4, my1 - 4], radius=3, fill=MSG_FILL)
+
+        big = small.resize((W, H), Image.NEAREST)
+        d2 = ImageDraw.Draw(big)
+        _box_text(big, d2, left, PVP_A_BOX, PVP_A_BAR, f_name, f_small, f_ball, S,
+                  mine=True)
+        _box_text(big, d2, right, PVP_B_BOX, PVP_B_BAR, f_name, f_small, f_ball, S,
+                  mine=True)
+        # 玩家名字压在信息框上沿
+        for nm, box in ((left_name, PVP_A_BOX), (right_name, PVP_B_BOX)):
+            if not nm:
+                continue
+            lab = str(nm)[:8]
+            fonts.draw_text(
+                big, ((box[0] + 5) * S, (box[1] - 7) * S), lab, f_small.size,
+                (250, 250, 245), stroke_width=max(1, S // 2), stroke_fill=(40, 52, 40),
+            )
+        # 「HP」标签文字
+        for tag_box in (PVP_A_TAG, PVP_B_TAG):
+            cx = (tag_box[0] + tag_box[2] / 2) * S
+            cy = (tag_box[1] + tag_box[3] / 2) * S
+            fonts.draw_text(big, (cx - fonts.measure("HP", f_ball.size) / 2,
+                                  cy - f_ball.size * 0.62), "HP", f_ball.size,
+                            HP_TAG_FG)
+        # 地名 / 天气
+        tx = (mx0 + tx_pad) * S
+        ty = (my0 + 4) * S
+        for i, line in enumerate(shown):
+            fonts.draw_text(
+                big, (tx, ty + i * int(MSG_LINE_H * S)), line, f_msg.size, MSG_TEXT,
+                stroke_width=max(1, S // 2), stroke_fill=MSG_SHADOW,
+            )
+        buf = BytesIO()
+        big.save(buf, format="PNG")
+        return buf.getvalue()
+    except Exception as e:  # 渲染失败回退文本
+        logger.debug("宝可梦世界: 玩家对战画面渲染失败: %s", e)
+        return b""
+
+
 def _draw_box(d_small, box, *, fill=BOX_FILL, edge=BOX_EDGE, radius=3, shadow=True):
     x0, y0, x1, y1 = box
     if shadow:
@@ -491,7 +641,7 @@ def _ratio(mon: dict) -> float:
 
 
 def _paste_small(small, mon: dict, ground, *, factor: float, bounds, back: bool,
-                 dim: bool) -> None:
+                 dim: bool = False, flip: bool = False) -> None:
     """按"脚底对齐"把精灵贴到逻辑画布:水平居中于站台,底边压在落地线上。"""
     from PIL import ImageEnhance, ImageOps
 
@@ -503,6 +653,9 @@ def _paste_small(small, mon: dict, ground, *, factor: float, bounds, back: bool,
         img = _silhouette((bounds[0], min(bounds[1], 48)))
     elif back and path and os.path.basename(os.path.dirname(path)) != "sprites_back":
         # 退回正面图时镜像,近似"从背后看"的观感
+        img = ImageOps.mirror(img)
+    if flip and not back:
+        # 玩家对战:左侧用正面图水平翻转,好和右侧面对面
         img = ImageOps.mirror(img)
     if dim:
         img = ImageEnhance.Brightness(img).enhance(0.45)

@@ -231,3 +231,20 @@ def test_message_box_never_covers_player_panel():
             if im.getpixel((x, y)) == BR.MSG_FRAME
         )
         assert inside == 0, f"{count} 行时对话框压住了我方信息框({inside} 像素)"
+
+
+def test_pvp_battle_layout_round_trips():
+    """玩家对战画面:两只正面宝可梦面对面(左侧翻转),返回合法 PNG。"""
+    from pw import battle_render as BR
+
+    left = {"species": "squirtle", "name": "杰尼龟", "level": 20, "gender": "M",
+            "cur_hp": 53, "max_hp": 53}
+    right = {"species": "charmander", "name": "小火龙", "level": 20, "gender": "F",
+             "cur_hp": 31, "max_hp": 51, "status": "brn"}
+    data = BR.render_pvp_battle(
+        left, right, ["杰尼龟 使用了 水枪!", "效果拔群!"],
+        left_name="小智", right_name="小霞", turn=3, wager=200,
+        weather="rain", location="深灰市",
+        left_party=[left, {"cur_hp": 0}], right_party=[right], scale=2)
+    assert data[:8] == b"\x89PNG\r\n\x1a\n", "没有返回 PNG"
+    assert len(data) > 2000, len(data)
