@@ -472,15 +472,21 @@ def test_menu_screens_emit_images_when_enabled():
             run_cmd(p, ev, fn)
             joined = "".join(ev.outputs)
             assert "<chain:" in joined, f"{cmd} 没有输出图片:{ev.outputs}"
-            # 图片路径绝不重发整段正文:要么纯图片(<chain:1>),要么只多一行短提示
-            assert "<chain:2>" not in joined or len(joined) < 200, (
-                f"{cmd} 附带的文本过长(疑似重复发正文):{joined[:120]}"
+            # 图片路径**绝不重发整段正文**:附带的文本必须比文本回退明显短
+            # (不是比长度上限 —— 有些界面本来就要补几行图片里没有的信息)
+            p.config = {"ui_image": False}
+            fb_ev = _Event(cmd)
+            run_cmd(p, fb_ev, fn)
+            fb = "".join(str(x) for x in fb_ev.outputs)
+            p.config = {"ui_image": True, "battle_image_scale": 2}
+            assert len(joined) < len(fb), (
+                f"{cmd} 附带的文本不比正文短,疑似重复:{joined[:120]}"
             )
             if "<chain:2>" in joined:
                 assert any(
                     k in joined
                     for k in ("行动", "使用:", "移动:", "买卖:", "挑战:", "管理:",
-                              "分类:", "详情:")
+                              "分类:", "详情:", "下一步", "◆")
                 ), f"{cmd} 附带的文本不是指令提示:{joined[:120]}"
         # 关闭开关 → 回退纯文本
         p.config = {"ui_image": False}
@@ -1061,8 +1067,15 @@ def test_image_mode_does_not_resend_full_text():
             assert len(ev2.outputs) == 1, f"{cmd} 输出了多条消息:{ev2.outputs}"
             joined = "".join(ev2.outputs)
             assert joined.startswith("<chain:"), f"{cmd} 没走图片路径:{joined[:60]}"
-            # 图片 + 提示 ≤ 一行提示的量级;正文动辄几百字,一定超这个长度
-            assert len(joined) < 200, f"{cmd} 疑似把正文也发了:{joined[:150]}"
+            # 图片路径绝不重发整段正文:附带的文本必须比文本回退**明显短**
+            p.config = {"ui_image": False}
+            fb_ev = _Event(cmd)
+            run_cmd(p, fb_ev, fn)
+            body_len = len("".join(str(x) for x in fb_ev.outputs))
+            p.config = {"ui_image": True, "battle_image_scale": 2}
+            assert len(joined) < body_len, (
+                f"{cmd} 疑似把正文也发了({len(joined)} vs 正文 {body_len}):{joined[:150]}"
+            )
 
         # 对照:关掉图片后必须是**完整正文**(说明内容没被删掉,只是不再重复发)
         p.config = {"ui_image": False}

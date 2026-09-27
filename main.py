@@ -33,6 +33,7 @@ from .prompts import (
     HELP_TEXT,
     NARRATE_EVENT_SYSTEM,
     NARRATE_SCENE_SYSTEM,
+    TUTORIAL_TEXT,
     WELCOME_TEMPLATE,
     narration_facts,
 )
@@ -93,6 +94,95 @@ _EXPLORE_USAGE = """❌ 用法:`/探索 [目标]`
 · `/探索 道具` —— 只捡道具
 · `/探索 事件` —— 只看这里今天有什么事件与世界动态
 每次探索固定消耗 40 步。"""
+
+
+def _next_step(t: Trainer, state=None) -> str:
+    """根据当前进度给一句"下一步该做什么"(新手引导的核心)。
+
+    优先级刻意如此(先救命 → 先出门 → 就地能做的事 → 再去赶路):
+    队伍危险 → 还没出门 → 还没抓到宝可梦 → 站在道馆城镇 → 徽章够了打联盟
+    → 能进化/有没学的招 → 去下一个道馆 → 委托/探索。
+    这样"就地的动作"总排在"赶路"前面,玩家不会被一句"去某某镇"牵着走一辈子。
+    """
+    try:
+        world = WorldMap()
+        dex = get_dex()
+        party = t.data.get("party") or []
+        if not party:
+            return "🎯 下一步:去 `/探索` 找一只宝可梦收服它。"
+        # ① 先救命
+        hurt = [m for m in party
+                if int(m.get("cur_hp") or 0) <= int(m.get("max_hp") or 1) // 4]
+        if t.all_fainted() or len(hurt) >= max(1, len(party) // 2):
+            if any(k.startswith(("potion", "super", "hyper", "max"))
+                   for k in t.data.get("bag") or {}):
+                return "🎯 下一步:队伍有点惨 —— 用 `/使用 伤药` 回血,或回宝可梦中心 `/治疗`。"
+            return "🎯 下一步:队伍有点惨 —— 去宝可梦中心 `/治疗`(免费,顺带回满 PP)。"
+        # ② 还没出过门
+        if int(t.data.get("steps") or 0) <= 0:
+            return ("🎯 下一步:发 `/探索` 出门看看(只想遇宝可梦就 `/探索 野生`,"
+                    "只想捡道具就 `/探索 道具`)。")
+        # ③ 图鉴才刚开始 → 教怎么抓
+        if len(t.data.get("dex_caught") or []) <= 1 and t.count("poke-ball") > 0:
+            return "🎯 下一步:遇到野生宝可梦时用 `/捕捉 精灵球` 收服(`/对战 1` 出招削弱它)。"
+        # ④ 就地在下一个道馆城镇 → 直接挑战
+        try:
+            gym = world.next_gym(t.region, t.badges)
+        except Exception as e:
+            logger.debug("宝可梦世界: 下一道馆查询失败: %s", e)
+            gym = None
+        if gym and str(gym.get("location") or "") == t.location:
+            return (f"🎯 下一步:{world.node_zh(t.location)} 的道馆就在眼前 —— "
+                    f"`/道馆 挑战` 打 {gym.get('leader') or '馆主'}"
+                    f"(现在 {t.badge_count()} 枚徽章)。")
+        # ⑤ 本地区徽章齐了 → 联盟 / 大赛
+        total_gym = len(world.gyms(t.region)) or 8
+        if t.badge_count() >= total_gym and not t.flag(f"champion:{t.region}", False):
+            gate = world.gateway(t.region)
+            if gate and t.location == gate:
+                return "🎯 下一步:`/联盟 挑战` —— 四天王与冠军在等你!"
+            if gate:
+                return (f"🎯 下一步:徽章齐了,`/地图` 走到 "
+                        f"{world.node_zh(gate)},那里能 `/联盟 挑战`。")
+            return "🎯 下一步:`/联盟 挑战` 打四天王与冠军!"
+        if t.flag(f"champion:{t.region}", False):
+            return "🎯 下一步:你已是本地区冠军 —— `/大赛 挑战` 冲击世界冠军。"
+        # ⑥ 就地培养:能进化 / 有没学的招
+        for i, p in enumerate(party, 1):
+            mon = B.dict_to_mon(p)
+            try:
+                opts = dex.evolution_options(
+                    mon.species, level=mon.level, moves=mon.moves, item=mon.item,
+                    friendship=mon.friendship, gender=mon.gender, daytime="day",
+                    party=party,
+                )
+            except Exception as e:
+                logger.debug("宝可梦世界: 进化条件查询失败: %s", e)
+                opts = []
+            if any(o.get("kind") in ("level", "levelFriendship", "levelMove", "levelHold")
+                   for o in opts):
+                return f"🎯 下一步:第 {i} 只 {mon.display} 可以 `/进化` 了(变强不少)。"
+        for i, p in enumerate(party, 1):
+            mon = B.dict_to_mon(p)
+            try:
+                new = [m for m in dex.learnable(mon.species, mon.level)
+                       if m.get("move") not in mon.moves]
+            except Exception as e:
+                logger.debug("宝可梦世界: 可学招式查询失败: %s", e)
+                new = []
+            if new:
+                zh = growth.move_zh(new[0].get("move") or "")
+                return f"🎯 下一步:第 {i} 只 {mon.display} 有没学的招(`/学招 {i}`,例如 {zh})。"
+        # ⑦ 赶路:去下一个道馆
+        if gym:
+            town = str(gym.get("location") or "")
+            if town:
+                return (f"🎯 下一步:`/地图` 看路线、`/前往 <相邻地点>` 一路走到 "
+                        f"{world.node_zh(town)},那里有道馆。")
+        return "🎯 下一步:`/任务` 看今日委托,或 `/探索` 继续变强。"
+    except Exception as e:      # 引导文案绝不能把指令搞崩,但留日志便于排查
+        logger.warning("宝可梦世界: 下一步提示生成失败: %s", e)
+        return "🎯 下一步:`/探索` 出门看看,或 `/帮助` 看全部指令。"
 
 
 def _explore_target(arg: str) -> tuple[str, str]:
@@ -231,7 +321,11 @@ class PokemonWorldPlugin(Star):
         """
         t = self._load(event)
         if t is None:
-            return None, "❌ 你还没有开始旅程。发送 `/开始 名字 御三家` 成为训练家吧!"
+            return None, (
+                "❌ 你还没有开始旅程。\n"
+                "· 直接开始:`/开始 小智 皮卡丘`(名字 + 御三家)\n"
+                "· 不知道选什么:发 `/新手` 看 5 步上手引导"
+            )
         if not in_battle_ok and B.in_battle(t):
             return None, _BATTLE_LOCKED_MSG
         return t, ""
@@ -881,7 +975,13 @@ class PokemonWorldPlugin(Star):
         pocket_arg, want_index, want_page = _parse_page_args(
             self._args(event, ("背包", "bag", "道具")), numeric_is_page=False
         )
-        payload = self._bag_payload(t, pocket_arg, index=want_index, page=want_page)
+        async with self._lock(t.scope):
+            payload = self._bag_payload(t, pocket_arg, index=want_index, page=want_page)
+            # 记住"正在看的分类"(写进存档):翻页/看第 N 件不带分类时继续用它。
+            # 要落盘,否则重启后"上次看的分类"又丢了。
+            if str(t.flag("bag_pocket", "") or "") != payload["pocket"]:
+                t.set_flag("bag_pocket", payload["pocket"])
+                self._save(t)
         # 文本回退:**按口袋过滤**(以前不管写哪个口袋都列全部,切分类等于没做),
         # 并在最上面列出各口袋数量,让"怎么切分类"一眼可见。
         groups = payload["groups"]
@@ -1642,6 +1742,9 @@ class PokemonWorldPlugin(Star):
             _, want_index, want_page = _parse_page_args(
                 arg, numeric_is_page=(action in ("页", "page"))
             )
+            if not arg:
+                # 不带参数时沿用上次翻到的那一页(存玩家身上),别每次都跳回第 1 页
+                want_page = max(1, coerce_int(t.flag("shop_page", 1), 1))
             entries = self._shop_payload(t, discount)
             per = max(1, int(UIM.SHOP_PER_PAGE))
             if want_index > 0:
@@ -1650,6 +1753,12 @@ class PokemonWorldPlugin(Star):
                 sel = min((want_page - 1) * per, len(entries) - 1)
             else:
                 sel = 0
+            # 记住这次看的页(按选中的那件反推),下次 `/商店` 直接续上
+            page_now = max(1, sel // per + 1) if entries else 1
+            if int(coerce_int(t.flag("shop_page", 1), 1)) != page_now:
+                async with self._lock(t.scope):
+                    t.set_flag("shop_page", page_now)
+                    self._save(t)
             text = self._shop_text(t, discount)
             async for r in self._emit_ui(
                 event, "shop",
@@ -2675,6 +2784,11 @@ class PokemonWorldPlugin(Star):
                 locks=locks, scale=self._img_scale(),
             ),
             text=text,
+            hint="\n".join(
+                x for x in (_next_step(t),
+                            "行动:`/探索` 前进 · `/任务` 看委托 · `/新手` 上手引导")
+                if x
+            ),
         ):
             yield r
 
@@ -2754,6 +2868,17 @@ class PokemonWorldPlugin(Star):
             return
         self.trainers.delete(scope, uid)
         yield event.plain_result("🗑️ 你的存档已删除,可以重新 `/开始`。")
+
+    @filter.command("新手", alias={"引导", "教程", "新手引导", "tutorial", "guide"})
+    async def cmd_tutorial(self, event: AstrMessageEvent):
+        """/新手 —— 5 步上手引导(附当前进度建议)"""
+        lines = [TUTORIAL_TEXT]
+        t = self._load(event)
+        if t is not None:
+            nxt = _next_step(t)
+            if nxt:
+                lines.append(nxt)
+        yield event.plain_result("\n\n".join(lines))
 
     @filter.command("帮助", alias={"help", "说明"})
     async def cmd_help(self, event: AstrMessageEvent):
@@ -2891,7 +3016,10 @@ class PokemonWorldPlugin(Star):
         ]
         if today_bits:
             lines.append("◆ 今日:" + " / ".join(today_bits[:3]))
-        lines.append("行动:`/探索` 前进、`/任务` 看委托、`/帮助` 全指令")
+        nxt = _next_step(t)
+        if nxt:
+            lines.append(nxt)
+        lines.append("行动:`/探索` 前进 · `/队伍` 看队伍 · `/新手` 上手引导")
         return "\n".join(lines)
 
     def _map_text(self, t: Trainer, region: str, *, own: bool) -> str:
@@ -3661,6 +3789,14 @@ class PokemonWorldPlugin(Star):
             if want and want in (pk, label):
                 pocket = pk
         if not pocket:
+            # 没写分类时**沿用上次看的分类**(存在玩家身上):
+            # 否则 `/背包 回复` 之后来一句 `/背包 页 2` 会突然跳回"道具/精灵球",
+            # 玩家以为自己翻的是当前分类的下一页。
+            last = str(t.flag("bag_pocket", "") or "")
+            if any(last == pk for pk, _lb in UI.POCKETS):
+                pocket = last
+        if not pocket:
+            # 头一次打开:挑第一个**非空**的分类(比停在空的"道具"友好)
             for pk, _label in UI.POCKETS:
                 if groups.get(pk):
                     pocket = pk

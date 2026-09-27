@@ -1048,3 +1048,51 @@ def test_paging_commands_for_bag_and_shop(monkeypatch):
             "页 2", numeric_is_page=True
         )
         assert (want_index, want_page) == (0, 2)
+
+
+def test_bag_pocket_and_shop_page_are_remembered():
+    """翻页/看第 N 件不带分类时,要**沿用上次看的分类**(用户提醒的坑)。
+
+    以前 `/背包 回复` 之后来一句 `/背包 页 2` 会突然跳回"道具/精灵球" ——
+    玩家以为自己翻的是当前分类的下一页。商店同理(不要每次跳回第 1 页)。
+    """
+    from pw import ui_menu as UIM
+
+    with tempfile.TemporaryDirectory() as tmp:
+        p, ev = _start(tmp)
+        t = p._load(ev)
+        t.data["bag"] = {"poke-ball": 5, "potion": 3, "antidote": 1,
+                         "super-potion": 2, "hyper-potion": 1, "max-potion": 1}
+        t.data["location"] = "pewter-city"
+        total_gyms = len(__import__("pw.world", fromlist=["WorldMap"]).WorldMap().gyms("kanto"))
+        for i in range(total_gyms):
+            t.add_badge("kanto", i)
+        t.data["money"] = 99999
+        p._save(t)
+
+        def pocket_of(cmd):
+            out = _run(p, cmd, "cmd_bag")
+            for line in out.splitlines():
+                if line.startswith("── "):
+                    return line.strip("─ ").strip()
+            return ""
+
+        # 切到"回复"后,不带分类的翻页/看序号都还在"回复"
+        assert pocket_of("/背包 回复") == "回复"
+        assert pocket_of("/背包 页 2") == "回复", "翻页跳回别的分类了"
+        assert pocket_of("/背包 2") == "回复", "看第 N 件跳回别的分类了"
+        # 换成"精灵球"后继续沿用
+        assert pocket_of("/背包 精灵球") == "精灵球"
+        assert pocket_of("/背包 页 2") == "精灵球"
+        # 落到存档里,重启后仍然记得
+        assert p._load(ev).flag("bag_pocket", "") == "balls"
+
+        # 商店:记得上次翻到第几页
+        assert p._load(ev).flag("shop_page", 1) == 1
+        _run(p, "/商店 页 3", "cmd_shop")
+        assert p._load(ev).flag("shop_page", 1) == 3
+        _run(p, "/商店", "cmd_shop")           # 不带参数 → 沿用第 3 页
+        assert p._load(ev).flag("shop_page", 1) == 3, "每次/商店都跳回第 1 页"
+        per = UIM.SHOP_PER_PAGE
+        _run(p, f"/商店 {per * 2 + 1}", "cmd_shop")   # 看第 2*per+1 件 → 第 3 页
+        assert p._load(ev).flag("shop_page", 1) == 3
