@@ -370,6 +370,14 @@ class Pokemon:
         return before - self.cur_hp
 
     def full_heal(self) -> None:
+        """宝可梦中心/全队治疗:**HP、异常状态、PP 全回复**。
+
+        PP 也要回复 —— 以前只回 HP/状态/能力等级,打完一架 PP 是空的,
+        玩家去了宝可梦中心还是没法出招。上限走 `items.max_pp`,
+        所以 `/使用 PP提升剂` 加过的上限不会被抹掉。
+        """
+        from .items import max_pp
+
         self.cur_hp = self.max_hp
         self.fainted = False
         self.faint_logged = False
@@ -378,6 +386,8 @@ class Pokemon:
         self.stages = {}
         self.volatiles = {}
         self.choice_locked = ""
+        for mv in self.moves or []:
+            self.pp[mv] = max_pp(self, mv)
 
 
 # ──────────────────────────── 一方 / 对战 ────────────────────────────

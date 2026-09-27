@@ -1561,3 +1561,74 @@ def test_ability_patch_only_for_species_with_hidden_ability():
             ev = _Event("/使用 特性膏药 1")
             run_cmd(p, ev, p.cmd_use)
             assert "没有隐藏特性" in "".join(ev.outputs)
+
+
+def test_heal_restores_pp_not_just_hp():
+    """`/治疗` 必须回满 PP —— 以前只回 HP/异常状态,打完一架 PP 是空的,
+    进了宝可梦中心还是没法出招(用户反馈)。"""
+    from pw.battle import mon_to_dict
+    from pw.engine import create_pokemon
+    from pw.items import max_pp
+    from pw.player import Trainer
+
+    mon = create_pokemon("squirtle", 20)
+    for mv in mon.moves:
+        mon.pp[mv] = max(0, mon.pp[mv] - 5)
+    mon.cur_hp = 3
+    mon.status = "psn"
+    mon.full_heal()
+    assert mon.cur_hp == mon.max_hp
+    assert not mon.status
+    assert all(mon.pp[mv] == max_pp(mon, mv) for mv in mon.moves), mon.pp
+
+    # 走整条 `/治疗` 路径(存档 →  healed 落盘)
+    t = Trainer({"party": [mon_to_dict(create_pokemon("pidgey", 9))]}, uid="u1", scope="g1")
+    t.party[0]["pp"] = dict.fromkeys(t.party[0].get("pp") or {}, 0)
+    t.party[0]["cur_hp"] = 1
+    assert t.heal_party() >= 1
+    healed = t.party[0]
+    assert healed["cur_hp"] == healed["max_hp"], healed
+    assert all(int(v) > 0 for v in healed["pp"].values()), healed["pp"]
+
+
+def test_pp_up_bonus_survives_a_heal():
+    """PP 上限提升过(`pp_bonus`)的招,治疗要回到**提升后**的上限,不能被抹掉。"""
+    from pw.engine import create_pokemon
+    from pw.items import max_pp
+
+    mon = create_pokemon("squirtle", 20)
+    mv = mon.moves[0]
+    mon.pp_bonus = {mv: 3}
+    base = int((__import__("pw.dex", fromlist=["x"]).get_dex().moves[mv] or {}).get("pp") or 10)
+    assert max_pp(mon, mv) == base + 3
+    mon.pp[mv] = 0
+    mon.full_heal()
+    assert mon.pp[mv] == base + 3, mon.pp[mv]
+
+
+def test_whiteout_heal_also_restores_pp():
+    """全灭后被送回宝可梦中心,PP 也要回满。"""
+    from pw import battle as B
+    from pw.engine import create_pokemon
+    from pw.items import max_pp
+    from pw.player import new_trainer
+
+    t = new_trainer("u1", "g1", "小智", starter="杰尼龟")
+    t.data["region"] = "kanto"
+    t.data["visited"] = ["pallet-town"]
+    t.data["location"] = "kanto-route-1"
+    mon = t.data["party"][0]
+    mon["pp"] = dict.fromkeys(mon.get("pp") or {}, 0)
+    weak = create_pokemon("caterpie", 2).to_dict()
+    weak["id"] = "m9"
+    t.data["party"] = [mon]
+    B.start(t, [{"species": "dragonite", "level": 70}], kind="trainer", wild=False,
+            meta={"kind": "trainer", "title": "测试"}, day=1)
+    for _ in range(10):
+        if not B.in_battle(t):
+            break
+        res = B.take_turn(t, "move tackle", day=1)
+        if res.finished:
+            break
+    healed = B.dict_to_mon(t.data["party"][0])
+    assert all(healed.pp[mv] == max_pp(healed, mv) for mv in healed.moves), healed.pp
