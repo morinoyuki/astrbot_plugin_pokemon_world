@@ -273,7 +273,7 @@ def render_news(day: int, *, world_events: list[str] = (), player_events: list[s
         _dialog_text(sc, world_box, "◆ 世界", world)
 
         # 个人播报 + 未解锁提示
-        player_box = (4, 89, 236, 144)
+        player_box = (4, 89, 236, sc.content_bottom)
         _dialog(sc, player_box)
         mine = [f"· {x}" for x in _lines(player_events, limit=3)]
         if not mine:
@@ -352,7 +352,7 @@ def render_tournament(rounds: list[str], *, best: int = 0, current: int = 0,
             sc.text(x0 + 6, y0 + 14.5, _fit(sc, sub, 58, 7.2), size=7.2, fill=TEXT_DIM)
 
         # ── 称号栏 ──
-        box = (5, 126, 235, 144)
+        box = (5, 126, 235, sc.content_bottom)
         sc.window(box, radius=2, shadow=False)
         title_list = _lines(titles, limit=3)
         if title_list:
@@ -426,7 +426,7 @@ def render_battle_result(*, outcome: str, title: str = "", lines: list[str] = ()
         mon = mon if isinstance(mon, dict) else None
         rx0 = 5
         if mon:
-            panel = (5, 44, 82, 144)
+            panel = (5, 44, 82, sc.content_bottom)
             sc.window(panel, radius=3)
             sp = _str(mon.get("species"))
             sc.sprite(sp, ground=(43, 108), factor=0.95, bounds=(66, 60))
@@ -549,7 +549,7 @@ def render_growth(mon: dict, *, before_level: int = 0, after_level: int = 0,
             sc.text(12, 81 + i * 9, ln, size=8, fill=TEXT if learned else TEXT_DIM)
 
         # ── 待替换 ──
-        pb = (5, 108, 235, 144)
+        pb = (5, 108, 235, sc.content_bottom)
         sc.window(pb, radius=2, shadow=False)
         sc.text(10, 110.5, "○ 待替换招式", size=7.8, fill=(140, 96, 56))
         pend = "、".join(_lines(pending, limit=4)) or "招式栏还有空位,不用替换。"
@@ -581,7 +581,7 @@ def _growth_evolution(sc: Screen, mon: dict, sp: str, name: str, from_zh: str,
     sc.text_center(56, 109, _str(from_zh, "之前"), size=8, fill=TEXT_DIM)
     sc.text_center(184, 109, _str(to_zh, name), size=9.4, fill=(40, 88, 44))
 
-    box = (5, 124, 235, 144)
+    box = (5, 124, 235, sc.content_bottom)
     sc.window(box, radius=2, shadow=False)
     extra = _lines(learned, limit=2)
     msg = f"恭喜!{_str(from_zh, name)} 进化成了 {to_zh}!"
@@ -642,7 +642,7 @@ def render_gotcha(mon: dict, *, ball_zh: str = "精灵球", ball_key: str = "",
             sc.text(130, 84 + i * 9.4, ln, size=7.8, fill=TEXT_DIM)
 
         # 收服印章
-        stamp = (146, 124, 232, 143)
+        stamp = (146, 124, 232, sc.content_bottom - 1)
         sc.d.rounded_rectangle(list(stamp), radius=3, fill=(250, 238, 226),
                                outline=STAMP_RED, width=2)
         sc.d.rectangle([stamp[0] + 3, stamp[1] + 3, stamp[2] - 3, stamp[3] - 3],

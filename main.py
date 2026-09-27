@@ -71,6 +71,71 @@ DEFAULT_STARTERS = ["新叶喵", "呆火鳄", "润水鸭", "皮卡丘", "伊布"
 EXPLORE_ITEM_POOL = ["potion", "poke-ball", "antidote", "oran-berry", "super-potion"]
 
 
+# `/探索` 的目标别名:值里的第一项是规范模式名
+_EXPLORE_ALIASES: dict[str, frozenset[str]] = {
+    "all": frozenset({"", "全部", "任意", "随便", "都行", "all", "any"}),
+    "wild": frozenset({"野生", "野怪", "宝可梦", "精灵", "wild", "pokemon"}),
+    "trainer": frozenset({"训练家", "训练师", "npc", "trainer"}),
+    "item": frozenset({"道具", "物品", "东西", "捡", "item", "items"}),
+    "event": frozenset({"事件", "情报", "状况", "动态", "event", "news"}),
+}
+
+_EXPLORE_USAGE = """❌ 用法:`/探索 [目标]`
+· `/探索` 或 `/探索 全部` —— 什么都可能碰上(默认)
+· `/探索 野生` —— **只**找野生宝可梦
+· `/探索 属性 水` —— 只找水属性的野生宝可梦(也可直接写 `/探索 水`)
+· `/探索 训练家` —— 只找路边训练家(看到后用 `/训练家战` 挑战)
+· `/探索 道具` —— 只捡道具
+· `/探索 事件` —— 只看这里今天有什么事件与世界动态
+每次探索固定消耗 40 步。"""
+
+
+def _explore_target(arg: str) -> tuple[str, str]:
+    """解析 `/探索` 的目标,返回 `(模式, 属性英文名或空串)`。
+
+    模式:`all` / `wild` / `trainer` / `item` / `event`;无法识别返回 `("", "")`。
+    属性支持 `/探索 属性 水` 与 `/探索 水` 两种写法。
+    """
+    raw = str(arg or "").strip()
+    if not raw:
+        return "all", ""
+    parts = raw.replace(",", " ").replace("、", " ").split()
+    head = parts[0] if parts else ""
+    dex = get_dex()
+    if head in ("属性", "type", "系"):
+        if len(parts) < 2:
+            return "", ""
+        t = dex.resolve_type(parts[1])
+        return ("wild", t) if t else ("", "")
+    low = raw.lower()
+    for mode, names in _EXPLORE_ALIASES.items():
+        if low in names or head.lower() in names:
+            return mode, ""
+    t = dex.resolve_type(raw)          # 直接写属性名
+    if t:
+        return "wild", t
+    return "", ""
+
+
+def _species_types(species: str | None) -> list[str]:
+    """图鉴里的属性(英文)。"""
+    if not species:
+        return []
+    entry = get_dex().species.get(str(species)) or {}
+    return [str(x) for x in (entry.get("types") or [])]
+
+
+def _available_types(world, location: str) -> list[str]:
+    """该地点野生宝可梦的属性集合(中文名,去重排序,给提示用)。"""
+    dex = get_dex()
+    out: set[str] = set()
+    for row in world.wild_pools(location):
+        for t in _species_types(row.get("species")):
+            out.add(dex.type_label(t))
+    return sorted(out)
+
+
+
 class PokemonWorldPlugin(Star):
     def __init__(self, context: Context, config=None):
         super().__init__(context)
@@ -550,9 +615,21 @@ class PokemonWorldPlugin(Star):
                 payload, index=idx + 1, party_size=total, scale=self._img_scale(),
             ),
             text=text,
-            hint="管理:`/队伍` 查看 · 电脑里的用 `/队伍 取出 <序号>`",
+            # 特性说明放这里而不是画进图里:图片底部留给四行资料更清爽,
+            # 而且聊天里的正常字号比 6px 的图内小字好读得多
+            hint=self._mon_hint(payload),
         ):
             yield r
+
+    def _mon_hint(self, payload: dict) -> str:
+        """资料页图片附带的文本:特性说明 + 管理入口。"""
+        lines = []
+        ab = str(payload.get("ability_zh") or "")
+        desc = str(payload.get("ability_desc") or "")
+        if ab:
+            lines.append(f"◆ 特性 {ab}:{desc}" if desc else f"◆ 特性 {ab}")
+        lines.append("管理:`/队伍` 查看 · 电脑里的用 `/队伍 取出 <序号>`")
+        return "\n".join(lines)
 
     @filter.command("电脑", alias={"仓库", "箱子", "box", "storage"})
     async def cmd_box(self, event: AstrMessageEvent):
@@ -713,13 +790,19 @@ class PokemonWorldPlugin(Star):
 
     @filter.command("探索", alias={"explore", "遭遇", "搜索"})
     async def cmd_explore(self, event: AstrMessageEvent):
-        """/探索 —— 在当前地点探索"""
+        """/探索 [野生|属性 <属性>|训练家|道具|事件] —— 有指向性地探索"""
         t, err = self._require(event)
         if err:
             yield event.plain_result(err)
             return
         if B.in_battle(t):
             yield event.plain_result("⚠️ 先把眼前的战斗打完:`/对战 <招式>`")
+            return
+        mode, want_type = _explore_target(
+            self._args(event, ("探索", "explore", "遭遇", "搜索"))
+        )
+        if not mode:
+            yield event.plain_result(_EXPLORE_USAGE)
             return
         async with self._lock(t.scope):
             today = await self._ensure_day(event, t)
@@ -737,30 +820,48 @@ class PokemonWorldPlugin(Star):
             notice = [*today]
             t.data["steps"] = int(t.data.get("steps", 0)) + 40
             notice += QT.note(t, "steps", steps=40)
-            # 0) 神兽定点:条件满足且就在此地时,优先遭遇
-            site = (legendary.ready(t, world=world, day=state.day) or [None])[0]
-            if site and t.all_fainted():
-                yield event.plain_result("❌ 队伍全部失去战斗能力,先 `/治疗`。")
-                return
-            if site:
-                meta = legendary.legendary_meta(t, site)
-                log = B.start(
-                    t, meta["team"], kind="legend", wild=True, meta=meta,
-                    weather=_battle_weather(state, t.region), day=state.day,
-                )
+
+            # ── 只想知道今天有什么事件:不掷骰、不开战 ──
+            if mode == "event":
                 self._save(t)
-                notice.append(f"🐉 传说的宝可梦出现了:{site['zh']} Lv{site['level']}!")
-                _hint = self._battle_hint(t)
-                async for r in self._emit_battle(
-                    event, t, meta, log,
-                    text="\n".join(notice) + "\n" + _hint,
-                    keep="\n".join(notice) + "\n" + _hint,
-                    status=True,
-                ):
-                    yield r
+                yield event.plain_result(
+                    "\n".join(
+                        [
+                            *notice,
+                            f"📍 {world.region_zh(t.region)}·{world.node_zh(loc)}"
+                            f"(危险度:{world.tier_label(loc)})",
+                            D.today_brief(state, region=t.region, location=loc),
+                        ]
+                    )
+                )
                 return
-            # 1) 本地事件:火箭队 / 稀有宝可梦
-            if ev and ev.get("kind") == "rocket":
+
+            # ── 神兽定点:只有"想找野生"的目标才会被触发 ──
+            # 想捡道具/看事件却被神兽拦住会很烦,所以按目标过滤。
+            if mode in ("all", "wild"):
+                site = (legendary.ready(t, world=world, day=state.day) or [None])[0]
+                if site and want_type and want_type not in _species_types(site.get("species")):
+                    site = None
+                if site:
+                    meta = legendary.legendary_meta(t, site)
+                    log = B.start(
+                        t, meta["team"], kind="legend", wild=True, meta=meta,
+                        weather=_battle_weather(state, t.region), day=state.day,
+                    )
+                    self._save(t)
+                    notice.append(f"🐉 传说的宝可梦出现了:{site['zh']} Lv{site['level']}!")
+                    _hint = self._battle_hint(t)
+                    async for r in self._emit_battle(
+                        event, t, meta, log,
+                        text="\n".join(notice) + "\n" + _hint,
+                        keep="\n".join(notice) + "\n" + _hint,
+                        status=True,
+                    ):
+                        yield r
+                    return
+
+            # ── 本地事件:火箭队(算训练家战);想找野生的目标不触发 ──
+            if mode in ("all", "trainer") and ev and ev.get("kind") == "rocket":
                 meta = npc.rocket_battle(t, ev)
                 log = B.start(t, meta["team"], kind="rocket", meta=meta, day=state.day)
                 self._save(t)
@@ -774,69 +875,85 @@ class PokemonWorldPlugin(Star):
                 ):
                     yield r
                 return
-            # 2) 普通探索掷骰
+
+            # ── 普通探索掷骰 ──
             roll = rng.random()
             wild_p = 0.55 * float(mods.get("encounter_mult", 1.0))
             npc_p = 0.15
             if ev and ev.get("kind") == "swarm":
                 wild_p += 0.2
-            if roll < min(0.85, wild_p):
+            wild_p = min(0.85, wild_p)
+
+            # ── 只想捡道具 ──
+            if mode == "item":
+                item = rng.choice(EXPLORE_ITEM_POOL)
+                n = rng.randint(1, 2)
+                t.add_item(item, n)
+                self._save(t)
+                zh = (BAG_ITEMS.get(item) or {}).get("zh", item)
+                yield event.plain_result(
+                    "\n".join([*notice, f"🔍 你在草丛里发现了 {zh} ×{n}!"])
+                )
+                return
+
+            # ── 只想找训练家 ──
+            if mode == "trainer":
+                npcs = npc.route_trainers(t, loc, day=state.day)
+                self._save(t)
+                if npcs:
+                    cand = npcs[0]
+                    yield event.plain_result(
+                        "\n".join(notice)
+                        + f"\n👀 你看到一位训练家:{cand['name']}。"
+                        f"\n用 `/训练家战` 发起挑战。"
+                    )
+                else:
+                    yield event.plain_result(
+                        "\n".join(notice)
+                        + "\n👀 这条路上今天没有遇到训练家,换个地方或明天再来。"
+                    )
+                return
+
+            # ── 只想找野生(可指定属性) ──
+            if mode == "wild":
+                env = _environment_of(world, loc)
+                hit = self._roll_wild_typed(t, rng, env, want_type) if roll < wild_p else None
+                if hit is None:
+                    self._save(t)
+                    head = f"🌿 附近没有{get_dex().type_label(want_type)}属性的宝可梦" if want_type else ""
+                    tail = f"(这里能遇到:{'、'.join(_available_types(world, loc)) or '未知'})" if want_type else ""
+                    yield event.plain_result(
+                        "\n".join(
+                            [*notice,
+                             f"👀 你在附近转了一圈,什么也没遇到……{head}{tail}",
+                             "可以再来一次 `/探索 野生`(每次都算 40 步)。"]
+                        )
+                    )
+                    return
+                hit = self._maybe_rare(t, state, ev, rng, hit)
+                async for r in self._emit_wild(event, t, state, world, loc, hit, notice):
+                    yield r
+                return
+
+            # ── 默认:什么都可能碰上(与以前完全一致) ──
+            if roll < wild_p:
                 env = _environment_of(world, loc)
                 hit = B.roll_wild(t, rng=rng, environment=env)
                 if not hit:
+                    self._save(t)
                     yield event.plain_result(
                         "\n".join([*notice, "这里似乎什么也没有发生……"])
                     )
                     return
-                if (
-                    ev
-                    and ev.get("kind") == "rare"
-                    # 罕见现身事件的 rare_mult 此前没人消费 → 事件写了也不生效
-                    and rng.random()
-                    < 0.35 * float(state.modifiers.get("rare_mult", 1.0))
-                ):
-                    legend = npc.legendary_at(t, ev)
-                    if legend:
-                        hit = legend
-                level = hit["level"]
-                _entry = get_dex().species.get(str(hit.get("species")) or "") or {}
-                meta = {
-                    "kind": "wild",
-                    "title": f"野生的{hit['zh']}",
-                    "location": loc,
-                    "region": t.region,
-                    # 任务系统/结算卡需要的结构化信息。
-                    # 注意:遭遇结果是 methods(复数,列表)而不是 method —— 早期按
-                    # method 取值永远是空串,导致"钓鱼捕获"类委托无法推进。
-                    "species": str(hit.get("species") or ""),
-                    "types": list(hit.get("types") or _entry.get("types") or []),
-                    "method": _primary_method(hit.get("methods")),
-                    "new_species": not t.seen(str(hit.get("species")) or ""),
-                }
-                log = B.start(
-                    t,
-                    [{"species": hit["species"], "level": level}],
-                    kind="wild",
-                    wild=True,
-                    meta=meta,
-                    weather=_battle_weather(state, t.region),
-                    day=state.day,
-                )
-                self._save(t)
-                _hint = self._battle_hint(t)
-                async for r in self._emit_battle(
-                    event, t, meta, log,
-                    text="\n".join(notice) + "\n" + self._battle_intro(meta, log)
-                    + f"\n\n{_hint}",
-                    keep="\n".join(notice) + "\n" + _hint,
-                    status=True,
-                ):
+                hit = self._maybe_rare(t, state, ev, rng, hit)
+                async for r in self._emit_wild(event, t, state, world, loc, hit, notice):
                     yield r
                 return
             if roll < min(0.95, wild_p + npc_p):
                 npcs = npc.route_trainers(t, loc, day=state.day)
                 if npcs:
                     cand = npcs[0]
+                    self._save(t)
                     yield event.plain_result(
                         "\n".join(notice)
                         + f"\n👀 你看到一位训练家:{cand['name']}。"
@@ -851,6 +968,69 @@ class PokemonWorldPlugin(Star):
             yield event.plain_result(
                 "\n".join([*notice, f"🔍 你在草丛里发现了 {zh} ×{n}!"])
             )
+
+    def _roll_wild_typed(self, t: Trainer, rng, environment: str,
+                         want_type: str, *, tries: int = 12) -> dict | None:
+        """掷一只野生宝可梦;**指定属性**时最多重掷 tries 次直到属性匹配。
+
+        不做"过滤分布表"是有意的:地点分布是按真实版本数据来的,
+        重掷等价于"在这片草丛里多找一会儿",命中率为分布的属性占比。
+        """
+        if not want_type:
+            return B.roll_wild(t, rng=rng, environment=environment)
+        for _ in range(tries):
+            hit = B.roll_wild(t, rng=rng, environment=environment)
+            if hit and want_type in _species_types(hit.get("species")):
+                return hit
+        return None
+
+    def _maybe_rare(self, t: Trainer, state, ev, rng, hit: dict) -> dict:
+        """罕见现身事件:有概率把普通遭遇换成稀有/传说宝可梦。"""
+        if ev and ev.get("kind") == "rare" and rng.random() < 0.35 * float(
+            state.modifiers.get("rare_mult", 1.0)
+        ):
+            legend = npc.legendary_at(t, ev)
+            if legend:
+                return legend
+        return hit
+
+    async def _emit_wild(self, event: AstrMessageEvent, t: Trainer, state, world,
+                         loc: str, hit: dict, notice: list[str]):
+        """野生遭遇开战(并把结构化信息交给委托系统)。"""
+        level = hit["level"]
+        _entry = get_dex().species.get(str(hit.get("species")) or "") or {}
+        meta = {
+            "kind": "wild",
+            "title": f"野生的{hit['zh']}",
+            "location": loc,
+            "region": t.region,
+            # 任务系统/结算卡需要的结构化信息。
+            # 注意:遭遇结果是 methods(复数,列表)而不是 method —— 早期按
+            # method 取值永远是空串,导致"钓鱼捕获"类委托无法推进。
+            "species": str(hit.get("species") or ""),
+            "types": list(hit.get("types") or _entry.get("types") or []),
+            "method": _primary_method(hit.get("methods")),
+            "new_species": not t.seen(str(hit.get("species")) or ""),
+        }
+        log = B.start(
+            t,
+            [{"species": hit["species"], "level": level}],
+            kind="wild",
+            wild=True,
+            meta=meta,
+            weather=_battle_weather(state, t.region),
+            day=state.day,
+        )
+        self._save(t)
+        _hint = self._battle_hint(t)
+        async for r in self._emit_battle(
+            event, t, meta, log,
+            text="\n".join(notice) + "\n" + self._battle_intro(meta, log)
+            + f"\n\n{_hint}",
+            keep="\n".join(notice) + "\n" + _hint,
+            status=True,
+        ):
+            yield r
 
     @filter.command("对战", alias={"battle", "出招", "move"})
     async def cmd_battle(self, event: AstrMessageEvent):

@@ -1305,6 +1305,17 @@ class Screen:
             self.text_right(x1 - 5, y0 + 1.4, right, size=size, fill=TITLE_FG,
                             stroke=0.6, sfill=BOX_EDGE)
 
+    @property
+    def content_bottom(self) -> int:
+        """内容区的下边界(底部提示条上方留出间隙)。
+
+        `footer()` 占 y=h-16..h-5,再留 4px 间隙 ⇒ 面板底边最多到 h-20。
+        **所有界面最下面那块 window 都应该用它**,别再各写各的 143/144/150 ——
+        之前各写各的,`/宝可梦` 写到 152 直接和提示条叠在一起(用户反馈),
+        队伍界面第 6 行写到 174 也压住了提示条。
+        """
+        return int(self.h) - 20
+
     def footer(self, text: str, *, box=None, size: float = 7.8) -> None:
         if box is None:
             # 跟着画布高度走:默认 160 高时算出来仍是 (4,144,236,155),与旧版一致;
@@ -1490,7 +1501,7 @@ def _ratio(cur, mx) -> float:
 # ══════════════════════════════════════════════════════════════════
 # 界面:队伍(FRLG 队伍菜单)
 # ══════════════════════════════════════════════════════════════════
-PARTY_H = 186   # 队伍界面专用画布高度(比默认 160 高:6 行都要够宽裕)
+PARTY_H = 196   # 队伍界面专用画布高度(比默认 160 高:6 行都要够宽裕)
 
 
 def render_party(
@@ -1512,6 +1523,8 @@ def render_party(
     try:
         # 行高从 21 加到 26:原版 6×21 正好把最后一行的框压到底部提示条上,
         # 名字行与 HP 条之间只剩 0.5px(用户反馈"HP 图标与 Lv 贴太近")。
+        # 画布高度必须跟着长:6 行 ×26 从 y=19 排到 174,而 footer 在 h-16 起 ——
+        # 186 高时提示条落在 170,和第 6 行重叠(测试抓到的),196 高才留出间隙。
         sc = Screen(scale=scale, h=PARTY_H)
         sc.title_bar(title, right=f"{money:,}₽")
         top = 19
@@ -1606,7 +1619,7 @@ def render_bag(
             sc.text_right(228, y0 + 1.5, f"×{int(it.get('count') or 0)}", size=8.4,
                           fill=TEXT)
         # 说明框
-        sc.window((5, 113, 235, 144), radius=2)
+        sc.window((5, 113, 235, sc.content_bottom), radius=2)
         cur = shown[selected] if 0 <= selected < len(shown) else (shown[0] if shown else {})
         lines = sc.wrap(str(cur.get("desc") or "—"), 220, size=8, limit=3)
         for i, ln in enumerate(lines):
@@ -1634,8 +1647,8 @@ def render_trainer_card(
     try:
         sc = Screen(scale=scale)
         sc.title_bar("训练家卡")
-        sc.window((5, 19, 128, 143), radius=3)
-        sc.window((132, 19, 235, 143), radius=3)
+        sc.window((5, 19, 128, sc.content_bottom), radius=3)
+        sc.window((132, 19, 235, sc.content_bottom), radius=3)
         sc.ball(14, 26, 7)
         # 长名字必须截断:左框只到 x=128,否则会横穿到右侧徽章盒上
         sc.text(38, 26, _fit(sc, str(info.get("name") or "训练家"), 84, 11),
@@ -1734,7 +1747,7 @@ def render_dex(
                                fill=HP_OK if val >= 80 else (HP_MID if val >= 50 else HP_LOW))
             sc.text_right(232, y, str(val) if known else "?", size=7, fill=TEXT)
             y += 8.5
-        sc.window((5, 115, 235, 145), radius=3)
+        sc.window((5, 115, 235, sc.content_bottom), radius=3)
         flavor = str(entry.get("flavor") or entry.get("flavorEn") or "—")
         if not known:
             flavor = "还没有见过这只宝可梦。先去野外找到它,或者把它收服吧。"
@@ -1835,9 +1848,11 @@ def render_mon_summary(mon: dict, *, index: int = 1, party_size: int = 1,
                 sc.text(x + 26, y + 0.4, f"({int(b)})", size=6.2, fill=TEXT_DIM)
             sc.text_right(xr, y, str(int(stats.get(key) or 0)), size=7.8, fill=TEXT)
 
+        # 底部提示条(footer)在 160 高的画布上占 y=144..155 —— 下面这两个窗口
+        # **不能超过 140**,否则会被提示条压住(用户反馈的"重叠")。
         # ── 左下:特性 / 性格 / 亲密 / 持有物 ──
-        sc.window((5, 96, 118, 152), radius=2)
-        y = 100.0
+        sc.window((5, 96, 118, 140), radius=2)
+        y = 99.0
         for label, value in (
             ("特性", str(mon.get("ability_zh") or "?")),
             ("性格", str(mon.get("nature_zh") or "?")),
@@ -1846,19 +1861,15 @@ def render_mon_summary(mon: dict, *, index: int = 1, party_size: int = 1,
         ):
             sc.text(10, y, label, size=6.8, fill=TEXT_DIM)
             sc.text(34, y, _fit(sc, value, 84, 7.2), size=7.2, fill=TEXT)
-            y += 9
-        desc = str(mon.get("ability_desc") or "")
-        if desc:
-            sc.text(10, 137, _fit(sc, desc, 106, 6.2), size=6.2, fill=TEXT_DIM)
-
+            y += 9.0
         # ── 右下:招式 + PP ──
-        sc.window((122, 96, 235, 152), radius=2)
-        sc.text(127, 99, "招式", size=7.0, fill=TEXT_DIM)
+        sc.window((122, 96, 235, 140), radius=2)
+        sc.text(127, 98, "招式", size=7.0, fill=TEXT_DIM)
         moves = list(mon.get("moves") or [])
         if not moves:
             sc.text(127, 112, "还没有招式", size=7.6, fill=TEXT_DIM)
         for i, mv in enumerate(moves[:4]):
-            y = 107 + i * 10
+            y = 104.5 + i * 8.8
             # 属性用左侧小色块表示(省下横向空间给招式名与 PP)
             if mv.get("type"):
                 sc.d.rectangle([127, y + 1.5, 130.5, y + 7],
@@ -1889,19 +1900,20 @@ def render_box(mons: list[dict], *, capacity: int = 0, money: int = 0,
         sc.title_bar("电脑 · 宝可梦仓库",
                      right=f"{len(mons)}/{capacity}只" if capacity else f"{len(mons)}只")
         if not mons:
-            sc.window((5, 19, 235, 150), radius=2)
+            sc.window((5, 19, 235, sc.content_bottom), radius=2)
             sc.text_center(120, 70, "仓库是空的。", size=9, fill=TEXT_DIM)
             sc.text_center(120, 84, "队伍满 6 只后收服的宝可梦会存到这里。",
                            size=7.2, fill=TEXT_DIM)
             sc.footer("取出:`/队伍 取出 <序号>`", size=7.4)
             return sc.finish()
-        cols, rows, cw, ch = 2, 7, 116, 18
+        # ch×rows 必须让最后一格的下边缘 ≤ 140(footer 在 144..155)
+        cols, rows, cw, ch = 2, 7, 116, 17
         for i, mon in enumerate(mons[:cols * rows]):
             cx = 4 + (i % cols) * (cw + 1)
             cy = 19 + (i // cols) * ch
             sc.window((cx, cy, cx + cw - 1, cy + ch - 1), radius=2)
-            sc.sprite(str(mon.get("species") or ""), ground=(cx + 14, cy + ch - 4),
-                      factor=0.5, bounds=(24, ch - 8),
+            sc.sprite(str(mon.get("species") or ""), ground=(cx + 14, cy + ch - 3),
+                      factor=0.5, bounds=(24, ch - 6),
                       dim=_ratio(mon.get("cur_hp"), mon.get("max_hp")) <= 0)
             sc.text(cx + 27, cy + 2, _fit(sc, str(mon.get("name") or "?"), 58, 7.6),
                     size=7.6, fill=TEXT)
@@ -1911,7 +1923,7 @@ def render_box(mons: list[dict], *, capacity: int = 0, money: int = 0,
                 lv += "♂" if g == "M" else "♀"
             sc.text_right(cx + cw - 4, cy + 2, lv, size=6.8, fill=TEXT_DIM)
             # hp_bar 参数是 (x, y, 宽, 高)
-            sc.hp_bar((cx + 27, cy + 11, cw - 34, 4),
+            sc.hp_bar((cx + 27, cy + 10.5, cw - 34, 4),
                       _ratio(mon.get("cur_hp"), mon.get("max_hp")))
         more = len(mons) - cols * rows
         tail = f"共 {len(mons)} 只"

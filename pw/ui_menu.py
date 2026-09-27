@@ -178,8 +178,8 @@ def render_map(
 
         sc.title_bar("镇地图", right=region)
         MAP = (5, 19, 150, 108)
-        TOWN = (5, 111, 150, 144)
-        INFO = (153, 19, 235, 144)
+        TOWN = (5, 111, 150, sc.content_bottom)
+        INFO = (153, 19, 235, sc.content_bottom)
         sc.window(MAP, radius=2)
         sc.window(TOWN, radius=2)
         sc.window(INFO, radius=2)
@@ -382,7 +382,7 @@ def render_shop(
             sc.text(14, list_top + 6, "这里暂时没有商品。", size=8.5, fill=TEXT_DIM)
 
         # 底部说明框
-        sc.window((5, 115, 235, 144), radius=2)
+        sc.window((5, 115, 235, sc.content_bottom), radius=2)
         cur = shown[sel] if n else {}
         head = f"{cur.get('zh') or cur.get('key') or '—'} · 持有 ×{int(cur.get('count') or 0)}"
         sc.text(10, 117, head, size=7.6, fill=TEXT_DIM)
@@ -418,8 +418,8 @@ def render_gym(
         badge_name = str(gym.get("badge") or "徽章")
 
         sc.title_bar(str(gym.get("title") or "道馆"), right=str(region_zh or ""))
-        LEFT = (5, 19, 130, 144)
-        RIGHT = (133, 19, 235, 144)
+        LEFT = (5, 19, 130, sc.content_bottom)
+        RIGHT = (133, 19, 235, sc.content_bottom)
         sc.window(LEFT, radius=3)
         sc.window(RIGHT, radius=3)
 
@@ -529,7 +529,7 @@ def render_league(
         done_set = {str(d) for d in (done or [])}
 
         sc.title_bar("宝可梦联盟", right=str(region_zh or ""))
-        sc.window((5, 19, 235, 142), radius=3)
+        sc.window((5, 19, 235, sc.content_bottom), radius=3)
 
         rows: list[tuple[dict, bool, bool]] = []  # (数据, 是否已战胜, 是否冠军)
         for i, e in enumerate(elites[:4]):
@@ -643,7 +643,7 @@ def render_story(
             sc.text(14, top + 6, "还没有可进行的主线章节。", size=8.5, fill=TEXT_DIM)
 
         # 底部:当前章节说明
-        sc.window((5, 111, 235, 144), radius=2)
+        sc.window((5, 111, 235, sc.content_bottom), radius=2)
         cur = _pick_stage(shown, done_set, cur_key)
         if cur:
             head = f"{'●' if str(cur.get('key')) in done_set else '◆'} {cur.get('title') or ''}"

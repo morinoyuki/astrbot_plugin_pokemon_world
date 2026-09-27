@@ -86,8 +86,10 @@ def render_quests(
             sc.footer("◆ 每天凌晨 4 点刷新 · 完成委托可获得金钱与道具")
             return sc.finish()
 
+        # 3 行 ×(ch+1.5) 必须收在 content_bottom(140)以内:
+        # 原本 ch=37 时第 3 行画到 y=145,压住了底部提示条。
         top = 31.0
-        ch = 37.0
+        ch = 35.0
         for i, q in enumerate(rows):
             y0 = top + i * (ch + 1.5)
             y1 = y0 + ch
@@ -109,20 +111,20 @@ def render_quests(
             # 说明
             desc = str(q.get("desc") or "")
             if desc:
-                sc.text(20, y0 + 13.4, _fit(sc, desc, 210, 7.2), size=7.2, fill=TEXT_DIM)
+                sc.text(20, y0 + 13.0, _fit(sc, desc, 210, 7.2), size=7.2, fill=TEXT_DIM)
             # 进度条 + 进度数字
             from . import quests as Q
 
-            sc.text(8, y0 + 23, Q.progress_text({**q, "progress": cur}), size=7.4,
+            sc.text(8, y0 + 21.5, Q.progress_text({**q, "progress": cur}), size=7.4,
                     fill=TEXT)
-            _progress_bar(sc, (8, y0 + 31.5, 116, y0 + 35.5),
+            _progress_bar(sc, (8, y0 + 29.5, 116, y0 + 33.5),
                           cur / max(1, need), done=done)
             # 报酬
             reward = q.get("reward") or {}
             money = int(reward.get("money") or 0)
-            sc.text_right(160, y0 + 23, f"{money}₽" if money else "", size=7.4,
+            sc.text_right(160, y0 + 21.5, f"{money}₽" if money else "", size=7.4,
                           fill=(160, 112, 24))
-            _reward_icons(sc, reward.get("items") or {}, 164, y0 + 21.5, 9)
+            _reward_icons(sc, reward.get("items") or {}, 164, y0 + 20, 9)
         # 剩下的空位也画出来,免得下面空一大片
         for j in range(len(rows), 3):
             y0 = top + j * (ch + 1.5)

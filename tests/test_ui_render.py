@@ -611,3 +611,95 @@ def test_unobtained_badge_glyph_has_no_gold_leak():
         if im.getpixel((x, y)) == gold
     ]
     assert not leaked, f"未获得徽章里泄漏了金色像素:{leaked[:5]}"
+
+
+def _content_gap_above_footer(im, scale):
+    """返回 (纯背景间隙行数, 最低内容行)。
+
+    `Screen.footer()` 占 y=h-16..h-5;`window()` 的投影会让面板底边下方再多 2px。
+    所以允许的"空"像素只有 背景 / 投影 / 面板投影色,其余都算内容。
+    """
+    allowed = (UI.BG, UI.SHADOW, UI.BOX_SHADOW)
+    h = im.size[1] // scale
+    footer_top = h - 16
+    lowest = -1
+    for ly in range(footer_top):
+        for lx in range(0, im.size[0], 2):
+            if im.getpixel((lx, ly * scale + scale // 2)) not in allowed:
+                lowest = ly
+                break
+    return footer_top - lowest, lowest
+
+
+def test_no_screen_overlaps_the_footer_bar():
+    """任何界面都不能压到底部提示条上。
+
+    用户的反馈是"`/宝可梦` 下面两个窗口跟底部提示框重叠":那两个 window 画到
+    y=152,而提示条在 144 —— 直接叠了 8px。同样的隐患当时还在队伍(第 6 行到 174)、
+    委托板(第 3 行到 145)等界面里。现在统一用 `Screen.content_bottom`(= h-20),
+    这里逐个界面量"提示条上方还剩多少纯背景行",要求 ≥1(也就是没有内容落进提示条)。
+    """
+    from pw import ui_info as I
+    from pw import ui_menu as M
+    from pw import ui_quest as Q
+    from pw.dex import get_dex
+
+    dex = get_dex()
+    entry = dict(dex.species["pikachu"])
+    entry["_key"] = "pikachu"
+    mon = dict(
+        MON_A, species="charizard", name="喷火龙", level=36, gender="M",
+        exp_pct=42.0, exp_now=1200, exp_next=2900,
+        stats={"hp": 113, "atk": 76, "def": 72, "spa": 94, "spd": 77, "spe": 88},
+        base=dex.species["charizard"]["baseStats"], nature_zh="勤奋",
+        ability_zh="猛火", ability_desc="HP 减少时火属性招式威力提高。",
+        item_zh="无", friendship=90, dex_no=6, genus="火焰宝可梦",
+        evo_hint="可进化为 超级喷火龙X",
+        moves=[{"zh": "喷射火焰", "pp": 15, "pp_max": 15, "type": "Fire"},
+               {"zh": "劈开", "pp": 20, "pp_max": 20, "type": "Normal"}],
+    )
+    quest = {"giver": "捕虫少年阿明", "title": "帮忙补充图鉴", "desc": "帮我抓 2 只。",
+             "objective": {"kind": "catch", "count": 2},
+             "reward": {"money": 300, "items": {"poke-ball": 1}}}
+    screens = {
+        "party": UI.render_party([MON_A, MON_B], money=1, scale=SCALE),
+        "bag": UI.render_bag(BAG, money=1, active_pocket="balls", scale=SCALE),
+        "card": UI.render_trainer_card(CARD, scale=SCALE),
+        "dex": UI.render_dex(entry, caught=True, scale=SCALE),
+        "mon": UI.render_mon_summary(mon, index=1, party_size=3, scale=SCALE),
+        "box": UI.render_box(
+            [{"species": "pidgey", "name": "波波", "level": 5, "gender": "F",
+              "cur_hp": 12, "max_hp": 20}], capacity=60, scale=SCALE,
+        ),
+        "box_empty": UI.render_box([], capacity=60, scale=SCALE),
+        "quests": Q.render_quests([quest, quest, quest], progress=[(1, 2)] * 3,
+                                  day=1, region_zh="关都", scale=SCALE),
+        "map": M.render_map(
+            "关都",
+            [{"key": "pallet-town", "zh": "真新镇", "next": ["viridian-city"]},
+             {"key": "viridian-city", "zh": "常青市", "next": []}],
+            current="pallet-town", visited=["pallet-town"], gyms=[],
+            next_goal="常青市", scale=SCALE,
+        ),
+        "shop": M.render_shop(
+            [{"key": "potion", "zh": "伤药", "price": 200, "desc": "回复 20 HP。"}],
+            money=3000, location_zh="深灰市", scale=SCALE,
+        ),
+        "news": I.render_news(1, world_events=["天气异常"], region_zh="关都",
+                              location_zh="真新镇", weather_zh="晴天", scale=SCALE),
+        "result": I.render_battle_result(
+            outcome="win", title="野生战", lines=["击败了 小拉达!"],
+            rewards=["获得 320₽"], growth=["新叶喵 升到了 Lv6"],
+            mon={"species": "sprigatito", "level": 6}, scale=SCALE,
+        ),
+        "gotcha": I.render_gotcha(MON_A, ball_zh="精灵球", scale=SCALE),
+        "growth": I.render_growth(MON_A, before_level=5, after_level=6,
+                                  learned=["树叶"], scale=SCALE),
+    }
+    for name, data in screens.items():
+        assert data, f"{name} 渲染失败"
+        gap, lowest = _content_gap_above_footer(_img(data), SCALE)
+        assert gap >= 1, (
+            f"{name} 的内容(最低第 {lowest} 行)压到了底部提示条"
+            f"(间隙 {gap}px)"
+        )
