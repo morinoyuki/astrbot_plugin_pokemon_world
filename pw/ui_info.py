@@ -535,9 +535,14 @@ def render_growth(mon: dict, *, before_level: int = 0, after_level: int = 0,
         sc.window(panel, radius=3)
         sc.text(12, 22, "◆ 等级提升", size=8, fill=(56, 96, 60))
         bar_w = 122
+        # 没升级就**不要画箭头**(否则出现"Lv5 → Lv5"这种看不懂的画面 —— 调用方
+        # 现在只在真升级时才出成长卡,这里再兜一层)
         sc.text(12, 32, f"Lv{before}", size=11, fill=TEXT_DIM)
-        sc.text(48, 32.6, "→", size=12, fill=(96, 94, 80))
-        sc.text(62, 30, f"Lv{after}", size=14, fill=(40, 88, 44))
+        if after > before:
+            sc.text(48, 32.6, "→", size=12, fill=(96, 94, 80))
+            sc.text(62, 30, f"Lv{after}", size=14, fill=(40, 88, 44))
+        else:
+            sc.text(12, 30, f"Lv{before}", size=14, fill=(40, 88, 44))
         # 经验条:旧位置画箭头,新位置用青色填充,体现"跳了一截"
         ratio_before = _ratio(mon.get("exp_pct"), 100.0)
         jump = min(1.0, ratio_before + 0.25)

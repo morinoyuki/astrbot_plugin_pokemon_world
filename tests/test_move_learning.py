@@ -294,3 +294,90 @@ def test_candy_levelup_lines_also_carry_name_and_effect():
             if "想学" in line or "学会了" in line:
                 assert "杰尼龟" in line, f"没写清是谁学的:{line}"
                 assert "[" in line and "]" in line, f"没写属性分类:{line}"
+
+
+# ══════════════════════════════════════════════════════════════════
+# 成长卡:只涨经验不出卡,升级时主角要对
+# ══════════════════════════════════════════════════════════════════
+def _settle(tmp, *, near=None, second_near=None):
+    """打一场"训练家战胜利"并返回 (res, trainer)。
+
+    near:两只都停在"差 near 点经验升级";second_near:只让第 2 只接近升级。
+    """
+    from pw import battle as B
+    from pw.dex import get_dex
+    from pw.engine import Battle, Side, create_pokemon
+    from pw.player import new_trainer
+    from pw.util import game_day
+
+    dex = get_dex()
+    day = game_day()
+    t = new_trainer("u1", "g1", "小智", starter="杰尼龟", day=day)
+    mon = create_pokemon("pidgey", 5).to_dict()
+    mon["id"] = "m2"
+    t.data["party"].append(mon)
+    for i, m in enumerate(t.data["party"]):
+        n = second_near if (second_near is not None and i == 1) else (near or 90)
+        m["exp"] = dex.exp_for_level(dex.growth_of(m["species"]), m["level"] + 1) - n
+    b = Battle(player=Side.from_dict({}), enemy=Side.from_dict({}))
+    b.player.party = [B.dict_to_mon(x) for x in t.data["party"]]
+    b.enemy.party = [create_pokemon("caterpie", 3)]
+    res = B.TurnResult(outcome="win")
+    B._finish_win(t, b, {"kind": "trainer"}, res, daytime="day",
+                  money_mult=1.0, day=day)
+    return res, t
+
+
+def test_no_growth_card_when_nobody_levels_up():
+    """只涨经验(没人升级)不能出成长卡 —— 否则会画出"Lv5 → Lv5"这种荒唐画面。
+
+    实测反馈:杰尼龟打赢、波波也涨了经验,卡片写"lv5 → lv5"。
+    根因:旧代码只要 `res.growth` 非空就出卡,这时没有升级明细可选,
+    等级两处都退化成当前等级。
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        res, _t = _settle(tmp, near=90)          # 两只都不升级
+        assert res.growth, "应该还有经验文本(给结果卡用)"
+        assert all(not d["levels"] for d in res.growth_detail), res.growth_detail
+        leveled = next((d for d in res.growth_detail if d.get("levels")), None)
+        assert leveled is None, "没人升级就不该有升级明细(调用方据此不出卡)"
+
+
+def test_growth_card_belongs_to_the_leveled_mon():
+    """成长卡主角 = **真的升级了的那一只**,等级跳变必须正确。"""
+    with tempfile.TemporaryDirectory() as tmp:
+        res, _t = _settle(tmp, near=None, second_near=3)   # 只有波波升级
+        leveled = next((d for d in res.growth_detail if d.get("levels")), None)
+        assert leveled, res.growth_detail
+        assert leveled["name"] == "波波", leveled
+        assert (leveled["from_level"], leveled["to_level"]) == (5, 6), leveled
+
+        # 都升级时:第一个升级的(杰尼龟)当主角
+        res2, _t2 = _settle(tmp, near=3)
+        first = next((d for d in res2.growth_detail if d.get("levels")), None)
+        assert first and first["name"] == "杰尼龟", res2.growth_detail
+        assert (first["from_level"], first["to_level"]) == (5, 6)
+
+        # 另一只的升级也要在明细里(各自独立,不互相覆盖)
+        names = {d["name"]: d["to_level"] for d in res2.growth_detail}
+        assert names.get("波波") == 6, names
+
+
+def test_growth_renderer_never_shows_equal_level_arrow():
+    """兜底:等级没变时渲染层也不许画 "Lv5 → 5"。"""
+    from pw import ui_info as I
+    from pw import ui_render as UI
+
+    seen: list[str] = []
+    orig = UI.Screen.text
+    try:
+        UI.Screen.text = lambda self, x, y, s, **kw: (
+            seen.append(str(s)), orig(self, x, y, s, **kw))[1]
+        data = I.render_growth({"species": "pidgey", "name": "波波", "level": 5,
+                                "exp_pct": 30.0},
+                               before_level=5, after_level=5, scale=1)
+    finally:
+        UI.Screen.text = orig
+    assert data
+    assert not any(s == "→" for s in seen), seen
+    assert "Lv5" in " ".join(seen)

@@ -3711,22 +3711,23 @@ class PokemonWorldPlugin(Star):
                 ):
                     yield r
             return
-        if res.growth:
-            # 成长卡只讲**升级的那一只**。以前是从 res.growth 的所有文字行里
-            # 刮 `「…」` 来拼 learned/pending,结果全队的"学会/待学"都堆到
-            # 当前出战的那只头上(杰尼龟的"想学「缩入壳中」"出现在波波卡上)。
-            detail = next((d for d in res.growth_detail if d.get("levels")), None)
-            if detail is None and res.growth_detail:
-                detail = res.growth_detail[-1]
-            idx = int((detail or {}).get("index") or 0)
+        # 成长卡只讲**升级的那一只**,而且**没人升级就不出这张卡**:
+        # 以前只要涨了经验就出卡,这时没有明细可选,等级两处都退化成当前等级,
+        # 于是画出一张"Lv5 → Lv5"的荒唐卡(实测反馈);
+        # 只涨经验的情况交给结果卡的"── 成长 ──"文字行。
+        # 另外以前是从 res.growth 的所有文字行里刮 `「…」` 拼 learned/pending,
+        # 全队的"学会/待学"都会堆到当前出战的那只头上(杰尼龟的招式出现在波波卡上)。
+        detail = next((d for d in res.growth_detail if d.get("levels")), None)
+        if detail is not None:
+            idx = int(detail.get("index") or 0)
             md = t.party[idx] if 0 <= idx < len(t.party) else None
             view_g = B._mon_view(B.dict_to_mon(md)) if md else mon
-            learned = list((detail or {}).get("learned") or [])
-            pending = list((detail or {}).get("pending") or [])
-            evo_from = growth.species_zh(str((detail or {}).get("evolved_from") or ""))
-            evo_to = growth.species_zh(str((detail or {}).get("evolved_to") or ""))
-            before_level = int((detail or {}).get("from_level") or 0)
-            after_level = int((detail or {}).get("to_level") or 0)
+            learned = list(detail.get("learned") or [])
+            pending = list(detail.get("pending") or [])
+            evo_from = growth.species_zh(str(detail.get("evolved_from") or ""))
+            evo_to = growth.species_zh(str(detail.get("evolved_to") or ""))
+            before_level = int(detail.get("from_level") or 0)
+            after_level = int(detail.get("to_level") or 0)
             async for r in self._emit_ui(
                 event, "growth",
                 lambda: UII.render_growth(
