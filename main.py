@@ -5215,17 +5215,22 @@ def _web_edit_mon(d: dict, act: dict) -> str:
     raw = rows[idx - 1]
     mon = B.dict_to_mon(raw)
     st = act.get("set") or {}
+    dex = get_dex()
+    floor_exp = lambda lv: dex.exp_for_level(dex.growth_of(mon.species), lv)  # noqa: E731
+    # 顺序很重要:`exp` 先按给定值换算等级,`level` 后写入并**压过** exp ——
+    # 反过来的话,表单里带上的旧 exp 会把刚设好的等级**算回去**
+    # (实测:设 Lv20 + 表单里的旧 exp 135 → 又变回 Lv5,"编辑等级无法保存")。
+    if "exp" in st and "level" not in st:
+        mon.exp = max(0, coerce_int(st["exp"], mon.exp))
+        mon.level = min(100, max(1, dex.level_from_exp(dex.growth_of(mon.species),
+                                                        mon.exp)))
+        growth.recompute(mon)
     if "level" in st:
         lv = min(100, max(1, coerce_int(st["level"], mon.level)))
+        # 升级:经验至少补到该等级下限(已经更高就保留);
+        # 降级:多余经验一并丢掉,否则下一次涨经验会立刻又升回去
+        mon.exp = floor_exp(lv) if lv < mon.level else max(int(mon.exp), floor_exp(lv))
         mon.level = lv
-        dex = get_dex()
-        # 等级变了就把经验对齐到该等级的下限,免得出现"Lv20 却是 Lv5 的经验"
-        mon.exp = max(int(mon.exp), dex.exp_for_level(dex.growth_of(mon.species), lv))
-        growth.recompute(mon)
-    if "exp" in st:
-        mon.exp = max(0, coerce_int(st["exp"], mon.exp))
-        mon.level = min(100, max(1, get_dex().level_from_exp(
-            get_dex().growth_of(mon.species), mon.exp)))
         growth.recompute(mon)
     if "friendship" in st:
         mon.friendship = min(255, max(0, coerce_int(st["friendship"], mon.friendship)))

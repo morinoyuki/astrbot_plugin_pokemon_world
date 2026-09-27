@@ -50,6 +50,21 @@ def _plugin(tmp, *, with_context: bool = False, today: bool = True):
     return p
 
 
+async def _update(p, body):
+    """带请求体的 `_web_player_update` 直调(替换模块级 _web_body)。"""
+    import pw_plugin.main as PM
+
+    async def fake():
+        return body
+
+    orig = PM._web_body
+    PM._web_body = fake
+    try:
+        return await p._web_player_update()
+    finally:
+        PM._web_body = orig
+
+
 def run(coro):
     return asyncio.run(coro)
 
@@ -414,3 +429,94 @@ def test_mon_rows_have_uniform_fields_for_party_and_box():
         box_row = d["box"][0]
         assert box_row["nickname"] == "小火马"
         assert box_row["exp"] and box_row["max_hp"], box_row
+
+
+# ── 编辑等级:后端优先级 ───────────────────────────────────────────
+def test_edit_level_wins_over_stale_exp():
+    """设等级必须生效 —— 表单里那份**旧 exp** 不能把等级算回去。
+
+    实测反馈:"编辑宝可梦等级无法保存"。根因是后端先按 `level` 设好,
+    紧接着 `exp` 分支又用**表单里带上的旧经验值**反推出等级 → 又变回原等级。
+    """
+    import asyncio
+
+    with tempfile.TemporaryDirectory() as tmp:
+        p = _plugin(tmp)
+        scope, uid = "g10086", "u1"
+        before = p.trainers.load(scope, uid)["party"][0]
+        assert before["level"] == 5
+        # 复刻前端行为:level 与(旧的)exp 一起送
+        asyncio.run(_update(p, {"scope": scope, "uid": uid, "actions": [
+            {"op": "mon", "where": "party", "index": 1,
+             "set": {"level": 20, "exp": before["exp"]}},
+        ]}))
+        after = p.trainers.load(scope, uid)["party"][0]
+        assert after["level"] == 20, f"等级没保存(又被打回 Lv{after['level']})"
+        from pw.dex import get_dex
+
+        dex = get_dex()
+        floor = dex.exp_for_level(dex.growth_of(after["species"]), 20)
+        assert after["exp"] >= floor, (after["exp"], floor)
+        # 页面上重新读到的也要是 20(前端保存后会重新拉详情)
+        detail = asyncio.run(p._web_player(scope, uid))
+        assert detail["party"][0]["level"] == 20
+
+
+def test_edit_level_down_drops_excess_exp():
+    """降级要把多余经验丢掉,否则下一次涨经验立刻又升回去。"""
+    import asyncio
+
+    from pw.dex import get_dex
+
+    with tempfile.TemporaryDirectory() as tmp:
+        p = _plugin(tmp)
+        scope, uid = "g10086", "u1"
+        asyncio.run(_update(p, {"scope": scope, "uid": uid, "actions": [
+            {"op": "mon", "where": "party", "index": 1, "set": {"level": 30}},
+        ]}))
+        up = p.trainers.load(scope, uid)["party"][0]
+        assert up["level"] == 30
+        asyncio.run(_update(p, {"scope": scope, "uid": uid, "actions": [
+            {"op": "mon", "where": "party", "index": 1, "set": {"level": 5}},
+        ]}))
+        down = p.trainers.load(scope, uid)["party"][0]
+        dex = get_dex()
+        assert down["level"] == 5
+        assert down["exp"] == dex.exp_for_level(dex.growth_of(down["species"]), 5), down["exp"]
+
+
+def test_edit_exp_only_derives_level():
+    """只改经验 → 等级按经验换算(且两者一致)。"""
+    import asyncio
+
+    from pw.dex import get_dex
+
+    with tempfile.TemporaryDirectory() as tmp:
+        p = _plugin(tmp)
+        scope, uid = "g10086", "u1"
+        dex = get_dex()
+        want = dex.exp_for_level(dex.growth_of("squirtle"), 25)
+        asyncio.run(_update(p, {"scope": scope, "uid": uid, "actions": [
+            {"op": "mon", "where": "party", "index": 1, "set": {"exp": want}},
+        ]}))
+        after = p.trainers.load(scope, uid)["party"][0]
+        assert after["exp"] == want
+        assert after["level"] == 25, after["level"]
+
+
+def test_edit_other_fields_do_not_touch_level():
+    """只改亲密度/昵称/HP 时,等级与经验不能被顺手改掉。"""
+    import asyncio
+
+    with tempfile.TemporaryDirectory() as tmp:
+        p = _plugin(tmp)
+        scope, uid = "g10086", "u1"
+        before = p.trainers.load(scope, uid)["party"][0]
+        asyncio.run(_update(p, {"scope": scope, "uid": uid, "actions": [
+            {"op": "mon", "where": "party", "index": 1,
+             "set": {"friendship": 200, "nickname": "小水", "hp": 7}},
+        ]}))
+        after = p.trainers.load(scope, uid)["party"][0]
+        assert after["level"] == before["level"] and after["exp"] == before["exp"]
+        assert after["friendship"] == 200 and after["nickname"] == "小水"
+        assert after["cur_hp"] == 7

@@ -254,6 +254,7 @@
     const list = where === "party" ? d.party : d.box;
     const m = list.find((x) => x.index === index);
     if (!m) return;
+    const cur0 = m;      // 表单初始值,用来判断"用户改了哪一项"
     const mv = (m.moves || []).map((x) => x.key).join(", ");
     openModal(`编辑 ${m.zh}(第 ${index} 只)`, `
       <div class="grid2">
@@ -271,15 +272,19 @@
       {
         label: "保存", style: "primary",
         onClick: async () => {
-          const set = {
-            level: Number($("#m-lv").value),
-            exp: Number($("#m-exp").value),
-            friendship: Number($("#m-fr").value),
-            hp: Number($("#m-hp").value),
-            nickname: $("#m-nick").value,
-            item: $("#m-item").value,
-            moves: $("#m-moves").value.split(/[,,]/).map((x) => x.trim()).filter(Boolean),
-          };
+          // **只发用户真的动过的字段**:整份表单原样回传时,`exp` 会带着旧值
+          // 把刚改的等级算回去(后端虽然已经按"level 优先"处理,这里也不留隐患)
+          const cur = (k, v) => String(v ?? "") !== String(cur0[k] ?? "");
+          const set = {};
+          if (cur("level", Number($("#m-lv").value))) set.level = Number($("#m-lv").value);
+          if (cur("exp", Number($("#m-exp").value))) set.exp = Number($("#m-exp").value);
+          if (cur("friendship", Number($("#m-fr").value))) set.friendship = Number($("#m-fr").value);
+          if (cur("cur_hp", Number($("#m-hp").value))) set.hp = Number($("#m-hp").value);
+          if (cur("nickname", $("#m-nick").value)) set.nickname = $("#m-nick").value;
+          if (cur("item", $("#m-item").value)) set.item = $("#m-item").value;
+          const mv = $("#m-moves").value.split(/[,,]/).map((x) => x.trim()).filter(Boolean);
+          if (mv.join(",") !== (m.moves || []).map((x) => x.key).join(",")) set.moves = mv;
+          if (!Object.keys(set).length) { toast("没有改动"); return false; }
           await apiPost("api/player/update", {
             scope: CUR.scope, uid: CUR.uid,
             actions: [{ op: "mon", where, index, set }],
