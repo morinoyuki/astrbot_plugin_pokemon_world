@@ -1873,86 +1873,149 @@ class PokemonWorldPlugin(Star):
 
     @filter.command("学招", alias={"learn", "学招式"})
     async def cmd_learn(self, event: AstrMessageEvent):
-        """/学招 <队伍序号> <招式> [替换 <序号|招式>]"""
+        """/学招 <队伍序号> [替换 <现有招式> | 放弃] [待定序号]
+
+        规则:**新招式只会在升级(或进化)时出现**;招式栏没满自动学会,满了就进
+        "待决定"。一口气升几级 / 同级有多个招式时它们**一起**进待决定,玩家挨个
+        选择"替换哪一招"或"放弃"。决定后不再保留,也不能随时用学习表里的招换
+        (那是"无限换招",与规则冲突)。
+        """
         t, err = self._require(event)
         if err:
             yield event.plain_result(err)
             return
         if B.in_battle(t):
-            yield event.plain_result("⚠️ 对战中不能学招式,先结束当前对战。")
+            yield event.plain_result("⚠️ 对战中不能整理招式,先结束当前对战。")
             return
         arg = self._args(event, ("学招", "learn", "学招式")).strip()
         tokens = arg.split()
-        if len(tokens) < 2:
-            yield event.plain_result("❌ 用法:`/学招 1 十万伏特` 或 `/学招 1 十万伏特 替换 3`")
+        idx = coerce_int(tokens[0], 0) if tokens else 0
+        if not idx:
+            yield event.plain_result(
+                "❌ 用法:`/学招 <队伍序号>` 查看待决定的招式 · "
+                "`/学招 <序号> 替换 <现有招式序号>` · `/学招 <序号> 放弃 [待定序号]`"
+            )
             return
-        idx = coerce_int(tokens[0], 1) or 1
         mon = t.mon(idx - 1)
         if mon is None:
             yield event.plain_result("❌ 队伍序号不对。")
             return
-        # 必须查学习表:否则 Lv5 的鲤鱼王也能学会大字爆炎(绕过等级与可学表)。
-        # 等级升级时待学的招式本来就在 learnable 里,所以这里一并覆盖。
-        _mr0 = get_dex().resolve_move(tokens[1])
-        _mr0 = str(_mr0[0]) if _mr0 else ""
-        _known = {
-            str(x.get("move") or x.get("key") or "")
-            for x in get_dex().learnable(
-                mon.species, mon.level, include_tm=True, include_tutor=True
-            )
-        }
-        if not _mr0 or _mr0 not in _known:
+        md = t.party[idx - 1]
+        pending = list(md.get("pending") or [])
+        if not pending:
             yield event.plain_result(
-                f"❌ {mon.display} 学不会「{tokens[1]}」(不在它的可学表里,或等级还不够)。"
+                f"ℹ️ {mon.display} 现在没有要决定的招式。\n"
+                "新招式**只在升级时**出现:招式栏没满会自动学会,满了会留在这里"
+                "等你选择「替换」一个旧招式或「放弃」。"
             )
             return
-        mr = get_dex().resolve_move(tokens[1])
-        if not mr:
-            yield event.plain_result(f"❌ 未收录招式「{tokens[1]}」。")
-            return
-        replace = ""
-        if len(tokens) >= 4 and tokens[2] in ("替换", "replace", "忘掉"):
-            replace = tokens[3]
-        pending = list(t.party[idx - 1].get("pending") or [])
-        if len(mon.moves) >= 4 and not replace:
-            yield event.plain_result(
-                f"⚠️ {mon.display} 已会 4 个招式 —— 要学的「{growth.move_brief(mr[0])}」"
-                "需替换掉下面一个:\n"
-                + "\n".join(
-                    f"{i}. {growth.move_brief(m)}" for i, m in enumerate(mon.moves, 1)
-                )
-                + f"\n可用:`/学招 {idx} {tokens[1]} 替换 <序号|招式>`"
-            )
-            return
-        if replace:
-            old = mon.moves[int(replace) - 1] if replace.isdigit() and 0 < int(replace) <= len(mon.moves) else ""
-            if not old:
-                r2 = get_dex().resolve_move(replace)
-                old = r2[0] if r2 and r2[0] in mon.moves else ""
-            if not old:
-                yield event.plain_result(f"❌ 找不到要替换的招式「{replace}」。")
+        action = tokens[1].lower() if len(tokens) >= 2 else ""
+        rest = tokens[2:]
+        if action in ("替换", "replace", "忘掉", "换"):
+            which = 1
+            target_arg = ""
+            if len(rest) >= 2 and rest[0].isdigit():
+                which, target_arg = coerce_int(rest[0], 1), rest[1]
+            elif rest:
+                target_arg = rest[0]
+            if not target_arg:
+                yield event.plain_result(self._pending_panel(mon, pending, idx))
                 return
-            if not growth.replace_move(mon, old, mr[0]):
+            pno = min(max(1, which), len(pending))
+            want = pending[pno - 1]
+            forgotten = self._decide_pending(t, idx, mon, md, want, target_arg)
+            if not forgotten:
                 yield event.plain_result(
-                    f"❌ 「{growth.move_zh(mr[0])}」已经会了,不用替换。"
+                    f"❌ 没找到要替换的招式(用 1-{len(mon.moves)} 的序号或招式名):\n"
+                    + "\n".join(
+                        f"{i}. {growth.move_brief(m)}" for i, m in enumerate(mon.moves, 1)
+                    )
                 )
                 return
-        elif not growth.learn_move(mon, mr[0]):
-            yield event.plain_result("❌ 学不会(招式已满或已会)。")
-            return
-        t.commit(idx - 1, mon)
-        if mr[0] in pending:
-            pending.remove(mr[0])
-        t.party[idx - 1]["pending"] = pending
-        self._save(t)
-        yield event.plain_result(f"✅ {mon.display} 学会了「{mr[1].get('zh')}」!")
-        if pending:
-            # 待替换的招式也要能看出"这招做什么",否则玩家没法决定要不要换
             yield event.plain_result(
-                "仍待决定(用 `/学招 "
-                f"{idx} <招式> 替换 <序号>` 决定):\n"
-                + "\n".join(f"· {growth.move_brief(m)}" for m in pending)
+                f"✅ {mon.display} 忘记了「{growth.move_zh(forgotten)}」,"
+                f"学会了「{growth.move_brief(want)}」!"
+                + self._pending_tail(1, len(pending) - 1, idx)
             )
+            return
+        if action in ("放弃", "discard", "skip", "不要"):
+            which = coerce_int(rest[0], 1) if rest and rest[0].isdigit() else 1
+            pno = min(max(1, which), len(pending))
+            want = pending[pno - 1]
+            md["pending"] = [m for i, m in enumerate(pending, 1) if i != pno]
+            self._save(t)
+            yield event.plain_result(
+                f"🗑️ {mon.display} 放弃了「{growth.move_brief(want)}」(以后不会再出现)。"
+                + self._pending_tail(pno, len(md["pending"]), idx)
+            )
+            return
+        yield event.plain_result(self._pending_panel(mon, pending, idx))
+
+    def _pending_panel(self, mon, pending: list[str], idx: int) -> str:
+        """待决定面板:列出每条待定招式(带效果)与现有招式,以及决定方式。"""
+        head = [f"📘 {mon.display} 升级时学到了 {len(pending)} 个新招式:"]
+        head += [f"　{i}. {growth.move_brief(mv)}" for i, mv in enumerate(pending, 1)]
+        head.append("现有招式:")
+        head += [
+            f"　{i}. {growth.move_brief(m)}" for i, m in enumerate(mon.moves, 1)
+        ]
+        if len(pending) > 1:
+            head.append(
+                f"挨个决定:`/学招 {idx} 替换 <待定序号> <现有序号>` · "
+                f"`/学招 {idx} 放弃 <待定序号>`"
+            )
+        else:
+            head.append(
+                f"决定:`/学招 {idx} 替换 <现有序号>` · `/学招 {idx} 放弃`"
+            )
+        return "\n".join(head)
+
+    def _pending_tail(self, _which: int, left: int, idx: int) -> str:
+        """处理完一条后:还有几条、怎么继续。"""
+        if left <= 0:
+            return "\n招式栏定下来了(满了就等下次升级再决定)。"
+        return f"\n还剩 {left} 条待决定:`/学招 {idx}` 继续。"
+
+    def _apply_evo(self, t: Trainer, mon, target: str, md: dict) -> list[str]:
+        """执行进化,并把"招式栏满、没学上的进化招式"记进这只的待决定。
+
+        以前 `apply_evolution` 只在有空位时学,满了**静默丢掉** —— 与"新招式
+        必须由玩家二选一"的规则不一致。
+        """
+        pend: list[str] = []
+        growth.apply_evolution(mon, target, pending_out=pend)
+        if pend:
+            growth.set_pending(md, pend)
+        return pend
+
+    def _evo_pending_line(self, mon, pend: list[str], idx: int = 0) -> str:
+        """进化后还有待决定招式时的提示行。"""
+        if not pend:
+            return ""
+        how = f"(`/学招 {idx}` 决定)" if idx else "(用 `/学招 <队伍序号>` 决定)"
+        return (
+            f"\n　└ 想学「{growth.move_brief(pend[-1])}」但招式栏满了{how}"
+        )
+
+    def _decide_pending(
+        self, t: Trainer, idx: int, mon, md: dict, want: str, replace: str
+    ) -> str:
+        """把待定招式 `want` 学上,忘掉 `replace` 指定的那个(返回被忘掉的招式,失败为空串)。"""
+        old = ""
+        if replace.isdigit() and 0 < int(replace) <= len(mon.moves):
+            old = mon.moves[int(replace) - 1]
+        else:
+            r2 = get_dex().resolve_move(replace)
+            if r2 and r2[0] in mon.moves:
+                old = r2[0]
+        if not old:
+            return ""
+        if not growth.replace_move(mon, old, want):
+            return ""
+        md["pending"] = [m for m in (md.get("pending") or []) if m != want]
+        t.commit(idx - 1, mon)
+        self._save(t)
+        return old
 
     @filter.command("进化", alias={"evolve"})
     async def cmd_evolve(self, event: AstrMessageEvent):
@@ -2013,7 +2076,7 @@ class PokemonWorldPlugin(Star):
             target = opts[0]["target"] if isinstance(opts[0], dict) else opts[0]
             t.take_item(key, 1)
             old = mon.species
-            growth.apply_evolution(mon, target)
+            pend = self._apply_evo(t, mon, target, t.party[idx - 1])
             t.commit(idx - 1, mon)
             qlines = QT.note(t, "evolve", species=old)
             self._save(t)
@@ -2021,6 +2084,7 @@ class PokemonWorldPlugin(Star):
                 f"✨ {growth.species_zh(old)} 使用了 {entry['zh']},"
                 f"进化成了 {growth.species_zh(target)}!"
             )
+            msg += self._evo_pending_line(mon, pend, idx)
             if qlines:
                 msg += "\n" + "\n".join(qlines)
             yield event.plain_result(msg)
@@ -2047,11 +2111,12 @@ class PokemonWorldPlugin(Star):
             return
         target = met[0]["target"]
         old = mon.species
-        growth.apply_evolution(mon, target)
+        pend = self._apply_evo(t, mon, target, t.party[idx - 1])
         t.commit(idx - 1, mon)
         self._save(t)
         yield event.plain_result(
             f"✨ 咦……?{growth.species_zh(old)} 进化成了 {growth.species_zh(target)}!"
+            + self._evo_pending_line(mon, pend, idx)
         )
 
     # ── 玩家间交换:报价的存与取 ──────────────────────────────
@@ -2095,7 +2160,9 @@ class PokemonWorldPlugin(Star):
         else:
             trainer.box[i] = mon_to_dict(mon, trainer.box[i])
 
-    def _trade_evo(self, mon: Pokemon, party=()) -> str:
+    def _trade_evo(
+        self, mon: Pokemon, party=(), pending_out: list[str] | None = None
+    ) -> str:
         """收到宝可梦时的通信进化(含消耗携带道具),返回新物种 key 或 ""。"""
         dex = get_dex()
         opts = [
@@ -2113,7 +2180,7 @@ class PokemonWorldPlugin(Star):
         req = str((dex.species.get(target) or {}).get("evoItem") or "")
         if mon.item and req and dex.item_matches(str(mon.item), req):
             mon.item = ""            # 通信进化消耗携带道具
-        return growth.apply_evolution(mon, target)
+        return growth.apply_evolution(mon, target, pending_out=pending_out)
 
     @filter.command("交换", alias={"trade", "连接交换", "通讯交换"})
     async def cmd_trade(self, event: AstrMessageEvent):
@@ -2183,13 +2250,21 @@ class PokemonWorldPlugin(Star):
                 recv_for_them = other.add_pokemon(mine, day=state.day)
                 # 通信进化要作用在**收到的那只 Pokemon 对象**上,再写回它所在的槽位 ——
                 # 之前这里进化的是临时对象,commit 的又是另一个临时对象,进化被丢掉了。
+                pend_mine: list[str] = []
                 evo_mine = self._trade_evo(
-                    theirs, party=tuple(p.get("species") for p in t.party)
+                    theirs, party=tuple(p.get("species") for p in t.party),
+                    pending_out=pend_mine,
                 )
+                if pend_mine:
+                    growth.set_pending(recv_for_me, pend_mine)
                 self._store_mon(t, recv_for_me, theirs)
+                pend_theirs: list[str] = []
                 evo_theirs = self._trade_evo(
-                    mine, party=tuple(p.get("species") for p in other.party)
+                    mine, party=tuple(p.get("species") for p in other.party),
+                    pending_out=pend_theirs,
                 )
+                if pend_theirs:
+                    growth.set_pending(recv_for_them, pend_theirs)
                 self._store_mon(other, recv_for_them, mine)
                 my_slot = _find_mon_slot(t, str(recv_for_me.get("id") or ""))[0]
                 self._save(t)
@@ -2355,12 +2430,12 @@ class PokemonWorldPlugin(Star):
             req_item = str((dex.species.get(target) or {}).get("evoItem") or "")
             if used_item and req_item and dex.item_matches(used_item, req_item):
                 mon.item = ""
-            growth.apply_evolution(mon, target)
+            pend = self._apply_evo(t, mon, target, t.party[idx - 1])
             t.commit(idx - 1, mon)
             self._save(t)
         yield event.plain_result(
             f"🔁 你与远方训练家完成了连接交换 —— {growth.species_zh(old)} 进化成了 "
-            f"{growth.species_zh(target)}!"
+            f"{growth.species_zh(target)}!" + self._evo_pending_line(mon, pend, idx)
         )
 
     @filter.command("使用", alias={"use", "用道具"})
@@ -2426,6 +2501,9 @@ class PokemonWorldPlugin(Star):
             need = max(1, dex.exp_for_level(rate, mon.level + 1) - mon.exp)
             res = growth.gain_exp(mon, need, daytime=B.daytime_of())
             t.take_item(key, 1)
+            # 待决定要**真的写进存档**:以前只提示"用 /学招 替换",却没记录,
+            # `/学招` 自然找不到东西
+            dropped = growth.set_pending(t.party[num - 1], res.pending)
             t.commit(num - 1, mon)
             self._save(t)
             lines = [f"🍬 {mon.display} 使用了 {entry['zh']},升到了 Lv{mon.level}!"]
@@ -2436,8 +2514,12 @@ class PokemonWorldPlugin(Star):
                 for mv in res.learned
             )
             lines.extend(
+                f"　└ 之前的「{growth.move_zh(mv)}」没来得及选择,已放弃。"
+                for mv in dropped
+            )
+            lines.extend(
                 f"　└ {mon.display} 想学「{growth.move_brief(mv)}」"
-                "(招式已满,用 `/学招` 替换)"
+                f"(招式已满 —— `/学招 {num}` 决定替换或放弃)"
                 for mv in res.pending
             )
             if res.evolved_to:

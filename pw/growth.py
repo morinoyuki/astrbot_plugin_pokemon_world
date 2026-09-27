@@ -34,6 +34,24 @@ def move_zh(key: str) -> str:
     return ((get_dex().moves.get(key) or {}).get("zh")) or key
 
 
+def set_pending(md: dict, moves) -> list[str]:
+    """把**这一批**新招式一起放进待决定,返回被顶掉的上一批旧待定。
+
+    规则(按设计确定):
+    · 一次升级里学到的多招(一口气升几级 / 同级多个招式)**全部算待决定**,
+      玩家在 `/学招` 里挨个决定"替换哪一招"或"放弃";
+    · 但旧的一批还没决定就又来了新的一批 → 旧的那批算放弃(等于是错过)。
+    """
+    new = [str(m) for m in (moves or []) if m]
+    if not new:
+        md["pending"] = []
+        return []
+    old = [str(m) for m in (md.get("pending") or []) if str(m) not in new]
+    # 同批内的重复去掉,顺序保持出现顺序(玩家按这个顺序挨个决定)
+    md["pending"] = list(dict.fromkeys(new))
+    return old
+
+
 def move_brief(key: str | None) -> str:
     """招式**一行简介**:名字 [属性/分类] 威力 + 一句效果。
 
@@ -107,6 +125,7 @@ def auto_evolve(
     daytime: str | None = None,
     trade: bool = False,
     party=(),
+    pending_out: list[str] | None = None,
 ) -> str:
     """结算"升级即以当前条件成立"的进化(等级/亲密度/招式/携带/能力值)。
 
@@ -141,14 +160,21 @@ def auto_evolve(
             break
         if not picked:
             break
-        evolved = apply_evolution(mon, picked)
+        evolved = apply_evolution(mon, picked, pending_out=pending_out)
         if not evolved:
             break
     return evolved
 
 
-def apply_evolution(mon: Pokemon, target: str) -> str:
-    """执行进化:换物种、重算数值(HP 同比例)、学进化招式、保留昵称与招式。"""
+def apply_evolution(
+    mon: Pokemon, target: str, *, pending_out: list[str] | None = None
+) -> str:
+    """执行进化:换物种、重算数值(HP 同比例)、学进化招式、保留昵称与招式。
+
+    招式栏已满时,进化该学的新招式**不再静默丢掉**,而是追加到 `pending_out`
+    (由调用方记到存档的 pending 里,等玩家自己决定替换还是放弃)——
+    规则与升级一致:新招式必须由玩家二选一。
+    """
     dex = get_dex()
     if target not in dex.species or target == mon.species:
         return ""
@@ -177,6 +203,8 @@ def apply_evolution(mon: Pokemon, target: str) -> str:
             continue
         if len(mon.moves) < 4:
             learn_move(mon, mv)
+        elif pending_out is not None and mv not in pending_out:
+            pending_out.append(mv)
     return target
 
 
@@ -223,7 +251,7 @@ def gain_exp(
         res.capped = True
 
     before_species = mon.species
-    evolved = auto_evolve(mon, daytime=daytime, party=party)
+    evolved = auto_evolve(mon, daytime=daytime, party=party, pending_out=res.pending)
     if evolved:
         res.evolved_from = before_species
         res.evolved_to = evolved

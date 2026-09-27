@@ -720,18 +720,25 @@ def test_shop_learn_evolve_blocked_in_battle():
 
 
 def test_learn_replace_reports_failure():
-    """新招已经会了时不能谎报"学会了"。"""
+    """替换序号无效时不能谎报"学会了",也不能改坏招式栏。"""
     with tempfile.TemporaryDirectory() as tmp:
         p, ev = _fresh(tmp, "小火龙")
         t = p._load(ev)
         mon = t.party[0]
         mon["moves"] = ["ember", "scratch", "growl", "firefang"]
+        mon["pending"] = ["smokescreen"]          # 升级时学到、还没决定
         p._save(t)
-        ev2 = _Event("/学招 1 ember 替换 scratch")
+        before = list(mon["moves"])
+        ev2 = _Event("/学招 1 替换 9")             # 没有第 9 招
         run_cmd(p, ev2, p.cmd_learn)
-        t2 = p._load(ev2)
-        assert list(t2.party[0]["moves"]) == ["ember", "scratch", "growl", "firefang"]
-        assert "已经会了" in "".join(ev2.outputs), "".join(ev2.outputs)
+        assert list(p._load(ev2).party[0]["moves"]) == before, "失败的替换不该改招式"
+        assert "没找到要替换的招式" in "".join(ev2.outputs), "".join(ev2.outputs)
+        # 正确序号则替换成功,并清掉这条待决定
+        ev3 = _Event("/学招 1 替换 3")
+        run_cmd(p, ev3, p.cmd_learn)
+        t3 = p._load(ev3)
+        assert "smokescreen" in t3.party[0]["moves"]
+        assert not (t3.party[0].get("pending") or []), t3.party[0].get("pending")
 
 
 def test_trainer_card_day_count_increases():
@@ -788,9 +795,12 @@ def test_trade_evolution_and_rare_candy_are_usable():
         assert "宝可梦中心" in "".join(ev4.outputs)
 
 
-def test_learn_move_checks_learnset():
-    """/学招 必须查可学表 —— 否则 Lv5 鲤鱼王都能学大字爆炎。"""
-    from pw.dex import get_dex
+def test_learn_move_cannot_teach_arbitrary_moves():
+    """`/学招` 不能凭空教学习表里的招 —— 新招式只从升级/进化来。
+
+    规则:没有"待决定"招式时,`/学招` 不会教会任何东西(旧实现允许
+    `/学招 1 大字爆炎`,Lv5 鲤鱼王也能学,等于无限换招)。
+    """
     from pw.engine import create_pokemon
 
     with tempfile.TemporaryDirectory() as tmp:
@@ -798,33 +808,79 @@ def test_learn_move_checks_learnset():
         t = p._load(ev)
         t.data["party"] = [create_pokemon("magikarp", 5).to_dict()]
         t.data["party"][0]["id"] = "m1"
+        t.data["party"][0]["moves"] = ["splash", "tackle"]
         p._save(t)
 
-        ev2 = _Event("/学招 1 大字爆炎")
-        run_cmd(p, ev2, p.cmd_learn)
-        assert "学不会" in "".join(ev2.outputs), "越级招式必须拒绝"
-        assert "fireblast" not in p._load(ev2).party[0]["moves"]
+        for cmd in ("/学招 1 大字爆炎", "/学招 1 撞击", "/学招 1 大字爆炎 替换 1"):
+            ev2 = _Event(cmd)
+            run_cmd(p, ev2, p.cmd_learn)
+            out = "".join(ev2.outputs)
+            assert "没有要决定的招式" in out, f"{cmd} → {out}"
+            moves = list(p._load(ev2).party[0]["moves"])
+            assert moves == ["splash", "tackle"], f"{cmd} 不该改招式:{moves}"
 
-        # 可学表里的招式应当能学(不能把功能本身封死)
-        dex = get_dex()
-        known = [
-            str(x.get("move") or x.get("key") or "")
-            for x in dex.learnable("magikarp", 30, include_tm=True, include_tutor=True)
-        ]
-        assert known, "鲤鱼王在 Lv30 应当有可学招式"
-        # 找一个中文名能反查到的招式
-        target = next(
-            (m for m in known if (dex.moves.get(m) or {}).get("zh")), ""
-        )
-        if target:
-            t = p._load(ev2)
-            t.data["party"][0]["moves"] = ["splash", "tackle", "bounce", "flail"]
-            p._save(t)
-            zh = dex.moves[target]["zh"]
-            ev3 = _Event(f"/学招 1 {zh} 替换 4")
-            run_cmd(p, ev3, p.cmd_learn)
-            assert "学不会" not in "".join(ev3.outputs), "".join(ev3.outputs)
-            assert target in p._load(ev3).party[0]["moves"]
+
+def test_learn_handles_a_batch_of_pending_moves():
+    """一口气升几级学到的多招要**一起**进待决定,玩家挨个替换或放弃。"""
+    from pw import growth
+
+    with tempfile.TemporaryDirectory() as tmp:
+        p, ev = _fresh(tmp, "杰尼龟")
+        t = p._load(ev)
+        t.data["party"][0]["level"] = 5
+        t.data["party"][0]["moves"] = ["watergun", "tailwhip", "tackle", "bite"]
+        p._save(t)
+
+        mon = p._load(ev).party_mon()[0]
+        res = growth.gain_exp(mon, 20000)          # 一次升很多级
+        assert len(res.pending) >= 3, res.pending  # 一批多招
+        t = p._load(ev)
+        growth.set_pending(t.party[0], res.pending)
+        p._save(t)
+        assert len(p._load(ev).party[0]["pending"]) == len(res.pending)
+
+        # 面板要列出每一条(带效果)
+        ev2 = _Event("/学招 1")
+        run_cmd(p, ev2, p.cmd_learn)
+        panel = "".join(ev2.outputs)
+        assert f"学到了 {len(res.pending)} 个新招式" in panel, panel
+        assert "挨个决定" in panel, panel
+
+        # 挨个决定:先替换第 1 条,再放弃第 1 条(列表会前移),直到清空
+        ev3 = _Event("/学招 1 替换 1 2")
+        run_cmd(p, ev3, p.cmd_learn)
+        left = list(p._load(ev3).party[0]["pending"])
+        assert len(left) == len(res.pending) - 1, left
+        assert res.pending[0] in p._load(ev3).party[0]["moves"]
+        ev4 = _Event("/学招 1 放弃 1")
+        run_cmd(p, ev4, p.cmd_learn)
+        left2 = list(p._load(ev4).party[0]["pending"])
+        assert len(left2) == len(left) - 1, left2
+        # 放弃的那条不会进招式栏
+        assert left[0] not in p._load(ev4).party[0]["moves"]
+
+
+def test_new_batch_supersedes_undecided_old_batch():
+    """上一批还没决定又来新的一批 → 旧的算放弃,只留新的那批。"""
+    from pw import growth
+
+    with tempfile.TemporaryDirectory() as tmp:
+        p, ev = _fresh(tmp, "杰尼龟")
+        t = p._load(ev)
+        t.data["party"][0]["level"] = 5
+        t.data["party"][0]["moves"] = ["watergun", "tailwhip", "tackle", "bite"]
+        t.data["party"][0]["pending"] = ["protect"]      # 上一批没决定
+        p._save(t)
+
+        mon = p._load(ev).party_mon()[0]
+        res = growth.gain_exp(mon, 600)                  # 新的一批
+        t = p._load(ev)
+        dropped = growth.set_pending(t.party[0], res.pending)
+        p._save(t)
+        assert "protect" in dropped, dropped
+        pend = list(p._load(ev).party[0]["pending"])
+        assert "protect" not in pend, pend
+        assert set(pend) == set(res.pending), (pend, res.pending)
 
 
 def test_item_evolution_respects_gender():

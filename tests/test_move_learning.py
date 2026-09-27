@@ -115,20 +115,25 @@ def test_pending_lists_show_move_effect():
         t.data["party"][0]["pending"] = ["withdraw"]
         t.data["party"][0]["level"] = 8
         p._save(t)
-        ev = _Event("/学招 1 缩入壳中")
+        ev = _Event("/学招 1")
         run_cmd(p, ev, p.cmd_learn)
         shown = "".join(str(x) for x in ev.outputs)
         assert "缩入壳中 [水/变化]" in shown, shown
-        assert "—— " in shown, f"可替换招式没有效果说明:{shown}"
+        assert "—— " in shown, f"待替换/现有招式没有效果说明:{shown}"
         assert "水枪 [水/特殊]" in shown and "——" in shown, shown
 
         # 替换成功后,待定列表清空
-        ev2 = _Event("/学招 1 缩入壳中 替换 2")
+        ev2 = _Event("/学招 1 替换 2")
         run_cmd(p, ev2, p.cmd_learn)
         assert "学会了" in "".join(str(x) for x in ev2.outputs)
         after = p._load(ev2).data["party"][0]
         assert "withdraw" in after["moves"]
         assert not (after.get("pending") or []), after.get("pending")
+        # 决定过就不能再改:再发一次 `/学招` 只会说"没有要决定的招式"
+        ev3 = _Event("/学招 1 替换 1")
+        run_cmd(p, ev3, p.cmd_learn)
+        assert "没有要决定的招式" in "".join(str(x) for x in ev3.outputs)
+        assert p._load(ev3).data["party"][0]["moves"] == after["moves"], "决定后不该再变"
 
 
 def test_mon_panel_reports_pending_move():

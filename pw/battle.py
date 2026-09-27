@@ -437,7 +437,13 @@ def _finish_win(
                 "(招式已满,用 /学招 替换)"
             )
         if g.pending:
-            trainer.party[i]["pending"] = list(g.pending)
+            # 待决定只保留最新一条:旧的还没选就又来新的 → 旧的那条算放弃,
+            # 并在战报里说明,免得玩家以为"我那条待定去哪了"
+            dropped = growth.set_pending(trainer.party[i], g.pending)
+            for mv in dropped:
+                res.growth.append(
+                    f"　└ 之前的「{growth.move_zh(mv)}」没来得及选择,已放弃。"
+                )
         res.levels_gained += int(g.levels_gained or 0)
         res.growth_detail.append(
             {
