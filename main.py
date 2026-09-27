@@ -565,6 +565,171 @@ class PokemonWorldPlugin(Star):
         ):
             yield r
 
+    def _current_mon_index(self, t: Trainer) -> int:
+        """当前"关注"的宝可梦:对战中 = 出战的那只,否则 = 队伍第一只。"""
+        if B.in_battle(t):
+            side = ((B.session(t) or {}).get("battle") or {}).get("player") or {}
+            idx = int(side.get("active") or 0)
+            if 0 <= idx < len(t.party):
+                return idx
+        return 0
+
+    def _move_line(self, key: str, *, index: int = 0, pp: int | None = None,
+                   pp_max: int | None = None) -> str:
+        """招式的一行摘要:名字 + 属性/分类 + 威力/命中 + PP + 一句效果。"""
+        dex = get_dex()
+        e = dex.moves.get(str(key)) or {}
+        zh = e.get("zh") or growth.move_zh(key)
+        cat = dex.move_category_zh(e.get("category"))
+        tlabel = dex.type_label(str(e.get("type") or ""))
+        base = int(e.get("basePower") or 0)
+        acc = e.get("accuracy")
+        head = f"{index}. {zh} [{tlabel}/{cat}]"
+        if base:
+            head += f" 威力{base}"
+        a = _accuracy_zh(acc)
+        if a not in ("必中", "—"):
+            head += f" 命中{a}"
+        if pp is not None:
+            head += f" PP {int(pp)}/{int(pp_max if pp_max is not None else pp)}"
+        eff = dex.move_short_desc(key) or "—"
+        return f"{head}\n　　{eff}"
+
+    def _move_detail(self, key: str, *, mon=None) -> str:
+        """单个招式的完整资料。"""
+        dex = get_dex()
+        e = dex.moves.get(str(key)) or {}
+        zh = e.get("zh") or growth.move_zh(key)
+        cat = dex.move_category_zh(e.get("category"))
+        tlabel = dex.type_label(str(e.get("type") or ""))
+        acc = e.get("accuracy")
+        head = f"◆ {zh}(No.{int(e.get('num') or 0):03d})"
+        if mon is not None:
+            dex2 = get_dex()
+            owner = str(mon.nickname or (dex2.species.get(mon.species) or {}).get("zh")
+                        or mon.species)
+            head += f" · {owner} Lv{mon.level}"
+        lines = [head]
+        rows = [
+            f"属性:{tlabel} · 分类:{cat}",
+            f"威力:{int(e.get('basePower') or 0) or '—'} · 命中:{_accuracy_zh(acc)}",
+            f"PP:{int(e.get('pp') or 0)} · 优先度:{int(e.get('priority') or 0)}"
+            + (" · 容易会心" if e.get("critRatio") else ""),
+        ]
+        if mon is not None:
+            cur = int(mon.pp.get(key, 0) or 0)
+            mx = int((e.get("pp") or 0) or 0)
+            rows.append(f"它当前 PP:{cur}/{mx or cur}")
+        lines += rows
+        eff = dex.move_effect_text(key)
+        if eff:
+            lines.append(f"⚙️ 实际效果:{eff}")
+        desc = str(e.get("desc") or "").replace("\n", " ").strip()
+        if "无法使用这个招式" in desc:
+            lines.append("⚠️ 这是非标准招式,当前世代(Gen9)已无法使用")
+        elif desc:
+            lines.append(f"📖 图鉴说明:{desc}")
+        if mon is not None:
+            row = dex.learnable(mon.species, 100).__iter__()
+            hit = next((it for it in row if it["move"] == key), None)
+            if key in (mon.moves or []):
+                lines.append("✅ 你的宝可梦已经学会这招")
+            elif hit:
+                lines.append(f"📗 它可以学会({_learn_zh(hit.get('methods'))})")
+            else:
+                lines.append("🚫 这只宝可梦学不了这招")
+        return "\n".join(lines)
+
+    @filter.command("招式", alias={"技能", "招式表", "move", "moves"})
+    async def cmd_move(self, event: AstrMessageEvent):
+        """/招式 [序号|名字] —— 查看招式说明与效果(对战中可随时查,不消耗回合)"""
+        t, err = self._require(event, in_battle_ok=True)
+        if err:
+            yield event.plain_result(err)
+            return
+        parts = self._args(event, ("招式", "技能", "招式表", "move", "moves")).split()
+        where, mon_dict = "party", None
+        move_arg = ""
+        if parts and parts[0] in ("电脑", "box", "仓库"):
+            hit = t.box_find(parts[1] if len(parts) > 1 else "")
+            if hit is None:
+                yield event.plain_result(
+                    f"❌ 电脑里没有「{parts[1] if len(parts) > 1 else ''}」。用 `/电脑` 看列表。"
+                )
+                return
+            where, mon_dict = "box", hit[1]
+            move_arg = parts[2] if len(parts) > 2 else ""
+        elif len(parts) >= 2 and parts[0].isdigit():
+            # `/招式 <队伍序号> <招式序号>`:指定某只宝可梦
+            idx = int(parts[0])
+            if not 1 <= idx <= len(t.party):
+                yield event.plain_result(f"❌ 队伍里没有第 {idx} 只。")
+                return
+            where, mon_dict = "party", t.party[idx - 1]
+            move_arg = parts[1]
+        elif parts:
+            where, move_arg = ("party", parts[0]) if not B.in_battle(t) else ("battle", parts[0])
+        if mon_dict is None:
+            idx = self._current_mon_index(t)
+            if not t.party:
+                yield event.plain_result("队伍是空的,先去 `/探索` 收服一只吧。")
+                return
+            where, mon_dict = "party", t.party[idx]
+        mon = B.dict_to_mon(mon_dict)
+        dex = get_dex()
+        raw = str(mon.nickname or (dex.species.get(mon.species) or {}).get("zh")
+                  or mon.species)
+        head = f"◆ {raw} Lv{mon.level} 的招式"
+        if where == "box":
+            head = f"◆ {raw}(电脑)Lv{mon.level} 的招式"
+        if not mon.moves:
+            yield event.plain_result(head + ":没有招式。")
+            return
+        # 有招式参数 → 看详情
+        if move_arg:
+            key = ""
+            if move_arg.isdigit():
+                n = int(move_arg)
+                if not 1 <= n <= len(mon.moves):
+                    yield event.plain_result(
+                        f"❌ 它只有 {len(mon.moves)} 个招式(1~{len(mon.moves)})。"
+                    )
+                    return
+                key = mon.moves[n - 1]
+            else:
+                # 先在自己会的招式里按名字找,再退到全图鉴查询
+                want = str(move_arg).strip().lower()
+                key = next(
+                    (m for m in mon.moves
+                     if want in (str(m).lower(),
+                                 str((dex.moves.get(m) or {}).get("zh") or "").lower(),
+                                 str((dex.moves.get(m) or {}).get("name") or "").lower())),
+                    "",
+                )
+                if not key:
+                    # resolve_move 返回 (key, entry) 或 None(注意别把元组当 key)
+                    hit = dex.resolve_move(move_arg)
+                    if hit and str(hit[0]) not in (mon.moves or []):
+                        yield event.plain_result(
+                            self._move_detail(str(hit[0]))
+                            + f"\n(注意:{raw} 没有学会这招)"
+                        )
+                        return
+                    key = str(hit[0]) if hit else ""
+                if not key:
+                    yield event.plain_result(f"❌ 找不到招式「{move_arg}」。")
+                    return
+            yield event.plain_result(self._move_detail(key, mon=mon))
+            return
+        # 无参数 → 招式列表
+        lines = [head, "（看详情:`/招式 <序号>`;对战中查招式**不消耗回合**）"]
+        for i, key in enumerate(mon.moves[:4], 1):
+            lines.append(self._move_line(
+                key, index=i, pp=int(mon.pp.get(key, 0) or 0),
+                pp_max=int((dex.moves.get(key) or {}).get("pp") or 0),
+            ))
+        yield event.plain_result("\n".join(lines))
+
     @filter.command("宝可梦", alias={"精灵", "查看", "资料", "mon", "pokemon"})
     async def cmd_mon(self, event: AstrMessageEvent):
         """/宝可梦 [序号|名字] —— 查看单只宝可梦的详细资料(电脑里的要加前缀)"""
@@ -622,13 +787,38 @@ class PokemonWorldPlugin(Star):
             yield r
 
     def _mon_hint(self, payload: dict) -> str:
-        """资料页图片附带的文本:特性说明 + 管理入口。"""
+        """资料页图片附带的文本:特性说明 + 招式效果 + 管理入口。
+
+        图里只能画下招式名(4 行 8.8px 的行距),所以"这招是干嘛的"放在文本里 ——
+        用户反馈"招式大部分情况下只显示了名称 没办法查看说明和效果"。
+        """
         lines = []
         ab = str(payload.get("ability_zh") or "")
         desc = str(payload.get("ability_desc") or "")
         if ab:
             lines.append(f"◆ 特性 {ab}:{desc}" if desc else f"◆ 特性 {ab}")
-        lines.append("管理:`/队伍` 查看 · 电脑里的用 `/队伍 取出 <序号>`")
+        moves = payload.get("moves") or []
+        if moves:
+            lines.append("◆ 招式")
+            for i, mv in enumerate(moves, 1):
+                key = str(mv.get("key") or "")
+                dex = get_dex()
+                e = dex.moves.get(key) or {}
+                cat = dex.move_category_zh(e.get("category"))
+                base = int(e.get("basePower") or 0)
+                bits = f"[{dex.type_label(str(e.get('type') or ''))}/{cat}"
+                if base:
+                    bits += f" 威力{base}"
+                if str(e.get("accuracy")) != "True" and isinstance(
+                    e.get("accuracy"), (int, float)
+                ):
+                    bits += f" 命中{int(e['accuracy'])}%"
+                bits += "]"
+                eff = dex.move_short_desc(key)
+                lines.append(
+                    f"{i}. {mv.get('zh')} {bits}" + (f" —— {eff}" if eff else "")
+                )
+        lines.append("详情:`/招式 <序号>` · 管理:`/队伍` 查看")
         return "\n".join(lines)
 
     @filter.command("电脑", alias={"仓库", "箱子", "box", "storage"})
@@ -2114,6 +2304,7 @@ class PokemonWorldPlugin(Star):
             f"`/对战 switch <1-{max(1, len(t.party))}>` 换人、"
             "`/对战 item <道具>`、`/对战 run`"
         )
+        out.append("(看威力与效果:`/招式 <序号>` —— 查招式不消耗回合)")
         if len(t.party) > 1:
             out.append(f"(出战:队伍第 {active + 1} 只)")
         return "\n".join(out)
@@ -2592,6 +2783,7 @@ class PokemonWorldPlugin(Star):
             mx = int((mv.get("pp") or 0) or 0)
             moves.append(
                 {
+                    "key": key,
                     "zh": growth.move_zh(key),
                     "type": str(mv.get("type") or ""),
                     "pp": int(mon.pp.get(key, 0) or 0),
@@ -3127,6 +3319,39 @@ def _team_brief(team) -> str:
         if isinstance(m, dict) and m.get("species")
     ]
     return "、".join(out) or "?"
+
+
+_LEARN_METHOD_ZH = {
+    "M": "招式机",
+    "T": "教招",
+    "E": "蛋招",
+    "S": "特殊",
+    "R": "特殊",
+    "V": "VC/旧世代",
+    "L0": "进化时",
+}
+
+
+def _accuracy_zh(acc) -> str:
+    """命中率显示。数据里 `accuracy: True` 表示**必中**(不是 1%!)。"""
+    if acc is True or acc is None:
+        return "必中"
+    if isinstance(acc, (int, float)):
+        return f"{int(acc)}%"
+    return "—"
+
+
+def _learn_zh(methods) -> str:
+    """把学习途径代码列表翻成中文(如 ["L12","M"] → "等级 12 / 招式机")。"""
+    out: list[str] = []
+    for c in methods or []:
+        c = str(c)
+        if c.startswith("L"):
+            lv = int(c[1:] or 0)
+            out.append("进化时" if lv == 0 else f"等级 {lv}")
+        else:
+            out.append(_LEARN_METHOD_ZH.get(c, c))
+    return " / ".join(out)
 
 
 def _kind_zh(kind: str | None) -> str:

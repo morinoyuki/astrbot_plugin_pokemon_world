@@ -330,3 +330,147 @@ def test_player_can_always_forfeit_out_of_battle():
         assert not B.in_battle(p._load(_Event())), f"认输没能结束战斗:{out[:150]}"
         # 结束后其他行动恢复
         assert "锁定" not in _run(p, "/治疗", "cmd_heal")
+
+
+# ══════════════════════════════════════════════════════════════════
+# /招式 —— 招式说明与效果
+# ══════════════════════════════════════════════════════════════════
+def test_move_list_shows_effect_not_just_name():
+    """列表不能只给名字 —— 每招都要有属性/分类/威力/PP + 一句效果。"""
+    with tempfile.TemporaryDirectory() as tmp:
+        p, _ev = _start(tmp)
+        out = _run(p, "/招式", "cmd_move")
+        assert "的招式" in out
+        for token in ("[草/", "威力40", "PP ", "使对手", "防御 -1", "/招式 <序号>"):
+            assert token in out, f"招式列表缺少 {token}:\n{out}"
+
+
+def test_move_detail_has_fields_and_learn_state():
+    with tempfile.TemporaryDirectory() as tmp:
+        p, ev = _start(tmp)
+        t = p._load(ev)
+        t.data["party"][0]["moves"] = ["scratch", "leafage", "tailwhip", "growl"]
+        t.data["party"][0]["pp"] = {"scratch": 35, "leafage": 40, "tailwhip": 30, "growl": 40}
+        p._save(t)
+        out = _run(p, "/招式 1", "cmd_move")
+        for token in ("属性:", "分类:", "威力:", "命中:", "PP:", "优先度:",
+                      "实际效果:", "已经学会"):
+            assert token in out, f"详情缺少 {token}:\n{out}"
+
+        # 队里没人会的招式 → 仍能查图鉴资料,但要说清楚
+        out = _run(p, "/招式 十万伏特", "cmd_move")
+        assert "十万伏特" in out and "没有学会这招" in out
+        assert "麻痹" in out, out
+        # 序号越界 / 名字不存在
+        assert "❌" in _run(p, "/招式 9", "cmd_move")
+        assert "❌" in _run(p, "/招式 不存在的招", "cmd_move")
+
+
+def test_move_can_target_party_or_box_mon():
+    with tempfile.TemporaryDirectory() as tmp:
+        p, ev = _start(tmp)
+        second = create_pokemon("charmander", 8).to_dict()
+        second["id"] = "m2"
+        t = p._load(ev)
+        t.data["party"].append(second)
+        p._save(t)
+        _add_box(p, ev, "pidgey", 6, "bx1")
+
+        out = _run(p, "/招式 2 1", "cmd_move")      # 第 2 只宝可梦的第 1 招
+        assert "小火龙" in out, f"详情要写清是谁的招式:{out}"   # 标题带持有者
+        assert "实际效果:" in out
+        out = _run(p, "/招式 电脑 1", "cmd_move")
+        assert "波波" in out and "电脑" in out
+        assert "❌" in _run(p, "/招式 电脑 9", "cmd_move")
+        assert "❌" in _run(p, "/招式 5 1", "cmd_move")
+
+
+def test_move_lookup_during_battle_is_free():
+    """对战中查招式必须放行,而且**不消耗回合**。"""
+    with tempfile.TemporaryDirectory() as tmp:
+        p, ev = _start(tmp)
+        t = p._load(ev)
+        t.data["region"] = "kanto"
+        p._save(t)
+        _start_battle(p, ev, level=12, species="pidgey")
+        turn0 = ((p._load(ev).data.get("battle") or {}).get("battle") or {}).get("turn")
+
+        out = _run(p, "/招式", "cmd_move")
+        assert "其他行动已锁定" not in out, out
+        assert "招式" in out
+        out = _run(p, "/招式 2", "cmd_move")
+        assert "实际效果:" in out, out
+        turn1 = ((p._load(ev).data.get("battle") or {}).get("battle") or {}).get("turn")
+        assert turn0 == turn1, "查招式不该推进回合"
+
+        # 对战提示里要告诉玩家可以查招式
+        hint = p._battle_hint(p._load(ev))
+        assert "/招式" in hint, hint
+
+
+def test_bai_zhong_moves_are_not_shown_as_1_percent():
+    """数据里 accuracy=True 是"必中",不是 1%(Python 的 True 是 int)。"""
+    from pw.dex import get_dex
+
+    dex = get_dex()
+    assert dex.moves["aerialace"].get("accuracy") is True     # 必中招式
+    from test_commands import _MOD as _PKG
+
+    acc_mod = sys.modules.get("pw_plugin.main", _PKG)
+    out = acc_mod._accuracy_zh(True)
+    assert out == "必中", out
+    assert acc_mod._accuracy_zh(100) == "100%"
+    assert acc_mod._accuracy_zh(None) == "必中"
+    # 列表里不能出现"命中1%"
+    with tempfile.TemporaryDirectory() as tmp:
+        p, ev = _start(tmp)
+        t = p._load(ev)
+        t.data["party"][0]["moves"] = ["aerialace", "swift"]
+        t.data["party"][0]["pp"] = {"aerialace": 20, "swift": 20}
+        p._save(t)
+        listed = _run(p, "/招式", "cmd_move")
+        assert "命中1%" not in listed, listed
+
+
+def test_move_effect_text_is_derived_from_structured_fields():
+    """效果文本要来自**真正生效的字段**(而不是图鉴风味文字)。"""
+    from pw.dex import get_dex
+
+    dex = get_dex()
+    cases = {
+        "flamethrower": "灼伤",        # secondary.status
+        "tailwhip": "防御 -1",         # boosts
+        "doublekick": "连续攻击",       # multihit
+        "gigadrain": "回复造成伤害",     # drain
+        "bravebird": "反作用伤害",      # recoil
+        "sunnyday": "大晴天",          # weather
+        "reflect": "反射壁",           # sideCondition
+        "quickattack": "优先度 +1",     # priority
+        "selfdestruct": "自身倒下",      # selfdestruct
+        "recover": "回复自身最大 HP",    # heal
+        "protect": "自身",             # volatileStatus(给自己上的)
+    }
+    for key, want in cases.items():
+        got = dex.move_effect_text(key)
+        assert want in got, f"{key} 的效果文本缺少「{want}」:{got}"
+    # 占位说明("无法使用这个招式")不能当效果显示
+    assert "无法使用" not in dex.move_short_desc("barrage")
+    assert "无法使用" not in dex.move_short_desc("flameburst")
+    # 丢了 secondary 的招式要退回 desc 里的效果句(火焰牙的畏缩/灼伤)
+    assert "灼伤" in dex.move_short_desc("firefang")
+
+
+def test_mon_detail_hint_lists_move_effects():
+    """`/宝可梦` 图片只能画招式名,效果要跟在消息文本里。"""
+    with tempfile.TemporaryDirectory() as tmp:
+        p, ev = _start(tmp)
+        t = p._load(ev)
+        t.data["party"][0]["moves"] = ["flamethrower", "tailwhip"]
+        t.data["party"][0]["pp"] = {"flamethrower": 15, "tailwhip": 30}
+        p._save(t)
+        payload = p._mon_payload(p._load(ev), p._load(ev).party[0], index=1, party_size=1)
+        hint = p._mon_hint(payload)
+        assert "◆ 招式" in hint
+        assert "喷射火焰" in hint and "灼伤" in hint
+        assert "摇尾巴" in hint and "防御 -1" in hint
+        assert "/招式 <序号>" in hint

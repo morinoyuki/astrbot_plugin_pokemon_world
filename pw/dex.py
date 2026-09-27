@@ -21,6 +21,7 @@ import os
 import re
 import unicodedata
 from functools import cache, lru_cache
+from typing import ClassVar
 
 DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
 
@@ -271,6 +272,196 @@ class Dex:
         return "效果一般(1×)"
 
     # ─────────────── 数值计算 ───────────────
+
+    # ── 招式展示 ──
+    MOVE_CATEGORY_ZH: ClassVar[dict[str, str]] = {
+        "Physical": "物理",
+        "Special": "特殊",
+        "Status": "变化",
+    }
+    STATUS_FIELD_ZH: ClassVar[dict[str, str]] = {
+        "brn": "灼伤", "par": "麻痹", "slp": "睡眠", "frz": "冰冻", "psn": "中毒",
+        "tox": "剧毒", "confusion": "混乱", "flinch": "畏缩", "trap": "束缚",
+        "leechseed": "寄生种子", "partiallytrapped": "束缚", "saltcure": "盐腌",
+        "protect": "守住", "attract": "着迷", "substitute": "替身", "curse": "咒语",
+        "aquaring": "水流环", "foresight": "识破", "charge": "充电",
+        "defensecurl": "变圆", "bide": "忍耐", "smackdown": "击落",
+        "banefulbunker": "碉堡", "burningbulwark": "火焰守护", "destinybond": "同命",
+        "focusenergy": "集气", "ingrain": "扎根", "magiccoat": "魔法反射",
+        "magnetrise": "电磁飘浮", "minimize": "变小", "mudsport": "玩泥巴",
+        "powertrick": "力量戏法", "roost": "羽栖", "smackdown2": "击落",
+        "stockpile": "蓄力", "tarshot": "沥青射击", "telekinesis": "意念移物",
+        "watersport": "玩水", "yawn": "哈欠",
+    }
+    BOOST_FIELD_ZH: ClassVar[dict[str, str]] = {
+        "atk": "攻击", "def": "防御", "spa": "特攻", "spd": "特防", "spe": "速度",
+        "accuracy": "命中", "evasion": "闪避",
+    }
+    WEATHER_ZH: ClassVar[dict[str, str]] = {
+        "sunnyday": "大晴天", "raindance": "下雨", "sandstorm": "沙暴",
+        "snowscape": "下雪", "hail": "冰雹", "desolateland": "大日照",
+        "primordialsea": "大雨", "deltastream": "乱流",
+    }
+    TERRAIN_ZH: ClassVar[dict[str, str]] = {
+        "electricterrain": "电气场地", "grassyterrain": "青草场地",
+        "mistyterrain": "薄雾场地", "psychicterrain": "精神场地",
+    }
+    SIDE_CONDITION_ZH: ClassVar[dict[str, str]] = {
+        "reflect": "反射壁", "lightscreen": "光墙", "auroraveil": "极光幕",
+        "mist": "白雾", "safeguard": "神秘守护", "tailwind": "顺风",
+        "spikes": "撒菱", "stealthrock": "隐形岩", "toxicspikes": "毒菱",
+        "stickyweb": "黏黏网", "luckychant": "幸运咒语", "quickguard": "快速防守",
+        "wideguard": "广域防守", "matblock": "掀榻榻米", "craftyshield": "戏法防守",
+    }
+
+    def move_category_zh(self, category: str) -> str:
+        """物理 / 特殊 / 变化。"""
+        return self.MOVE_CATEGORY_ZH.get(str(category or ""), str(category or "?"))
+
+    def _boost_text(self, boosts) -> str:
+        if not isinstance(boosts, dict):
+            return ""
+        parts = []
+        for key, val in boosts.items():
+            label = self.BOOST_FIELD_ZH.get(str(key), str(key))
+            try:
+                n = int(val)
+            except (TypeError, ValueError):
+                continue
+            if n:
+                parts.append(f"{label} {'+' if n > 0 else ''}{n}")
+        return "、".join(parts)
+
+    def _ratio_text(self, raw) -> str:
+        """`drain`/`recoil` 在数据里是 [1,2] / [33,100] 这种分数。"""
+        if isinstance(raw, (list, tuple)) and len(raw) == 2:
+            try:
+                num, den = float(raw[0]), float(raw[1])
+                if den:
+                    return f"{abs(num) / den * 100:.0f}%"
+            except (TypeError, ValueError):
+                return ""
+        try:
+            return f"{abs(float(raw)) * 100:.0f}%"
+        except (TypeError, ValueError):
+            return ""
+
+    def move_effect_text(self, key: str) -> str:
+        """从**结构化字段**推出一句中文效果(招式的 `desc` 只是图鉴风味文字)。
+
+        对战中真正生效的是 `boosts`/`secondary`/`drain`/`recoil`/`multihit`/
+        `priority`/`critRatio`/`weather`/`terrain`/`heal`/`selfdestruct` 等字段,
+        这里把它们翻成人话 —— 光看 `desc` 玩家常常不知道招式实际做什么。
+        推不出内容时返回空串,由调用方退回显示 `desc`。
+        """
+        e = self.moves.get(str(key or ""))
+        if not e:
+            return ""
+        bits: list[str] = []
+        pri = int(e.get("priority") or 0)
+        if pri > 0:
+            bits.append(f"优先度 +{pri}")
+        elif pri < 0:
+            bits.append(f"优先度 {pri}")
+        if e.get("critRatio"):
+            bits.append("容易会心")
+        mh = e.get("multihit")
+        if isinstance(mh, list) and len(mh) == 2:
+            bits.append(f"连续攻击 {mh[0]}~{mh[1]} 次")
+        elif isinstance(mh, int) and mh > 1:
+            bits.append(f"连续攻击 {mh} 次")
+        drain = self._ratio_text(e.get("drain"))
+        if drain:
+            bits.append(f"回复造成伤害的 {drain}")
+        recoil = self._ratio_text(e.get("recoil"))
+        if recoil:
+            bits.append(f"自身承受 {recoil} 反作用伤害")
+        heal = self._ratio_text(e.get("heal"))
+        if heal:
+            bits.append(f"回复自身最大 HP 的 {heal}")
+        if e.get("selfdestruct"):
+            bits.append("使用后自身倒下")
+        if e.get("stallingMove"):
+            bits.append("变成防守姿态,本回合优先")
+        if e.get("ignoreAbility"):
+            bits.append("无视对手特性")
+
+        def _status_bits(d, prefix="") -> list[str]:
+            out: list[str] = []
+            st = d.get("status") if isinstance(d, dict) else None
+            vst = d.get("volatileStatus") if isinstance(d, dict) else None
+            boosts = d.get("boosts") if isinstance(d, dict) else None
+            who = "自身" if (isinstance(d, dict) and d.get("self")) else "对手"
+            if st:
+                out.append(prefix + f"使{who}" + self.STATUS_FIELD_ZH.get(str(st), str(st)))
+            if vst and not st:
+                out.append(prefix + f"使{who}" + self.STATUS_FIELD_ZH.get(str(vst), str(vst)))
+            if boosts:
+                who = "自身" if (isinstance(d, dict) and d.get("self")) else "对手"
+                bt = self._boost_text(boosts)
+                if bt:
+                    out.append(prefix + f"使{who} {bt}")
+            return out
+
+        sec = e.get("secondary")
+        if isinstance(sec, dict):
+            chance = int(sec.get("chance") or 0)
+            bits += _status_bits(sec, f"{chance}% " if chance else "")
+        elif isinstance(sec, list):
+            for item in sec:
+                if isinstance(item, dict):
+                    bits += _status_bits(item)
+        if not isinstance(sec, dict) or not bits:
+            own = {
+                "status": e.get("status"),
+                "volatileStatus": e.get("volatileStatus"),
+                "boosts": e.get("boosts"),
+                "self": e.get("target") in ("self", "allySide", "allyTeam"),
+            }
+            bits += [x for x in _status_bits(own) if x not in bits]
+        w = e.get("weather")
+        if w:
+            bits.append("天气变为" + self.WEATHER_ZH.get(str(w), str(w)))
+        ter = e.get("terrain")
+        if ter:
+            bits.append("布下" + self.TERRAIN_ZH.get(str(ter), str(ter)))
+        sc = e.get("sideCondition")
+        if sc:
+            bits.append("在我方场地布下「" + self.SIDE_CONDITION_ZH.get(str(sc), str(sc)) + "」")
+        if e.get("selfSwitch"):
+            bits.append("使用后自身退场")
+        base = int(e.get("basePower") or 0)
+        if base and not bits:
+            bits.append("造成伤害")
+        # 去重但保持顺序
+        seen: set[str] = set()
+        uniq = [b for b in bits if not (b in seen or seen.add(b))]
+        return "、".join(uniq)
+
+    def move_short_desc(self, key: str, *, limit: int = 40) -> str:
+        """一句话效果:优先用结构化推导;推不出(或只推出"造成伤害")时用 desc。
+
+        数据结构里少数招式丢了 `secondary`(如火焰牙的"畏缩/灼伤"、三色牙),
+        这时 `desc` 往往还写着效果 —— 所以挑 desc 里**带效果关键词**的那一句,
+        比只显示"造成伤害"有用得多。
+        """
+        eff = self.move_effect_text(key)
+        if eff and eff != "造成伤害":
+            return eff
+        raw = str((self.moves.get(str(key or "")) or {}).get("desc") or "")
+        if "无法使用这个招式" in raw:
+            # 147 个招式在数据里是这条占位说明(本代不可用),别当效果显示
+            return eff or "造成伤害"
+        desc = raw.replace("\n", " ").strip()
+        clauses = [c for c in re.split(r"[。;]", desc) if c.strip()]
+        if not clauses:
+            return eff or "造成伤害"
+        keys = ("有时", "陷入", "下降", "提高", "回复", "必定", "连续", "反作",
+                "优先", "无视", "交换", "能力")
+        for c in clauses[1:] or clauses:        # 先看第 2 句起的效果描述
+            if any(k in c for k in keys):
+                return c.strip()[:limit]
+        return (clauses[0] if eff else (clauses[0] if clauses else ""))[:limit] or eff
 
     def compute_stats(
         self,
