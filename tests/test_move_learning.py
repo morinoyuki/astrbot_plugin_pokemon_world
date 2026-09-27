@@ -24,6 +24,14 @@ if _ROOT not in sys.path:
 from test_commands import _Cmd, _Event, run_cmd  # noqa: E402
 
 
+def _pending_footer(t):
+    """模块级小工具(与 main.py 里同名,便于测试直调)。"""
+    import pw_plugin.main as M
+    from test_commands import _MOD  # noqa: F401
+
+    return M._pending_footer(t)
+
+
 def _trainer_with_party(tmp):
     """杰尼龟(4 招) + 波波(4 招),两只都停在"差一点升级"。"""
     from pw.dex import get_dex
@@ -381,3 +389,52 @@ def test_growth_renderer_never_shows_equal_level_arrow():
     assert data
     assert not any(s == "→" for s in seen), seen
     assert "Lv5" in " ".join(seen)
+
+
+def test_all_pending_moves_are_announced_after_a_battle():
+    """多只同时升级、各自都有新招式时,必须**逐个**列出来。
+
+    成长卡一次只画一只,别的宝可梦的新招式容易被忽略(用户反馈)。
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        p = _trainer_with_party(tmp)
+        t = p._load(_Event(""))
+        # 队伍里的每一只都各有一条待决定招式
+        for md, mv in zip(t.data["party"], ("withdraw", "featherdance"), strict=False):
+            md["pending"] = [mv]
+        p._save(t)
+        notice = p._pending_notice(p._load(_Event("")))
+        pairs = (("杰尼龟", "缩入壳中"), ("波波", "羽毛舞"))
+        for i, (name, mv) in enumerate(pairs, 1):
+            assert name in notice, f"{name} 没被列出来:{notice}"
+            assert mv in notice, f"{mv} 没被列出来:{notice}"
+            assert f"/学招 {i}" in notice, f"没给第 {i} 只的用法:{notice}"
+        assert notice.count("· ") >= len(pairs), notice
+        # 底注要能提醒(图里也能看到,不只靠文字)
+        foot = _pending_footer(t)
+        assert str(len(pairs)) in foot and "学招" in foot, foot
+        # 跳过某一只(单独播报过)时不再重复
+        skip = p._pending_notice(t, skip=2)
+        assert "波波" not in skip and "杰尼龟" in skip, skip
+
+
+def test_pending_footer_is_drawn_on_the_result_card(monkeypatch):
+    """结果卡的底注要真的画出来(有待决定招式时提示 /学招)。"""
+    from pw import ui_info as I
+    from pw import ui_render as UI
+
+    drawn: list[str] = []
+    orig = UI.Screen.text
+
+    def spy(self, x, y, s, **kw):
+        drawn.append(str(s))
+        return orig(self, x, y, s, **kw)
+
+    monkeypatch.setattr(UI.Screen, "text", spy)
+    data = I.render_battle_result(
+        outcome="win", title="测试战", lines=["赢了!"], rewards=["+24 EXP"],
+        growth=["杰尼龟: +24 EXP → Lv6"], footer="◆ 有 2 个新招式待决定,用 /学招 <队伍序号>",
+        mon={"species": "squirtle", "level": 6}, scale=1,
+    )
+    assert data
+    assert any("待决定" in x for x in drawn), drawn[-8:]

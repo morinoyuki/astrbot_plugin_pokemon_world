@@ -1120,6 +1120,27 @@ class PokemonWorldPlugin(Star):
         ):
             yield r
 
+    def _pending_notice(self, t: Trainer, *, skip: int = 0) -> str:
+        """列出**全队**待决定的招式。
+
+        一次战斗可能多只同时升级、各自都有新招式;成长卡只能画一只,
+        别的宝可梦的新招式很容易被忽略(用户反馈)。所以另外发一条清单。
+        """
+        rows: list[str] = []
+        for i, md in enumerate(t.data.get("party") or [], 1):
+            if skip and i == skip:
+                continue      # 这只已经单独播报过(例如刚吃神奇糖果)
+            name = str(md.get("nickname") or "") or _sp_zh(str(md.get("species") or ""))
+            rows.extend(
+                f"· {i}. {name}:{growth.move_brief(mv)}"
+                f" → `/学招 {i}` 决定替换或放弃"
+                for mv in (md.get("pending") or [])
+            )
+        if not rows:
+            return ""
+        head = f"📘 {len(rows)} 个新招式等着决定(招式栏满了才需要选):"
+        return "\n".join([head, *rows, "(决定后不会再出现;放弃就没了)"])
+
     def _mon_hint(self, payload: dict) -> str:
         """资料页图片附带的文本:特性说明 + 招式效果 + 管理入口。
 
@@ -3083,6 +3104,10 @@ class PokemonWorldPlugin(Star):
                 lines.append(
                     f"　└ ✨ {mon.display} 进化成了 {growth.species_zh(res.evolved_to)}!"
                 )
+            # 别的宝可梦也可能在等决定 —— 一起列出来,别让玩家漏掉
+            rest = self._pending_notice(t, skip=num)
+            if rest:
+                lines.append(rest)
             yield event.plain_result("\n".join(lines))
             return
 
@@ -4225,11 +4250,17 @@ class PokemonWorldPlugin(Star):
                     lines=res.lines,
                     # 战败/认输/逃跑不给奖励栏(渲染层也会再挡一次)
                     rewards=res.rewards if res.outcome in ("win", "caught") else [],
-                    growth=res.growth, mon=mon, scale=self._img_scale(),
+                    growth=res.growth, mon=mon,
+                    # 有待决定招式时,卡片底注直接提醒(图里也能看到,不只靠文字)
+                    footer=_pending_footer(t),
+                    scale=self._img_scale(),
                 ),
                 text="",
             ):
                 yield r
+        notice = self._pending_notice(t)
+        if notice:
+            yield event.plain_result(notice)
 
     def _temp_image(self, data: bytes, prefix: str) -> str:
         """把渲染好的图片落盘到临时文件并返回路径。
@@ -6124,3 +6155,11 @@ def _adopt_keys() -> set[str]:
 
 def _fossil_keys() -> set[str]:
     return fossil_revivable()
+
+
+def _pending_footer(t) -> str:
+    """结果卡的底注:有宝可梦等着决定招式时提醒一句。"""
+    n = sum(len(md.get("pending") or []) for md in (t.data.get("party") or []))
+    if not n:
+        return ""
+    return f"◆ 有 {n} 个新招式待决定,用 /学招 <队伍序号>"

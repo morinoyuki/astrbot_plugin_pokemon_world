@@ -414,7 +414,8 @@ def _inline_block(sc, top: float, rx0: int, label: str, lcolor, text: str, tcolo
 
 def render_battle_result(*, outcome: str, title: str = "", lines: list[str] = (),
                          rewards: list[str] = (), growth: list[str] = (),
-                         mon: dict | None = None, scale: int = SCALE_DEFAULT) -> bytes:
+                         mon: dict | None = None, footer: str = "",
+                         scale: int = SCALE_DEFAULT) -> bytes:
     """战斗结算:胜负横幅 + 结算台词 + 奖励 / 成长 + 我方精灵状态。"""
     try:
         sc = Screen(scale=scale)
@@ -498,7 +499,7 @@ def render_battle_result(*, outcome: str, title: str = "", lines: list[str] = ()
         _inline_block(sc, y, rx0, "◆ 成长", (120, 84, 48), gtext,
                       TEXT if growth else TEXT_DIM, 142, limit=lim_g)
 
-        sc.footer(OUTCOME_FOOT.get(key, "◆ 继续冒险吧!"))
+        sc.footer(_str(footer, OUTCOME_FOOT.get(key, "◆ 继续冒险吧!")))
         return sc.finish()
     except Exception as e:  # 渲染失败回退文本
         logger.debug("宝可梦世界: 战斗结算渲染失败: %s", e)
