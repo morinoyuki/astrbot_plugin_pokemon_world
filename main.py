@@ -51,7 +51,11 @@ from .pw.dex import get_dex
 from .pw.engine import create_pokemon  # 领养/复活要用(运行时需要)
 from .pw.items import (
     BAG_ITEMS,
+    FOSSIL_COMBOS,
     effect_text,
+    fossil_combo,
+    fossil_part,
+    fossil_revivable,
     fossil_species,
     max_pp,
     resolve_bag_item,
@@ -2074,10 +2078,9 @@ class PokemonWorldPlugin(Star):
             yield event.plain_result("❌ 化石复活要在「宝可梦中心」(研究所)办理。")
             return
         arg = self._args(event, ("复活", "revive", "化石复活", "研究所复活")).strip()
-        have = [
-            k for k in (t.data.get("bag") or {})
-            if int((t.data.get("bag") or {}).get(k) or 0) > 0 and fossil_species(k)
-        ]
+        bag = t.data.get("bag") or {}
+        have = [k for k in bag if int(bag.get(k) or 0) > 0 and fossil_species(k)]
+        has_parts = [k for k in bag if int(bag.get(k) or 0) > 0 and fossil_part(k)]
         if not arg:
             lines = [f"🦴 {world.node_zh(t.location)}的研究所 —— 化石复活"]
             if have:
@@ -2088,17 +2091,87 @@ class PokemonWorldPlugin(Star):
                         f"{_sp_zh(sp)}(Lv{REVIVE_LEVEL})"
                     )
                 lines.append(f"用法:`/复活 {BAG_ITEMS[have[0]]['zh']}`")
-            else:
+            if has_parts:
+                lines.append("· 拼合化石(要**两件一起**复活):")
+                lines.extend(
+                    f"　　{BAG_ITEMS[k]['zh']} ×{t.count(k)}" for k in sorted(has_parts)
+                )
+                for combo, sp in sorted(FOSSIL_COMBOS.items(), key=lambda kv: _sp_zh(kv[1])):
+                    if combo <= set(has_parts):
+                        names = " + ".join(BAG_ITEMS[x]["zh"] for x in sorted(combo))
+                        lines.append(f"　　{names} → {_sp_zh(sp)}(Lv{REVIVE_LEVEL})")
+                lines.append(
+                    "　用法:`/复活 化石鸟 化石龙`(顺序随意)"
+                )
+            if not have and not has_parts:
                 lines.append("你还没有化石。4 枚徽章后可在商店买到,委托奖励偶尔也有。")
             yield event.plain_result("\n".join(lines))
             return
-        hit = resolve_bag_item(arg)
-        key = hit[0] if hit else ""
+
+        # 解析:可能是"两件拼合化石",也可能是一件,也可能是想要的目标名
+        want = [resolve_bag_item(tok)[0] if resolve_bag_item(tok) else ""
+                for tok in arg.replace("、", " ").split()]
+        want = [k for k in want if k]
+        combo_sp = fossil_combo(want) if len(want) >= 2 else ""
+        if combo_sp and all(t.count(k) > 0 for k in want[:2]):
+            keys = list(want[:2])
+            async with self._lock(t.scope):
+                for k in keys:
+                    t.take_item(k, 1)
+                mon = create_pokemon(combo_sp, REVIVE_LEVEL)
+                t.add_pokemon(mon, day=self._state(t.scope).day)
+                self._save(t)
+            yield event.plain_result(
+                f"🦴 两件化石被强行拼在了一起…… {_sp_zh(combo_sp)} 复活了!"
+                f"(Lv{REVIVE_LEVEL})\n"
+                + "、".join(f"{BAG_ITEMS[k]['zh']} 用掉 1 个" for k in keys)
+                + "(拼错骨头的结果,样子有点怪。)"
+            )
+            return
+
+        key = want[0] if want else ""
         sp = fossil_species(key)
-        if not sp or not t.count(key):
+        if not sp:
+            # 可能玩家直接写了**目标宝可梦名**(例如 `/复活 雷鸟龙`)
+            target = ""
+            for combo, csp in FOSSIL_COMBOS.items():
+                if arg in (_sp_zh(csp), csp) and combo <= set(has_parts):
+                    target, keys = csp, sorted(combo)
+                    break
+            if target:
+                async with self._lock(t.scope):
+                    for k in keys:
+                        t.take_item(k, 1)
+                    mon = create_pokemon(target, REVIVE_LEVEL)
+                    t.add_pokemon(mon, day=self._state(t.scope).day)
+                    self._save(t)
+                yield event.plain_result(
+                    f"🦴 两件化石被强行拼在了一起…… {_sp_zh(target)} 复活了!"
+                    f"(Lv{REVIVE_LEVEL})\n"
+                    + "、".join(f"{BAG_ITEMS[k]['zh']} 用掉 1 个" for k in keys)
+                    + "(拼错骨头的结果,样子有点怪。)"
+                )
+                return
+            # 只有一件拼合化石 → 提示还需要什么
+            if key and fossil_part(key):
+                pairs = [
+                    " + ".join(BAG_ITEMS[x]["zh"] for x in sorted(combo))
+                    + f" → {_sp_zh(csp)}"
+                    for combo, csp in sorted(FOSSIL_COMBOS.items(),
+                                             key=lambda kv: _sp_zh(kv[1]))
+                    if key in combo
+                ]
+                yield event.plain_result(
+                    f"🧩 {BAG_ITEMS[key]['zh']} 只是一半,拼不出宝可梦。可以配:\n"
+                    + "\n".join(f"　· {p}" for p in pairs)
+                )
+                return
             yield event.plain_result(
                 f"❌ 没有「{arg}」这件化石(用 `/复活` 看看手里有什么)。"
             )
+            return
+        if not t.count(key):
+            yield event.plain_result(f"❌ 你没有「{BAG_ITEMS[key]['zh']}」这件化石。")
             return
         async with self._lock(t.scope):
             t.take_item(key, 1)
@@ -5528,4 +5601,4 @@ def _adopt_keys() -> set[str]:
 
 
 def _fossil_keys() -> set[str]:
-    return {fossil_species(k) for k in BAG_ITEMS if fossil_species(k)}
+    return fossil_revivable()

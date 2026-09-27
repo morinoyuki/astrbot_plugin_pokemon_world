@@ -180,3 +180,86 @@ def test_can_start_with_litten():
         ev2 = _Event("/开始 小智 超梦")
         run_cmd(p2, ev2, p2.cmd_start)
         assert "不在初始宝可梦候选里" in "".join(str(x) for x in ev2.outputs)
+
+
+def test_galar_two_part_fossils():
+    """伽勒尔那 4 只要**两件化石拼**才能复活(原作就是这么设定的)。"""
+    from pw.items import (
+        FOSSIL_COMBOS,
+        fossil_combo,
+        fossil_part,
+        fossil_revivable,
+        fossil_species,
+    )
+
+    assert fossil_part("fossilized-bird") == "Bird"
+    assert not fossil_species("fossilized-bird"), "拼合化石不该有单件产物"
+    # 顺序无关
+    assert fossil_combo(["fossilized-bird", "fossilized-drake"]) == "dracozolt"
+    assert fossil_combo(["fossilized-drake", "fossilized-bird"]) == "dracozolt"
+    assert fossil_combo(["fossilized-bird"]) == ""
+    # 鸟+鱼不是合法配方(原作里只有 鸟+龙/鸟+兽/鱼+龙/鱼+兽 四种)
+    assert fossil_combo(["fossilized-bird", "fossilized-fish"]) == ""
+    assert fossil_combo(["fossilized-bird", "fossilized-dino"]) == "arctozolt"
+    assert fossil_combo(["fossilized-fish", "fossilized-drake"]) == "dracovish"
+    assert fossil_combo(["fossilized-fish", "fossilized-dino"]) == "arctovish"
+    # 11 单件 + 4 拼合 = 15
+    assert len(fossil_revivable()) == 15
+    assert set(FOSSIL_COMBOS.values()) <= fossil_revivable()
+    # 4 件拼合化石都能买到
+    from pw.world import WorldMap
+
+    stock = set(WorldMap().shop_stock("pewter-city", 8))
+    assert {"fossilized-bird", "fossilized-fish", "fossilized-drake",
+            "fossilized-dino"} <= stock
+
+
+def test_revive_two_part_fossil_consumes_both():
+    """/复活 两件 → 拼出宝可梦并消耗两件;只给一件要提示能配什么。"""
+    with tempfile.TemporaryDirectory() as tmp:
+        p = _plugin(tmp)
+        t = p._load(_Event(""))
+        for k in ("fossilized-bird", "fossilized-fish", "fossilized-drake",
+                  "fossilized-dino"):
+            t.add_item(k, 2)
+        p._save(t)
+
+        # 只有一件 → 提示配对,不消耗
+        out = _run(p, "/复活 化石鸟", "cmd_revive")
+        assert "只是一半" in out and "化石龙" in out and "化石兽" in out, out
+        assert p._load(_Event("")).count("fossilized-bird") == 2, "提示不该消耗"
+
+        # 两件 → 拼出来,两件各消耗 1
+        out = _run(p, "/复活 化石鸟 化石龙", "cmd_revive")
+        t2 = p._load(_Event(""))
+        assert "雷鸟龙" in out and "Lv20" in out, out
+        assert "dracozolt" in [m["species"] for m in t2.data["party"]]
+        assert t2.count("fossilized-bird") == 1 and t2.count("fossilized-drake") == 1
+
+        # 也可以直接写目标名
+        out = _run(p, "/复活 鳃鱼海兽", "cmd_revive")
+        t3 = p._load(_Event(""))
+        assert "arctovish" in [m["species"] for m in t3.data["party"]], t3.data["party"]
+        assert t3.count("fossilized-fish") == 1 and t3.count("fossilized-dino") == 1
+
+
+def test_fossil_revivable_are_all_obtainable_and_labelled():
+    """15 只化石宝可梦都要在可得集合里,`/图鉴` 也都要写"化石复活"。"""
+    import pw_plugin.main as PM
+
+    from pw.items import fossil_revivable
+
+    got = PM._obtainable_set()
+    missing = sorted(fossil_revivable() - got)
+    assert not missing, f"这些化石宝可梦还拿不到:{missing}"
+    with tempfile.TemporaryDirectory() as tmp:
+        p = _plugin(tmp)
+        for sp in ("dracozolt", "dracovish"):
+            out = _run(p, f"/图鉴 {_zh(sp)}", "cmd_dex")
+            assert "获取途径:化石复活" in out, out[:200]
+
+
+def _zh(sp: str) -> str:
+    from pw.dex import get_dex
+
+    return get_dex().species[sp]["zh"]

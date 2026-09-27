@@ -945,6 +945,9 @@ SHOP_TIERS: list[tuple[int, list[str]]] = [
          "helix-fossil", "dome-fossil", "old-amber", "root-fossil", "claw-fossil",
          "skull-fossil", "armor-fossil", "cover-fossil", "plume-fossil",
          "jaw-fossil", "sail-fossil",
+         # 伽勒尔:要两件拼合(化石鸟/鱼/龙/兽)
+         "fossilized-bird", "fossilized-fish", "fossilized-drake",
+         "fossilized-dino",
          "dusk-ball", "quick-ball", "timer-ball", "level-ball", "heavy-ball",
          "beast-ball",
          # 中档持有道具

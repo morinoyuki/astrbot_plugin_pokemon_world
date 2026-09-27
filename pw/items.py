@@ -602,10 +602,58 @@ for _k, (_zh, _sp, _sp_zh) in _FOSSILS.items():
         _ITEM_IDX.setdefault(_norm(_alias), _k)
 
 
+# 伽勒尔那 4 只**要两件化石拼**(原作里就是"拼错骨头"的设定,所以长得四不像)
+_FOSSIL_PARTS = {
+    "fossilized-bird": ("化石鸟", "Bird"),
+    "fossilized-fish": ("化石鱼", "Fish"),
+    "fossilized-drake": ("化石龙", "Drake"),
+    "fossilized-dino": ("化石兽", "Dino"),
+}
+for _k, (_zh, _en) in _FOSSIL_PARTS.items():
+    BAG_ITEMS.setdefault(_k, {
+        "zh": _zh,
+        "kind": "rare",
+        "desc": f"伽勒尔地区发现的不完整化石({_en}) —— 要**两件拼在一起**才能复活。",
+        "effect": {"fossil_part": _en},
+    })
+    for _alias in (_zh, f"{_zh}化石"):
+        _ITEM_IDX.setdefault(_norm(_alias), _k)
+
+# 两件化石 → 复活的宝可梦(frozenset 做键,顺序无关)
+FOSSIL_COMBOS: dict[frozenset[str], str] = {
+    frozenset({"fossilized-bird", "fossilized-drake"}): "dracozolt",    # 雷鸟龙
+    frozenset({"fossilized-bird", "fossilized-dino"}): "arctozolt",     # 雷鸟海兽
+    frozenset({"fossilized-fish", "fossilized-drake"}): "dracovish",    # 鳃鱼龙
+    frozenset({"fossilized-fish", "fossilized-dino"}): "arctovish",     # 鳃鱼海兽
+}
+
+
 def fossil_species(key: str) -> str:
-    """化石道具 → 能复活的宝可梦 key(不是化石就返回空串)。"""
+    """化石道具 → 能复活的宝可梦 key(单件化石;拼合化石不在此列)。"""
     eff = (BAG_ITEMS.get(str(key or "")) or {}).get("effect") or {}
     return str(eff.get("revive_species") or "")
+
+
+def fossil_part(key: str) -> str:
+    """拼合化石的部件名(Bird/Fish/Drake/Dino);不是拼合化石就返回空串。"""
+    eff = (BAG_ITEMS.get(str(key or "")) or {}).get("effect") or {}
+    return str(eff.get("fossil_part") or "")
+
+
+def fossil_combo(keys) -> str:
+    """两件拼合化石 → 宝可梦 key(顺序无关;拼不出来返回空串)。"""
+    parts = {str(k) for k in (keys or []) if str(k)}
+    for combo, sp in FOSSIL_COMBOS.items():
+        if combo == parts:
+            return sp
+    return ""
+
+
+def fossil_revivable() -> set[str]:
+    """所有能靠化石复活的宝可梦(11 只单件 + 4 只拼合)。"""
+    out = {fossil_species(k) for k in BAG_ITEMS if fossil_species(k)}
+    out.update(FOSSIL_COMBOS.values())
+    return {x for x in out if x}
 
 
 def effect_text(key: str | None) -> str:
@@ -673,6 +721,8 @@ def effect_text(key: str | None) -> str:
         elif field == "teaches":
             zh = (get_dex().moves.get(str(val)) or {}).get("zh") or val
             bits.append(f"教会「{zh}」")
+        elif field == "fossil_part":
+            bits.append(f"拼合化石部件({val})—— 需要两件一起复活")
         elif field == "revive_species":
             bits.append(f"可复活成{(get_dex().species.get(str(val)) or {}).get('zh', val)}")
         elif field == "level_up":
