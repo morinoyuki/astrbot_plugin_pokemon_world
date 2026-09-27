@@ -282,7 +282,7 @@ def render_news(day: int, *, world_events: list[str] = (), player_events: list[s
             mine.append(f"× 尚未解锁:{lock}")
         _dialog_text(sc, player_box, "◆ 个人", mine, limit=3)
 
-        sc.footer("◆ /日常 查看完整世界动态")
+        sc.footer("◆ /今日 查看完整世界动态")
         return sc.finish()
     except Exception as e:  # 渲染失败回退文本
         logger.debug("宝可梦世界: 早间新闻渲染失败: %s", e)
@@ -556,7 +556,7 @@ def render_growth(mon: dict, *, before_level: int = 0, after_level: int = 0,
         for i, ln in enumerate(sc.wrap(pend, 214, size=8, limit=3)):
             sc.text(12, 120 + i * 9, ln, size=8, fill=TEXT if pending else TEXT_DIM)
 
-        sc.footer("◆ /换招 替换招式 · 继续冒险!")
+        sc.footer("◆ /学招 替换招式 · 继续冒险!")
         return sc.finish()
     except Exception as e:  # 渲染失败回退文本
         logger.debug("宝可梦世界: 成长界面渲染失败: %s", e)

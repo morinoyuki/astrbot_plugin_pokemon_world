@@ -684,9 +684,13 @@ class Battle:
             if self.finished:
                 break
 
-        self._tick_end_of_turn()
-        self._check_faints()
-        self._check_stall()
+        # 战斗已经结束(捕获成功 / 逃跑成功 / 全体倒下)就**不要再走回合结束**:
+        # 否则会出现"刚说捕获成功,接着又扣沙暴伤害"这种荒唐日志,甚至会因为
+        # 天气把刚收进球的宝可梦打成濒死。
+        if not self.finished:
+            self._tick_end_of_turn()
+            self._check_faints()
+            self._check_stall()
         return list(self.log)
 
     # 连续多少回合双方都没掉血就收场(25 回合足够打完任何正常对局:

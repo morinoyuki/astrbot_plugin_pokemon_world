@@ -432,7 +432,7 @@ class PokemonWorldPlugin(Star):
             event, "card",
             lambda: UI.render_trainer_card(self._card_payload(t), scale=self._img_scale()),
             text=text,
-            hint="行动:`/探索` 前进、`/任务` 看委托、`/帮助` 全指令",
+            hint=self._status_hint(t, today),
         ):
             yield r
 
@@ -924,9 +924,29 @@ class PokemonWorldPlugin(Star):
                 scale=self._img_scale(),
             ),
             text=text,
-            hint="移动:`/前往 <地点>`(只能去相邻地点)、`/飞行 <地点>`(需徽章)",
+            hint=self._map_hint(t),
         ):
             yield r
+
+    def _map_hint(self, t: Trainer) -> str:
+        """地图图片附带的文本:相邻地点(带危险度)+ 本地服务 + 操作方式。
+
+        图片画的是"整张地区图 + 当前位置 + 下一目标",**没有**相邻地点清单和
+        城镇服务 —— 之前为了去掉重复文本把这两项一起删了(用户反馈
+        "地图的城镇 服务 ... 额外的信息也给弄没了")。
+        """
+        world = WorldMap()
+        ns = world.neighbors(t.location)
+        near = "、".join(
+            f"{world.node_zh(n)}(危险度{world.tier_label(n)})" for n in ns
+        ) or "无"
+        svc = "、".join(_service_zh(world.services(t.location))) or "无"
+        return (
+            f"◆ 相邻地点:{near}"
+            f"\n◆ 本地服务:{svc}"
+            "\n移动:`/前往 <地点>`(只能去相邻)、`/前往 飞行 <城镇>`"
+            "(同地区 3 徽章解锁,500₽)"
+        )
 
     @filter.command("前往", alias={"go", "移动", "去"})
     async def cmd_go(self, event: AstrMessageEvent):
@@ -1053,7 +1073,8 @@ class PokemonWorldPlugin(Star):
                     async for r in self._emit_battle(
                         event, t, meta, log,
                         text="\n".join(notice) + "\n" + _hint,
-                        keep="\n".join(notice) + "\n" + _hint,
+                        keep="\n".join(notice) + "\n" + self._battle_intro(meta, log)
+                        + "\n" + _hint,
                         status=True,
                     ):
                         yield r
@@ -1069,7 +1090,8 @@ class PokemonWorldPlugin(Star):
                 async for r in self._emit_battle(
                     event, t, meta, log,
                     text="\n".join(notice) + "\n" + self._battle_intro(meta, log),
-                    keep="\n".join(notice) + "\n" + _hint,
+                    keep="\n".join(notice) + "\n" + self._battle_intro(meta, log)
+                    + "\n" + _hint,
                     status=True,
                 ):
                     yield r
@@ -1226,7 +1248,8 @@ class PokemonWorldPlugin(Star):
             event, t, meta, log,
             text="\n".join(notice) + "\n" + self._battle_intro(meta, log)
             + f"\n\n{_hint}",
-            keep="\n".join(notice) + "\n" + _hint,
+            keep="\n".join(notice) + "\n" + self._battle_intro(meta, log)
+            + f"\n{_hint}",
             status=True,
         ):
             yield r
@@ -1286,15 +1309,20 @@ class PokemonWorldPlugin(Star):
                     "对战结束", res.lines + res.rewards + res.growth, after,
                 )
                 async for r in self._emit_battle(
-                    event, t, meta, res.lines, text=text, keep=keep
+                    event, t, meta, res.lines,
+                    text=text,
+                    keep="\n".join(f"· {x}" for x in res.lines) + "\n" + keep,
                 ):
                     yield r
                 async for r in self._emit_result_cards(event, t, meta, res):
                     yield r
                 return
+            # 战斗画面的对话框只放得下 4 行,长战报会被截断 —— 所以完整战报
+            # 再用文本发一遍(用户反馈"避免过长导致省略一部分")。
+            log_text = "\n".join(f"· {x}" for x in res.lines)
             async for r in self._emit_battle(
                 event, t, meta, res.lines,
-                text=text, keep=self._battle_hint(t), status=True,
+                text=text, keep=log_text + "\n" + self._battle_hint(t), status=True,
             ):
                 yield r
             if res.awaiting_switch:
@@ -2018,9 +2046,25 @@ class PokemonWorldPlugin(Star):
                 locations=locs, scale=self._img_scale(),
             ),
             text="\n".join(lines),
-            hint="行动:`/探索` 前进、`/队伍` 查看队伍、`/帮助` 全指令",
+            hint=self._dex_hint(key, entry, locs, evos),
         ):
             yield r
+
+    def _dex_hint(self, key: str, entry: dict, locs: list, evos: list) -> str:
+        """图鉴图片附带的文本:进化与野外分布(图片里只写"已收录")。"""
+        lines = []
+        if evos:
+            lines.append("可进化为:" + "、".join(str(x) for x in evos))
+        if locs:
+            world = WorldMap()
+            names = [world.node_zh(str(x)) if not isinstance(x, str) else x
+                     for x in locs[:8]]
+            lines.append("野外分布:" + "、".join(names))
+        evo_entry = entry.get("evos") or []
+        if not evos and not evo_entry:
+            lines.append("不会进化")
+        lines.append("行动:`/探索` 前进、`/队伍` 查看队伍、`/帮助` 全指令")
+        return "\n".join(lines)
 
     @filter.command("今日", alias={"today", "事件", "世界动态"})
     async def cmd_today(self, event: AstrMessageEvent):
@@ -2234,6 +2278,58 @@ class PokemonWorldPlugin(Star):
             lines += badges
         if today:
             lines += ["── 今日 ──", *today]
+        return "\n".join(lines)
+
+    def _legend_hint(self, t: Trainer, world, sites: list[dict],
+                     caught: list[str], ready: list[str], locked: list[str]) -> str:
+        """神兽面板图片附带的文本:说清**为什么**还没解锁 + 怎么挑战。
+
+        图片里未解锁的格子只显示 "???"(还带徽章 0/8 的标题),玩家看不出
+        差多少徽章或者要不要先当冠军。
+        """
+        lines = []
+        gyms = len(world.gyms(t.region)) or 8
+        if locked:
+            need = [s for s in sites if s.get("species") in locked]
+            need_badges = max((int(s.get("need_badges") or 0) for s in need), default=0)
+            tail = ""
+            if need_badges and t.badge_count() < need_badges:
+                tail = f"(需要 {need_badges} 枚徽章,你现在 {t.badge_count()} 枚)"
+            elif not t.flag(f"champion:{t.region}"):
+                tail = "(需要先成为本地区冠军)"
+            lines.append(f"❓ 还有 {len(locked)} 只传说的线索没出现{tail}")
+        if ready:
+            names = "、".join(
+                str(s.get("zh") or s.get("species"))
+                for s in sites if s.get("species") in ready
+            )
+            lines.append(f"🎯 现在就栖息在附近:{names} —— `/神兽 挑战 <名字>`")
+        if caught:
+            lines.append(f"✅ 已收服 {len(caught)} 只")
+        lines.append(f"提示:集齐 {gyms} 枚徽章后,更强的传说会出现")
+        return "\n".join(lines)
+
+    def _status_hint(self, t: Trainer, today: list[str]) -> str:
+        """训练家卡图片附带的文本:卡片上**没画**的那几项。
+
+        卡片画的是 ID/金钱/地区/当前/旅程/步数/图鉴/徽章格/队伍数/电脑/主线阶段,
+        但没有危险度、道具件数、今日事件,也不写"现在不在对战中"。
+        """
+        world = WorldMap()
+        lines = [
+            f"◆ {world.where_am_i(t)} · 危险度 {world.tier_label(t.location)}"
+            f" · 道具 {sum(t.bag.values())} 件"
+        ]
+        if B.in_battle(t):
+            lines.append("⚔️ " + self._battle_state_brief(t))
+        else:
+            lines.append("🕊️ 当前没有在战斗")
+        today_bits = [
+            str(x) for x in today if not str(x).lstrip().startswith(("📅", "🌅"))
+        ]
+        if today_bits:
+            lines.append("◆ 今日:" + " / ".join(today_bits[:3]))
+        lines.append("行动:`/探索` 前进、`/任务` 看委托、`/帮助` 全指令")
         return "\n".join(lines)
 
     def _map_text(self, t: Trainer, region: str, *, own: bool) -> str:
@@ -2477,7 +2573,7 @@ class PokemonWorldPlugin(Star):
             async for r in self._emit_battle(
                 event, t, meta, log,
                 text=self._battle_intro(meta, log),
-                keep=self._battle_hint(t),
+                keep=self._battle_intro(meta, log) + "\n" + self._battle_hint(t),
                 status=True,
             ):
                 yield r
@@ -2532,8 +2628,8 @@ class PokemonWorldPlugin(Star):
                 async for r in self._emit_battle(
                     event, t, meta, log,
                     text=self._battle_intro(meta, log) + f"\n\n{_hint}",
-                    keep=_hint,
-                status=True,
+                    keep=self._battle_intro(meta, log) + f"\n{_hint}",
+                    status=True,
                 ):
                     yield r
                 return
@@ -2560,7 +2656,8 @@ class PokemonWorldPlugin(Star):
                     scale=self._img_scale(),
                 ),
                 text=legendary.panel_text(t, world=world, day=state.day),
-                hint="挑战:`/神兽 挑战 <名字>`(需先解锁对应地区)",
+                hint=self._legend_hint(t, world, sites, caught_keys, ready_keys,
+                                       locked_keys),
             ):
                 yield r
 
@@ -2629,7 +2726,8 @@ class PokemonWorldPlugin(Star):
             async for r in self._emit_battle(
                 event, t, meta, log,
                 text=self._battle_intro(meta, log),
-                keep=self._battle_hint(t), status=True,
+                keep=self._battle_intro(meta, log) + "\n" + self._battle_hint(t),
+                status=True,
             ):
                 yield r
 

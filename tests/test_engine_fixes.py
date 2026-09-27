@@ -452,3 +452,60 @@ def test_normal_species_get_level_appropriate_moves():
     assert all(
         int((dex.moves.get(m) or {}).get("basePower") or 0) >= 0 for m in moves
     )
+
+
+def test_capture_ends_battle_without_further_damage():
+    """捕获成功就是战斗结束 —— 不能再结算回合结束的天气/异常伤害。
+
+    实测日志:「投出了 精灵球!/恭喜!成功捕获了 波波!/杰尼龟 受到沙暴伤害 1。/
+    波波 受到沙暴伤害 1。」 —— 后面两行既荒唐(球里的宝可梦还在掉血),
+    还可能把刚收服的宝可梦打成濒死。
+    """
+    from pw.engine import Battle, Side, create_pokemon
+
+    for _ in range(30):
+        p1 = Side.from_dict({})
+        p1.party = [create_pokemon("squirtle", 30)]
+        p1.active = 0
+        e1 = Side.from_dict({})
+        foe = create_pokemon("pidgey", 5)
+        foe.cur_hp = max(1, foe.cur_hp // 2)
+        e1.party = [foe]
+        e1.active = 0
+        b = Battle(player=p1, enemy=e1)
+        b.wild = True
+        b.weather = "sand"
+        b.weather_turns = 9
+        b.bag = {"master-ball": 3}
+        logs = b.step({"type": "catch", "item": "master-ball"})
+        if b.captured is not None:
+            break
+    assert b.finished and b.captured is not None, "大师球应当必定捕获"
+    joined = "\n".join(logs)
+    assert "捕获" in joined
+    assert "受到" not in joined and "沙暴" not in joined, f"捕获后还在结算伤害:{logs}"
+    # 收服到的宝可梦也不该被判濒死
+    assert not e1.party[0].fainted
+
+
+def test_escape_ends_battle_without_end_of_turn_damage():
+    """逃跑成功同理:不该再走回合结束的伤害结算。"""
+    from pw.engine import Battle, Side, create_pokemon
+
+    for _ in range(60):
+        p1 = Side.from_dict({})
+        p1.party = [create_pokemon("squirtle", 40)]
+        p1.active = 0
+        e1 = Side.from_dict({})
+        e1.party = [create_pokemon("pidgey", 3)]
+        e1.active = 0
+        b = Battle(player=p1, enemy=e1)
+        b.wild = True
+        b.weather = "sand"
+        b.weather_turns = 9
+        logs = b.step({"type": "run"})
+        if b.escaped:
+            break
+    assert b.escaped, "等级差这么大应该能跑掉"
+    joined = "\n".join(logs)
+    assert "受到" not in joined and "沙暴" not in joined, f"逃跑后还在结算伤害:{logs}"

@@ -694,7 +694,7 @@ def render_story(
         else:
             sc.text(10, 118, "沿着地图前进,继续你的旅程。", size=8, fill=TEXT_DIM)
 
-        sc.footer("◆ /主线 继续 · 与首领的决战在等着你")
+        sc.footer("◆ /主线 挑战 · 与首领的决战在等着你")
         return sc.finish()
     except Exception as e:  # 渲染失败回退文本
         logger.debug("宝可梦世界: 主线界面渲染失败: %s", e)

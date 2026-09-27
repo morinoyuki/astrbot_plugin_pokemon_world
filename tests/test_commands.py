@@ -1117,3 +1117,74 @@ def test_battle_hint_shows_our_moves():
         assert len(ev4.outputs) == 1, f"文本回退不该发多条:{ev4.outputs}"
         body = "".join(ev4.outputs)
         assert "HP " in body and "招式:" in body
+
+
+def test_battle_turn_also_sends_full_log_as_text():
+    """战斗画面的对话框只放得下 4 行,完整战报要用文本补一遍。
+
+    用户:"对战时的战报可以加回纯文本 避免过长导致省略一部分"。
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        p = _Cmd(tmp)
+        p.config = {"ui_image": True, "battle_image": True, "battle_image_scale": 2,
+                    "quest_enable": False}
+        ev = _Event("/开始 小智 新叶喵")
+        run_cmd(p, ev, p.cmd_start)
+        t = p._load(ev)
+        t.data["region"] = "kanto"
+        p._save(t)
+        from pw import battle as B
+        from pw.util import game_day
+
+        B.start(t, [{"species": "pidgey", "level": 6}], kind="wild", wild=True,
+                meta={"kind": "wild", "title": "野生的波波"}, day=game_day())
+        p._save(t)
+        ev2 = _Event("/对战 move 2")      # 用有威力的招,保证有战报
+        run_cmd(p, ev2, p.cmd_battle)
+        text = "".join(ev2.outputs)
+        assert text.startswith("<chain:"), "应输出战斗画面"
+        # 战报行(· 开头)必须出现在文本里,而不是只画在图里
+        log_lines = [x for x in text.split("\n") if x.strip().startswith("·")]
+        assert log_lines, f"没有附带战报文本:{text[:200]}"
+        assert "招式:" in text, "我方招式提示也要留着"
+
+
+def test_image_hints_keep_info_the_image_does_not_draw():
+    """图片路径的提示要保留"图里没画"的信息。
+
+    用户反馈:"之前只是让你去掉图片里已有的重复纯文本内容,但你把额外的信息
+    也给弄没了" —— 典型是 `/地图` 的相邻地点(带危险度)和城镇服务。
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        p = _Cmd(tmp)
+        p.config = {"ui_image": True, "battle_image_scale": 2, "quest_enable": False}
+        ev = _Event("/开始 小智 新叶喵")
+        run_cmd(p, ev, p.cmd_start)
+        t = p._load(ev)
+        t.data["location"] = "pewter-city"      # 有宝可梦中心/商店/道馆的城镇
+        t.data["visited"] = ["pallet-town", "viridian-city", "pewter-city"]
+        p._save(t)
+
+        # 地图:相邻地点 + 危险度 + 本地服务
+        ev2 = _Event("/地图")
+        run_cmd(p, ev2, p.cmd_map)
+        hint = "".join(ev2.outputs)
+        assert "相邻地点" in hint, hint[:200]
+        assert "危险度" in hint, hint[:200]
+        assert "本地服务" in hint, hint[:200]
+        assert "宝可梦中心" in hint, hint[:200]
+        # 飞行必须写成真实指令(以前写成了不存在的 `/飞行`)
+        assert "/前往 飞行" in hint and "/飞行 <" not in hint, hint[:200]
+
+        # 状态卡:图片没画危险度/道具件数/今日事件
+        ev3 = _Event("/状态")
+        run_cmd(p, ev3, p.cmd_status)
+        card = "".join(ev3.outputs)
+        assert "危险度" in card and "道具" in card, card[:200]
+        assert "没有在战斗" in card, card[:200]
+
+        # 图鉴:图片只写"野外分布:已收录",进化信息要留在文本里
+        ev4 = _Event("/图鉴 新叶喵")
+        run_cmd(p, ev4, p.cmd_dex)
+        dex = "".join(ev4.outputs)
+        assert "可进化为" in dex, dex[:200]
