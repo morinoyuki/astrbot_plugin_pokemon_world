@@ -1096,3 +1096,46 @@ def test_bag_pocket_and_shop_page_are_remembered():
         per = UIM.SHOP_PER_PAGE
         _run(p, f"/商店 {per * 2 + 1}", "cmd_shop")   # 看第 2*per+1 件 → 第 3 页
         assert p._load(ev).flag("shop_page", 1) == 3
+
+
+def test_catch_card_shows_the_caught_mon_when_party_is_full(monkeypatch):
+    """队伍满 6 只时捕获物进电脑 —— 捕获成功界面要显示**它**,不是队伍里最后一只。"""
+    from pw_plugin.pw import battle as PB
+    from pw_plugin.pw import ui_info as PUII
+    from pw_plugin.pw.util import game_day
+
+    caps: list[dict] = []
+    orig = PUII.render_gotcha
+
+    def spy(mon, **kw):
+        caps.append(dict(mon))
+        return orig(mon, **kw)
+
+    monkeypatch.setattr(PUII, "render_gotcha", spy)
+    with tempfile.TemporaryDirectory() as tmp:
+        p = _Cmd(tmp)
+        p.config = {"ui_image": True, "battle_image": False, "quest_enable": False,
+                    "battle_image_scale": 2}
+        run_cmd(p, _Event("/开始 小智 杰尼龟"), p.cmd_start)
+        t = p._load(_Event(""))
+        t.data["region"] = "kanto"
+        for sp in ("pidgey", "rattata", "caterpie", "weedle", "spearow"):
+            m = PB.create_pokemon(sp, 3).to_dict()
+            m["id"] = "x" + sp[:3]
+            t.data["party"].append(m)
+        t.data["bag"] = {"master-ball": 5}
+        p._save(t)
+        from pw_plugin.pw.player import MAX_PARTY
+
+        assert len(t.data["party"]) == MAX_PARTY, len(t.data["party"])
+        PB.start(t, [{"species": "abra", "level": 8}], kind="wild", wild=True,
+                 meta={"kind": "wild", "title": "野生"}, day=game_day())
+        p._save(t)
+        ev = _Event("/捕捉 大师球")
+        run_cmd(p, ev, p.cmd_catch)
+        assert caps, "没有出捕获成功界面"
+        assert caps[-1].get("species") == "abra", caps[-1]
+        # 队伍里确实没有它(它进了电脑)
+        t2 = p._load(ev)
+        assert "abra" not in [m["species"] for m in t2.data["party"]]
+        assert "abra" in [m["species"] for m in (t2.data.get("box") or [])]

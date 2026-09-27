@@ -42,6 +42,7 @@ from .pw import battle as B
 from .pw import daily as D
 from .pw import events as EV
 from .pw import growth, legendary, npc, story
+from .pw import pvp as PVP
 from .pw import quests as QT
 from .pw import ui_info as UII
 from .pw import ui_menu as UIM
@@ -452,6 +453,14 @@ class PokemonWorldPlugin(Star):
             )
         if not in_battle_ok and B.in_battle(t):
             return None, _BATTLE_LOCKED_MSG
+        # 玩家对战中视为"忙碌":标记写在存档里(`pvp` 键),所以这里不需要读世界
+        if not in_battle_ok and t.data.get("pvp"):
+            return None, (
+                "⚔️ 你正在和别人对战,其他行动已锁定!\n"
+                "· 出招:`/对战 <招式序号>`、`/对战 switch <序号>`、"
+                "`/对战 item <道具>`\n"
+                "· 投降:`/对战 弃权`"
+            )
         return t, ""
 
     def _save(self, t: Trainer) -> None:
@@ -1553,6 +1562,33 @@ class PokemonWorldPlugin(Star):
             yield event.plain_result(err)
             return
         arg = self._args(event, ("对战", "battle", "出招", "move")).strip()
+        low = arg.strip().lower()
+
+        # ── 玩家对玩家:挑战 / 接受 / 拒绝 / 取消 / 出招 ──
+        ats = [x for x in _at_users(event) if x[0] and x[0] != 'all']
+        if ats and not B.in_battle(t) and not self._pvp_key_of(t):
+            async for r in self._pvp_challenge(event, t, ats[0][0], ats[0][1], arg):
+                yield r
+            return
+        if low in ("接受", "accept", "同意", "应战"):
+            async for r in self._pvp_accept(event, t):
+                yield r
+            return
+        if low in ("拒绝", "refuse", "reject", "不了"):
+            async for r in self._pvp_decline(event, t):
+                yield r
+            return
+        if low.startswith(("取消", "cancel", "撤回")):
+            target = ats[0][0] if ats else ""
+            async for r in self._pvp_cancel(event, t, target):
+                yield r
+            return
+        # PvP 进行中:出招 / 换人 / 道具 / 投降都走 PvP 那条路
+        if self._pvp_key_of(t) and not B.in_battle(t):
+            async for r in self._pvp_submit(event, t, arg):
+                yield r
+            return
+
         if not B.in_battle(t):
             yield event.plain_result("❌ 当前没有对战。用 `/探索` 或 `/道馆 挑战` 开战。")
             return
@@ -3725,6 +3761,11 @@ class PokemonWorldPlugin(Star):
         while True:
             try:
                 await asyncio.sleep(60)
+                # 玩家对战:替"90 秒没出招"的一方自动出招,不让人卡住
+                try:
+                    await self._pvp_tick()
+                except Exception as e:
+                    logger.debug("宝可梦世界: PvP 超时检查失败: %s", e)
                 if not self._cfg_bool("event_enable", True):
                     continue
                 hour = int(coerce_int(self._cfg("event_hour", 4), 4) or 4)
@@ -4043,15 +4084,11 @@ class PokemonWorldPlugin(Star):
         mon = view.get("my") or {}
         if res.outcome == "caught" and res.rewards:
             _ball_key = str(res.item_key or "poke-ball")
-            # 满 6 只时捕获物进电脑,party[-1] 是旧成员 → 卡片会显示错宝可梦。
-            # 用"战斗结算后的 box 增量"定位新捕获的那只。
-            box_now = t.data.get("box") or []
-            fresh = [m for m in box_now if str(m.get("id") or "") not in _box_before]
-            caught = (
-                B.dict_to_mon(fresh[-1])
-                if fresh
-                else (B.dict_to_mon(t.party[-1]) if t.party else None)
-            )
+            # 用结算时记下的捕获物(`res.caught`),不要再用 party[-1]/box 增量去猜 ——
+            # 队伍满 6 只时捕获物进电脑,猜出来的是别的宝可梦。
+            caught = B.dict_to_mon(res.caught) if res.caught else None
+            if caught is None and t.party:      # 老存档/异常情况兜底
+                caught = B.dict_to_mon(t.party[-1])
             if caught is not None:
                 view_c = B._mon_view(caught)  # 复用内部视图构造
                 async for r in self._emit_ui(
@@ -4634,6 +4671,321 @@ class PokemonWorldPlugin(Star):
             body = text or keep
         if body:
             yield event.plain_result(body)
+
+    # ════════════════════════════════════════════════════════════
+    # 玩家对玩家(PvP)回合制对战
+    #
+    # `/对战 @对方 [赌注 N]` 发起 → 对方 `/对战 接受` → 双方每回合各自
+    # `/对战 <招式|换人|道具>`,双方都交了才结算;`/对战 弃权` 投降。
+    # 会话存在世界状态里(同群共享),一方 90 秒不动由调度器/下一次交互自动出招,
+    # 战报在双方下一次操作时补发。
+    # ════════════════════════════════════════════════════════════
+
+    async def _pvp_challenge(self, event, t: Trainer, target_uid: str,
+                             target_name: str, arg: str):
+        """`/对战 @某人 [赌注 N]` —— 发起挑战。"""
+        if str(target_uid) == str(t.uid):
+            yield event.plain_result("❌ 不能和自己对战。")
+            return
+        wager = 0
+        toks = str(arg or "").replace("赌注", " 赌注 ").split()
+        if "赌注" in toks:
+            i = toks.index("赌注")
+            wager = coerce_int(toks[i + 1], 0) if len(toks) > i + 1 else 0
+        async with self._lock(t.scope):
+            state = self._state(t.scope)
+            other = self._trainer_in(t.scope, target_uid)
+            if other is None:
+                yield event.plain_result(
+                    "❌ 对方还没开始旅程(要先用 `/开始` 创建训练家)。"
+                )
+                return
+            if t.all_fainted():
+                yield event.plain_result("❌ 你的队伍全都失去战斗能力了,先 `/治疗`。")
+                return
+            if PVP.active_for(state, target_uid):
+                yield event.plain_result("❌ 对方正在和别人对战,等这场打完。")
+                return
+            if wager and t.money < wager:
+                yield event.plain_result(
+                    f"❌ 赌注不能超过你身上的钱(你现在 {fmt_money(t.money)})。"
+                )
+                return
+            try:
+                PVP.offer(state, challenger=t.uid,
+                          challenger_name=t.name or "训练家",
+                          target=target_uid, wager=wager, day=state.day)
+            except B.BattleError as e:
+                yield event.plain_result(str(e))
+                return
+            self._save_state(state)
+        name = target_name or "对方"
+        tip = f"(赌注 {wager:,}₽)" if wager else "(友谊赛,不赌钱)"
+        yield event.plain_result(
+            f"⚔️ {t.name or '训练家'} 向 {name} 发起对战{tip}!\n"
+            f"{name} 用 `/对战 接受` 应战,或 `/对战 拒绝`;5 分钟内有效。"
+        )
+
+    async def _pvp_accept(self, event, t: Trainer):
+        """`/对战 接受` —— 应战并开打。"""
+        async with self._lock(t.scope):
+            state = self._state(t.scope)
+            rows = PVP.incoming(state, t.uid)
+            if not rows:
+                yield event.plain_result("❌ 没有人正在挑战你。")
+                return
+            row = rows[0]
+            other = self._trainer_in(t.scope, str(row.get("from")))
+            if other is None:
+                state.data.get(PVP.BOX_KEY, {}).pop(
+                    PVP.key_for(str(row.get("from")), t.uid), None
+                )
+                self._save_state(state)
+                yield event.plain_result("❌ 挑战者已经不在这个群了,挑战作废。")
+                return
+            wager = int(row.get("wager") or 0)
+            if wager and (t.money < wager or other.money < wager):
+                yield event.plain_result(
+                    "❌ 有一方身上的钱不够付赌注,这场取消了。"
+                )
+                return
+            if t.all_fainted() or other.all_fainted():
+                yield event.plain_result("❌ 有一方队伍全灭,先去 `/治疗`。")
+                return
+            try:
+                log = PVP.begin(
+                    state, row, other.party_mon(), t.party_mon(),
+                    seed=hash_int("pvp", str(row.get("from")), t.uid, state.day),
+                )
+            except B.BattleError as e:
+                yield event.plain_result(str(e))
+                return
+            row["to_name"] = t.name or "训练家"
+            row["from_name"] = other.name or row.get("from_name") or "训练家"
+            for who in (other, t):
+                who.data["pvp"] = PVP.key_for(str(row.get("from")), t.uid)
+                self._save(who)
+            self._save_state(state)
+        yield event.plain_result(self._pvp_text(row, log=log, first=True))
+
+    async def _pvp_decline(self, event, t: Trainer):
+        """`/对战 拒绝` —— 拒掉别人对我的挑战。"""
+        async with self._lock(t.scope):
+            state = self._state(t.scope)
+            rows = PVP.incoming(state, t.uid)
+            if not rows:
+                yield event.plain_result("❌ 没有人正在挑战你。")
+                return
+            row = rows[0]
+            key = PVP.key_for(str(row.get("from")), t.uid)
+            state.data.get(PVP.BOX_KEY, {}).pop(key, None)
+            self._save_state(state)
+        yield event.plain_result(f"🙅 {t.name or '你'} 拒绝了这场对战。")
+
+    async def _pvp_cancel(self, event, t: Trainer, target_uid: str):
+        """`/对战 取消 @某人` —— 撤回自己发出的挑战。"""
+        async with self._lock(t.scope):
+            state = self._state(t.scope)
+            key = PVP.key_for(t.uid, target_uid or "")
+            row = state.data.get(PVP.BOX_KEY, {}).get(key)
+            if not isinstance(row, dict) or str(row.get("from")) != str(t.uid):
+                yield event.plain_result("❌ 没有你发出的挑战。")
+                return
+            state.data[PVP.BOX_KEY].pop(key, None)
+            self._save_state(state)
+        yield event.plain_result("🗑️ 挑战已撤回。")
+
+    async def _pvp_tick(self) -> None:
+        """调度器每 60 秒跑一次:替超时未出招的一方自动出招。"""
+        for scope in self.worlds.list_scopes():
+            if not ((self._state(scope).data.get(PVP.BOX_KEY)) or {}):
+                continue
+            async with self._lock(scope):
+                state = self._state(scope)
+                if not ((state.data.get(PVP.BOX_KEY)) or {}):
+                    continue
+                if self._pvp_sweep(state):
+                    self._save_state(state)
+
+    def _trainer_in(self, scope: str, uid: str) -> Trainer | None:
+        """载入**别的玩家**的存档并包成 Trainer(load 返回的是裸 dict)。"""
+        d = self.trainers.load(scope, str(uid))
+        return Trainer(d, uid=str(uid), scope=scope) if d is not None else None
+
+    def _pvp_key_of(self, t: Trainer) -> str:
+        return str(t.data.get("pvp") or "")
+
+    def _pvp_row(self, state, t: Trainer) -> dict | None:
+        key = self._pvp_key_of(t)
+        if not key:
+            return None
+        row = (state.data.get(PVP.BOX_KEY) or {}).get(key)
+        if not isinstance(row, dict) or row.get("stage") != "battle":
+            return None
+        return row
+
+    def _pvp_text(self, row: dict, *, log=None, first: bool = False,
+                  turn: list[str] | None = None, note: str = "") -> str:
+        """PvP 战报文本:双方阵容 + 本回合日志 + 各自可出的招。"""
+        from .pw.pvp import battle_of, move_list
+
+        battle = battle_of(row)
+        a_uid, b_uid = PVP.side_names(row)
+        a_name = str(row.get("from_name") or "") or self._player_name(a_uid)
+        b_name = str(row.get("to_name") or "") or self._player_name(b_uid)
+        head = [f"⚔️ 玩家对战 —— {a_name} vs {b_name}"]
+        if int(row.get("wager") or 0):
+            head.append(f"💰 赌注 {int(row['wager']):,}₽")
+        head.append(
+            f"🔵 {a_name}:{battle.player.mon.display if battle.player.mon else '—'} "
+            f"HP {battle.player.mon.cur_hp if battle.player.mon else 0}/"
+            f"{battle.player.mon.max_hp if battle.player.mon else 0}"
+        )
+        head.append(
+            f"🔴 {b_name}:{battle.enemy.mon.display if battle.enemy.mon else '—'} "
+            f"HP {battle.enemy.mon.cur_hp if battle.enemy.mon else 0}/"
+            f"{battle.enemy.mon.max_hp if battle.enemy.mon else 0}"
+        )
+        if note:
+            head.append(note)
+        body = [f"· {x}" for x in (log or turn or row.get("log") or [])]
+        if not battle.finished:
+            head.append(f"── 第 {int(row.get('turn') or 0) + 1} 回合 ──")
+            head.append(f"{a_name} 的招式:{move_list(battle, True) or '无'}")
+            head.append(f"{b_name} 的招式:{move_list(battle, False) or '无'}")
+            head.append(
+                "双方各自出招:`/对战 <序号|招式>`、`/对战 switch <序号>`、"
+                "`/对战 item <道具>`;投降 `/对战 弃权`。"
+            )
+            head.append("两边都出招后立即结算(90 秒不动会自动出招)。")
+        return "\n".join([*head, *body])
+
+    def _player_name(self, uid: str) -> str:
+        """没有名字时的兜底显示(会话里通常存了真名)。"""
+        return f"玩家{str(uid)[-4:]}" if uid else "对手"
+
+    async def _pvp_submit(self, event, t: Trainer, arg: str):
+        """PvP 中提交自己的行动;双方齐了就结算。"""
+        scope = t.scope
+        out = ""
+        async with self._lock(scope):
+            state = self._state(scope)
+            row = self._pvp_row(state, t)
+            if row is None:
+                yield event.plain_result("❌ 你现在没有进行中的玩家对战。")
+                return
+            a_uid, b_uid = PVP.side_names(row)
+            other_uid = b_uid if str(t.uid) == a_uid else a_uid
+            # 弃权:直接结束
+            if arg.strip().lower() in ("forfeit", "giveup", "投降", "认输", "弃权"):
+                out = self._pvp_finish(state, row, winner=other_uid,
+                                       reason=f"🏳️ {t.name or '有人'} 投降了。")
+            else:
+                try:
+                    action = PVP.parse_for(row, t.uid, t, arg)
+                except B.BattleError as e:
+                    yield event.plain_result(str(e))
+                    return
+                ready = PVP.submit(row, t.uid, action)
+                # 对方超时没动 → 先替他自动出招,再一起结算
+                late = PVP.timeout_side(row)
+                if late:
+                    bb = PVP.battle_of(row)
+                    PVP.submit(row, late, PVP.auto_action(bb, late == a_uid))
+                    ready = True
+                if ready:
+                    res = PVP.advance(row)
+                    if res["finished"]:
+                        win = PVP.winner_uid(row, res["winner"]) or other_uid
+                        out = self._pvp_finish(state, row, winner=win,
+                                               log=res["lines"], keep=False)
+                    else:
+                        out = self._pvp_text(row, turn=res["lines"])
+                else:
+                    self._save_state(state)
+                    yield event.plain_result(
+                        "⏳ 收到你的行动,等对方出招……(90 秒不动自动出招)\n"
+                        + self._pvp_text(row, note="你的行动已记录。")
+                    )
+                    return
+            self._save_state(state)
+        if out:
+            yield event.plain_result(out)
+
+    def _pvp_finish(self, state, row: dict, *, winner: str, reason: str = "",
+                    log=None, keep: bool = True) -> str:
+        """结束一场 PvP:移出会话、清算赌注、把两队状态写回各自存档。"""
+        from .pw.pvp import battle_of
+
+        battle = battle_of(row)
+        a_uid, b_uid = PVP.side_names(row)
+        loser = b_uid if str(winner) == str(a_uid) else a_uid
+        wager = int(row.get("wager") or 0)
+        names = {str(row.get("from")): str(row.get("from_name") or ""),
+                 str(row.get("to")): str(row.get("to_name") or "")}
+
+        def nm(u: str) -> str:
+            return names.get(str(u)) or self._player_name(u)
+
+        lines = [f"⚔️ 玩家对战结束 —— {nm(winner)} 获胜!"]
+        if reason:
+            lines.append(reason)
+        # 写回双方队伍(HP/PP/异常都保留:友谊赛不给恢复)
+        for uid, side in ((a_uid, battle.player), (b_uid, battle.enemy)):
+            who = self._trainer_in(state.scope, str(uid))
+            if who is None:
+                continue
+            for i, mon in enumerate(side.party):
+                if i < len(who.party):
+                    who.party[i] = B.mon_to_dict(mon, who.party[i])
+            who.data.pop("pvp", None)
+            if str(uid) == str(winner) and wager:
+                who.add_money(wager)          # 赢家拿赌注
+            elif str(uid) == str(loser) and wager:
+                who.add_money(-min(wager, who.money))
+            self._save(who)
+        key = PVP.key_for(a_uid, b_uid)
+        state.data.get(PVP.BOX_KEY, {}).pop(key, None)
+        if wager:
+            lines.append(
+                f"💰 赌注 {wager:,}₽ 从 {nm(loser)} 转给了 {nm(winner)}。"
+            )
+        if keep:
+            lines.append("(队伍保持现有伤害 —— 记得 `/治疗`)")
+        if log:
+            lines.extend(f"· {x}" for x in log)
+        return "\n".join(lines)
+
+    def _pvp_sweep(self, state) -> list[str]:
+        """调度器每 60 秒调一次:替迟到的一方自动出招(不让对战卡死)。
+
+        返回**被动过的会话键**(推进了回合或结束了对战)—— 调用方据此决定
+        要不要落盘:以前只在"结束"时保存,自动推进的回合没写回,
+        重启后就白打了。
+
+        战报不能主动推送(插件没有可移植的主动发消息接口),所以结果留在会话里,
+        双方下一次操作时会看到。
+        """
+        done: list[str] = []
+        for key, row in list((state.data.get(PVP.BOX_KEY) or {}).items()):
+            if not isinstance(row, dict) or row.get("stage") != "battle":
+                continue
+            late = PVP.timeout_side(row)
+            while late:
+                bb = PVP.battle_of(row)
+                a_uid, _b = PVP.side_names(row)
+                PVP.submit(row, late, PVP.auto_action(bb, late == a_uid))
+                late = PVP.timeout_side(row)
+                if not PVP.pending_side(row):
+                    break
+            if not PVP.pending_side(row):
+                res = PVP.advance(row)
+                done.append(key)
+                if res["finished"]:
+                    win = PVP.winner_uid(row, res["winner"]) or PVP.side_names(row)[1]
+                    self._pvp_finish(state, row, winner=win, log=res["lines"],
+                                    reason="⌛ 有一方超时未出招。", keep=False)
+        return done
 
     # ════════════════════════════════════════════════════════════
     # WebUI 插件页面:数据管理 REST 接口

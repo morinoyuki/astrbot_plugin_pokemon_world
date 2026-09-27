@@ -40,6 +40,8 @@ class TurnResult:
     finished: bool = False
     outcome: str = ""  # win / loss / caught / escaped / forfeit / ""
     item_key: str = ""  # 本次投出的精灵球 key(捕获画面要显示实际用的球)
+    caught: dict = field(default_factory=dict)   # 本次捕获到的宝可梦(存档里的 dict)
+    caught_where: str = ""                       # "party" / "box"
     awaiting_switch: bool = False
     growth: list[str] = field(default_factory=list)
     # **按宝可梦分开**的成长明细:结算后要单独给"升级的那一只"出成长卡,
@@ -394,6 +396,10 @@ def _finish_catch(trainer: Trainer, battle, res: TurnResult, *, day: int = 0) ->
     trainer.mark_caught(mon.species)
     entry = trainer.add_pokemon(mon, day=day)
     where = "队伍" if entry in trainer.party else "电脑"
+    # 把捕获物本身记在结果里:结算后去看存档/队伍都"已经晚了"
+    # (满 6 只时它进电脑,靠 party[-1] 或 box 增量都会定位到错的宝可梦)
+    res.caught = dict(entry)
+    res.caught_where = where
     res.rewards.append(
         f"🎉 捕获成功!{dex.species.get(mon.species, {}).get('zh', mon.species)} "
         f"Lv{mon.level} 已加入你的{where}。"
