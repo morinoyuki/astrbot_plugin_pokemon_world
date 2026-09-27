@@ -93,6 +93,10 @@
 | 🩺 数据自检 | 跑一遍不变量检查:招式机数据、**每件道具都有获取途径**、进化目标存在、学习表招式有效、**昼夜条件能被识别**、精灵图覆盖、**道馆按顺序可达** |
 | 🧰 维护 | 库/临时图占用统计,清理过期界面图(`pw_*.png`) |
 
+> 页面通过 `pages/manage/bridge.js`(适配层)与本插件通信:endpoint 用**裸路由**
+> (`api/overview`,不带前导斜杠、不带插件名)—— dashboard 会自行拼成
+> `/api/v1/plugins/extensions/<插件名>/<endpoint>`;适配层还会逐个风格试探并缓存
+> (兼容不同 AstrBot 版本与独立端口模式),bridge 也会从 `window.parent` 取。
 > 写操作与聊天指令**共用同一把会话锁**,不会和玩家操作打架;
 > 接口路由带插件名前缀(`/astrbot_plugin_pokemon_world/api/...`),
 > 旧版 AstrBot 没有插件 Web API 时自动跳过注册,不影响插件本体。

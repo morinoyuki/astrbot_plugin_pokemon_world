@@ -57,20 +57,31 @@ def run(coro):
 # ── ① 页面文件 ─────────────────────────────────────────────────────
 def test_page_files_exist_and_wire_the_bridge():
     page = _ROOT / "pages" / "manage"
-    for name in ("index.html", "app.js", "style.css"):
+    for name in ("index.html", "app.js", "bridge.js", "style.css"):
         f = page / name
         assert f.is_file(), f"缺少页面文件 {name}"
         assert f.stat().st_size > 200, f"{name} 太小,可能是空文件"
     html = (page / "index.html").read_text(encoding="utf-8")
-    # dashboard 只认这个 SDK 路径;少了页面就是一片空白
-    assert "/api/plugin/page/bridge-sdk.js" in html, "没引用 bridge SDK"
-    assert "./app.js" in html and "./style.css" in html
+    # bridge SDK 由 AstrBot 注入,页面**不需要**手写 <script src=...bridge-sdk.js>;
+    # 但页面自己的资源(含适配层 bridge.js)必须按相对路径引用 ——
+    # 绝对路径在 dashboard 的资源重写(带 asset_token)下会失效。
+    for asset in ("./bridge.js", "./app.js", "./style.css"):
+        assert asset in html, f"index.html 没引用 {asset}"
+    br = (page / "bridge.js").read_text(encoding="utf-8")
+    assert "AstrBotPluginPage" in br, "bridge.js 没找 bridge"
     js = (page / "app.js").read_text(encoding="utf-8")
-    assert "AstrBotPluginPage" in js, "app.js 没用 bridge SDK"
-    # 端点要和自己注册的路由对得上(SDK 会自动补插件前缀)
-    for ep in ("/api/overview", "/api/scopes", "/api/players", "/api/selfcheck",
-               "/api/maintenance", "/api/cleanup", "/api/player/update", "/api/world/reset"):
-        assert f'apiGet("{ep}' in js or f'apiPost("{ep}' in js, f"app.js 没调用 {ep}"
+    # app.js 只通过适配层说话(不直接碰 SDK),这样 endpoint 风格差异只在一处处理
+    assert "PWPageBridge" in js, "app.js 没用适配层"
+    assert "window.AstrBotPluginPage.api" not in js, "app.js 不该直接调 SDK"
+    # 端点必须是**裸路由**(不带前导斜杠、不带插件名):dashboard 会拼成
+    # `/api/v1/plugins/extensions/<插件名>/<endpoint>` 再与注册路由 fullmatch 比对,
+    # 多一个前导斜杠就 404 —— 表现为"总览无数据、保存无声失败"。
+    for ep in ("api/overview", "api/scopes", "api/players", "api/selfcheck",
+               "api/maintenance", "api/cleanup", "api/player/update", "api/world/reset"):
+        assert f'apiGet("{ep}"' in js or f'apiPost("{ep}"' in js, f"app.js 没调用 {ep}"
+    import re as _re
+
+    assert not _re.search(r'api(?:Get|Post)\("/', js), "端点带了前导斜杠"
 
 
 # ── ② 路由注册 ─────────────────────────────────────────────────────

@@ -3,7 +3,7 @@
 (function () {
   "use strict";
 
-  const P = window.AstrBotPluginPage;
+  const BR = window.PWPageBridge;
   const $ = (sel) => document.querySelector(sel);
   const $$ = (sel) => Array.from(document.querySelectorAll(sel));
 
@@ -65,17 +65,27 @@
   function closeModal() { $("#modal-mask").classList.remove("show"); }
 
   // ── bridge 调用 ──
-  async function apiGet(ep, params) {
-    if (!P?.apiGet) throw new Error("bridge SDK 未加载");
-    const r = await P.apiGet(ep, params);
-    if (r && r.ok === false) throw new Error(r.message || "请求失败");
+  // 具体走哪个 endpoint 风格由 bridge.js 逐个试探并缓存(不同 AstrBot 版本拼接
+  // 方式不同);这里只管拿到 {ok, data} 或抛出可读错误。
+  async function apiGet(route, params) {
+    const r = await BR.request(window, "GET", route, { params });
+    if (!r.ok) throw new Error(r.error || "请求失败");
     return r;
   }
-  async function apiPost(ep, body) {
-    if (!P?.apiPost) throw new Error("bridge SDK 未加载");
-    const r = await P.apiPost(ep, body);
-    if (r && r.ok === false) throw new Error(r.message || "请求失败");
+  async function apiPost(route, body) {
+    const r = await BR.request(window, "POST", route, { body });
+    if (!r.ok) throw new Error(r.error || "请求失败");
     return r;
+  }
+
+  /** 出错时把消息写进面板(只弹 toast 容易错过 —— "总览无数据"就是这么被忽略的)。 */
+  function showError(target, err) {
+    const el = typeof target === "string" ? $(target) : target;
+    if (el) {
+      el.innerHTML = `<div class="check"><div class="mark">❌</div>` +
+        `<div class="txt"><b>加载失败</b><span>${esc(err?.message || err)}</span></div></div>`;
+    }
+    toast("❌ " + (err?.message || err));
   }
 
   // ── Tab ──
@@ -94,7 +104,7 @@
 
   // ── 总览 ──
   async function loadOverview() {
-    const o = await apiGet("/api/overview");
+    const o = await apiGet("api/overview");
     const db = o.db || {};
     $("#ov-cards").innerHTML = [
       card("玩家存档", o.players),
@@ -117,7 +127,7 @@
 
   // ── 玩家存档 ──
   async function loadScopeOptions() {
-    SCOPES = (await apiGet("/api/scopes")).scopes || [];
+    SCOPES = (await apiGet("api/scopes")).scopes || [];
     const opts = SCOPES.map(
       (s) => `<option value="${esc(s.scope)}">${esc(s.scope)} · ${s.players} 人` +
         `${s.kind ? " · " + esc(s.kind) : ""}</option>`
@@ -130,7 +140,7 @@
   async function loadPlayers() {
     const scope = $("#p-scope").value;
     const kw = $("#p-keyword").value.trim().toLowerCase();
-    const r = await apiGet("/api/players", scope ? { scope } : {});
+    const r = await apiGet("api/players", scope ? { scope } : {});
     let rows = r.players || [];
     if (kw) {
       rows = rows.filter((x) =>
@@ -175,7 +185,7 @@
       {
         label: "删除", style: "danger",
         onClick: async () => {
-          await apiPost("/api/player/delete", { scope, uid });
+          await apiPost("api/player/delete", { scope, uid });
           toast("已删除");
           await loadPlayers();
           await loadScopeOptions();
@@ -186,7 +196,7 @@
 
   // ── 玩家详情 ──
   async function openPlayer(scope, uid) {
-    const d = await apiGet(`/api/player/${encodeURIComponent(scope)}/${encodeURIComponent(uid)}`);
+    const d = await apiGet(`api/player/${encodeURIComponent(scope)}/${encodeURIComponent(uid)}`);
     CUR = { scope, uid, data: d };
     $("#drawer-title").textContent = `${d.summary.name || uid}`;
     $("#drawer-sub").textContent = `${scope} / ${uid}`;
@@ -269,7 +279,7 @@
             item: $("#m-item").value,
             moves: $("#m-moves").value.split(/[,,]/).map((x) => x.trim()).filter(Boolean),
           };
-          await apiPost("/api/player/update", {
+          await apiPost("api/player/update", {
             scope: CUR.scope, uid: CUR.uid,
             actions: [{ op: "mon", where, index, set }],
           });
@@ -282,7 +292,7 @@
   }
 
   async function saveBase() {
-    await apiPost("/api/player/update", {
+    await apiPost("api/player/update", {
       scope: CUR.scope, uid: CUR.uid,
       set: {
         name: $("#e-name").value,
@@ -298,7 +308,7 @@
   }
 
   async function act(actions, tip) {
-    await apiPost("/api/player/update", {
+    await apiPost("api/player/update", {
       scope: CUR.scope, uid: CUR.uid, actions,
     });
     toast(tip || "已执行");
@@ -320,7 +330,7 @@
   async function loadWorld() {
     const scope = $("#w-scope").value;
     if (!scope) { toast("先选一个范围"); return; }
-    const r = await apiGet(`/api/world/${encodeURIComponent(scope)}`);
+    const r = await apiGet(`api/world/${encodeURIComponent(scope)}`);
     const s = r.summary || {};
     $("#w-cards").innerHTML = [
       card("世界第几天", s.day_no, `开服绝对序号 ${s.started_day}`),
@@ -343,7 +353,7 @@
   // ── 自检 ──
   async function runSelfcheck() {
     $("#sc-list").innerHTML = `<p class="muted">检查中…</p>`;
-    const r = await apiGet("/api/selfcheck");
+    const r = await apiGet("api/selfcheck");
     $("#sc-list").innerHTML = (r.checks || []).map((c) => `
       <div class="check">
         <div class="mark">${c.ok ? "✅" : "❌"}</div>
@@ -354,7 +364,7 @@
 
   // ── 维护 ──
   async function loadMaint() {
-    const m = await apiGet("/api/maintenance");
+    const m = await apiGet("api/maintenance");
     $("#m-cards").innerHTML = [
       card("库文件", fmtSize(m.db?.size), m.db?.path || ""),
       card("玩家 / 世界", `${m.db?.trainers ?? 0} / ${m.db?.worlds ?? 0}`,
@@ -367,12 +377,19 @@
 
   // ── 启动 ──
   async function boot() {
-    if (!P) {
-      document.body.textContent = "bridge SDK 未加载,无法使用管理页面";
+    if (!BR) {
+      showError("#ov-cards", new Error("bridge.js 未加载(页面资源缺失)"));
       return;
     }
-    await P.ready();
-    if (P.getContext && P.getContext()?.isDark) document.body.classList.add("dark");
+    const bridge = await BR.readyBridge(window);
+    if (!bridge) {
+      showError("#ov-cards", new Error(
+        "没拿到 AstrBot 页面 bridge —— 请从 WebUI 的「插件页面」(插件详情 → Pages)" +
+        "打开本页;直接用浏览器访问 HTML 文件无法使用。"));
+      return;
+    }
+    const ctx = typeof bridge.getContext === "function" ? bridge.getContext() : null;
+    if (ctx && ctx.isDark) document.body.classList.add("dark");
 
     $$(".tab").forEach((t) => (t.onclick = () => switchTab(t.dataset.tab)));
     $$(".dt").forEach((t) => (t.onclick = () => {
@@ -401,7 +418,7 @@
         {
           label: "确认删除", style: "danger",
           onClick: async () => {
-            await apiPost("/api/player/delete", { scope, all: true, confirm: "DELETE" });
+            await apiPost("api/player/delete", { scope, all: true, confirm: "DELETE" });
             toast("已清空");
             await loadPlayers();
             await loadScopeOptions();
@@ -453,7 +470,7 @@
           {
             label: "重置", style: "danger",
             onClick: async () => {
-              await apiPost("/api/world/reset", { scope, what });
+              await apiPost("api/world/reset", { scope, what });
               toast("已重置");
               await loadWorld();
             },
@@ -466,7 +483,7 @@
     $("#sc-run").onclick = () => runSelfcheck().catch((e) => toast("❌ " + e.message));
     $("#m-clean").onclick = async () => {
       try {
-        const r = await apiPost("/api/cleanup", {
+        const r = await apiPost("api/cleanup", {
           keep_seconds: Number($("#m-keep").value) || 1800,
         });
         toast(`清理了 ${r.removed} 个文件,释放 ${fmtSize(r.freed)}`);
@@ -475,13 +492,13 @@
     };
     $("#m-reload").onclick = () => loadMaint().catch((e) => toast("❌ " + e.message));
 
-    TAB_LOADERS.overview = loadOverview;
+    TAB_LOADERS.overview = () => loadOverview().catch((e) => showError("#ov-cards", e));
     TAB_LOADERS.players = async () => { await loadScopeOptions(); await loadPlayers(); };
     TAB_LOADERS.world = async () => { await loadScopeOptions(); await loadWorld(); };
     TAB_LOADERS.selfcheck = runSelfcheck;
     TAB_LOADERS.maint = loadMaint;
 
-    await loadOverview().catch((e) => toast("❌ " + e.message));
+    await loadOverview().catch((e) => showError("#ov-cards", e));
   }
 
   boot();

@@ -1,5 +1,35 @@
 # Changelog
 
+## 1.10.1
+
+### 修复:插件页面「总览无数据 / 编辑无法保存」
+
+**根因**(读已安装的 AstrBot 实现确认,不是猜的):
+前端把 endpoint 拼成 `/api/v1/plugins/extensions/<插件名>/<endpoint>`
+(`dist/assets/PluginPagePage-*.js`),后端再用 `_match_registered_web_api`
+把 `/<插件名>/<endpoint>` 与**注册路由 fullmatch** 比对。
+所以 endpoint 只能是"去掉插件名、去掉前导斜杠"的**裸路由** `api/overview`;
+之前写的 `/api/overview` 会拼出双斜杠 → 404 → 页面表现为总览空白、
+点保存无声失败(旧代码还只弹一个容易被忽略的 toast)。
+
+**改法**:
+- 新增 `pages/manage/bridge.js` 适配层(**纯逻辑、无 DOM 依赖,可用 node 直接测**):
+  · endpoint 逐风格试探 + 记住命中的那种(裸路由 / 补 `page/` / 带插件名 …)
+    —— 兼容不同 AstrBot 版本与独立端口模式;
+  · bridge 从 `window.parent` 兜底获取(沙箱 iframe 里常常只有父窗口有),并轮询等待就绪;
+  · 统一三种响应信封(`{ok,…}` / `{success,data}` / 裸对象)与错误文案
+    (`message`/`error`/`detail`),路由不存在的两种表现(抛异常 / 回错误对象)都能继续换风格;
+- app.js 只通过适配层说话(不再直接碰 SDK),出错时**把消息写进面板**而不是只弹 toast;
+- 后端注册时用 `_json_view` 把 dict 包成框架的 `json_response`(handler 本体仍返回
+  纯 dict,测试可以直接调用断言);
+- 页面资源改相对路径引用 `./bridge.js`(bridge SDK 由 AstrBot 注入,不必手写)。
+
+**测试** 336 → 347:其中 8 条**用 node 真跑** `bridge.js`(候选顺序、跨风格回退与缓存、
+父窗口 bridge、POST 原样透传、信封归一化、缺 bridge 的可读报错),另有 1 条断言
+「app.js 调用的端点与后端注册路由对得上且不带前导斜杠」——正是这次踩的坑。
+ruff 全绿;版本 1.10.1。
+
+
 ## 1.10.0
 
 ### 新功能:AstrBot「插件页面」数据管理页面

@@ -170,7 +170,8 @@
 
 <div id="toast" class="toast"></div>
 
-<script src="/api/plugin/page/bridge-sdk.js"></script>
+<!-- bridge.js 是纯逻辑适配层(无 DOM 依赖),必须先于 app.js 加载 -->
+<script src="./bridge.js"></script>
 <script src="./app.js"></script>
 </body>
 </html>

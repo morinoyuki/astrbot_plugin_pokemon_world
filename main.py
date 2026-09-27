@@ -108,6 +108,23 @@ def _web_query(name: str, default: str = "") -> str:
     return str(val).strip() if val is not None else default
 
 
+def _json_view(handler):
+    """注册用的薄包装:把 handler 返回的 dict 包成 `json_response`。
+
+    dashboard 会先看响应的 `status` 字段再决定取 `data`;显式包一层是框架推荐写法。
+    handler 本体仍返回纯 dict(测试可以直接调用、直接断言)。
+    """
+
+    @functools.wraps(handler)
+    async def view(*args, **kwargs):
+        res = await handler(*args, **kwargs)
+        if isinstance(res, dict) and _web_json is not None:
+            return _web_json(res)
+        return res
+
+    return view
+
+
 def _web_handler(func):
     """包装插件 Web API handler:统一异常 → error envelope。"""
 
@@ -4366,7 +4383,7 @@ class PokemonWorldPlugin(Star):
         def _reg(route, handler, methods, desc) -> None:
             try:
                 self.context.register_web_api(
-                    route, handler, methods, f"宝可梦世界: {desc}"
+                    route, _json_view(handler), methods, f"宝可梦世界: {desc}"
                 )
             except Exception as e:
                 logger.warning("宝可梦世界: 注册 Web API %s 失败: %s", route, e)
