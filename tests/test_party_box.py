@@ -664,10 +664,15 @@ def test_bag_text_fallback_lists_effects():
         t = p._load(ev)
         t.data["bag"] = {"potion": 3, "great-ball": 2, "pp-up": 1}
         p._save(t)
-        out = _run(p, "/背包", "cmd_bag")
-        assert "回复 20 HP" in out
-        assert "捕获率 ×1.5" in out
-        assert "PP 上限" in out
+        # 文本回退现在**按分类**展示:逐个分类看(以前是一股脑全列)
+        out = _run(p, "/背包 回复", "cmd_bag")
+        assert "回复 20 HP" in out, out
+        out = _run(p, "/背包 精灵球", "cmd_bag")
+        assert "捕获率 ×1.5" in out, out
+        out = _run(p, "/背包 道具", "cmd_bag")
+        assert "PP 上限" in out, out
+        # 分类一览也要给出来(玩家才知道怎么切)
+        assert "分类:" in _run(p, "/背包", "cmd_bag")
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -871,3 +876,106 @@ def test_bag_payload_carries_structured_effect():
         assert "回复 20 HP" in rows["potion"]["effect"]
         rows = {x["key"]: x for x in p._bag_payload(t, "精灵球")["items"]}
         assert "捕获率" in rows["great-ball"]["effect"]
+
+
+def test_bag_pocket_switching_works_in_both_paths(monkeypatch):
+    """`/背包 精灵球` 之类必须真的切分类。
+
+    之前有两个问题:① 图片路径其实能切,但界面上没有任何"怎么切"的提示;
+    ② **文本回退路径完全忽略分类**,写哪个分类都列全部道具 —— 等于没做分类。
+    """
+    from pw import ui_render as UI
+
+    with tempfile.TemporaryDirectory() as tmp:
+        p, ev = _start(tmp)
+        t = p._load(ev)
+        t.data["bag"] = {"potion": 3, "poke-ball": 5, "super-potion": 2,
+                         "rare-candy": 1, "tm-flamethrower": 1, "master-ball": 1}
+        p._save(t)
+        # ① payload 按分类分组
+        balls = p._bag_payload(t, "精灵球")
+        assert balls["pocket"] == "balls"
+        assert {x["key"] for x in balls["items"]} == {"poke-ball", "master-ball"}
+        med = p._bag_payload(t, "回复")
+        assert med["pocket"] == "medicine"
+        assert {x["key"] for x in med["items"]} == {"potion", "super-potion"}
+        assert p._bag_payload(t, "招式机")["pocket"] == "tm"
+        # 序号 → 高亮(并自动翻页)
+        assert p._bag_payload(t, "精灵球", index=2)["selected"] == 1
+
+        # ② 文本回退也要按分类过滤
+        p.config = {"ui_image": False}
+        out_balls = _run(p, "/背包 精灵球", "cmd_bag")
+        assert "精灵球" in out_balls and "伤药" not in out_balls, out_balls
+        assert "── 精灵球 ──" in out_balls
+        assert "分类:道具" in out_balls, "要列出各分类,玩家才知道怎么切"
+        out_med = _run(p, "/背包 回复", "cmd_bag")
+        assert "伤药" in out_med and "精灵球 ×" not in out_med
+        # 指定序号 → 有 ▶ 标记
+        out_pick = _run(p, "/背包 道具 1", "cmd_bag")
+        assert "▶1." in out_pick, out_pick
+
+        # ③ 图片里要画出行序号,否则玩家没法指"第几件"
+        p.config = {"ui_image": True, "battle_image_scale": 2}
+        texts = _drawn_texts(monkeypatch, UI.render_bag, balls["items"],
+                             money=1, active_pocket="balls", selected=1,
+                             scale=1)
+        assert any(t.strip() == "1." for t in texts), texts[:12]
+        assert any(t.strip() == "2." for t in texts), texts[:12]
+        assert any("切换分类" in t for t in texts), texts[-6:]
+
+
+def test_battle_final_frame_shows_real_foe_after_wipe(monkeypatch):
+    """队伍全灭时的战斗画面不能错乱。
+
+    用户反馈:我方变成"队伍里第一只宝可梦"、敌方变成"？"。
+    根因是结算时 `data["battle"]` 被清掉 → `view()` 退到待机分支
+    (我方取 `party[0]`,而且 `_finish_loss` 刚把队伍治好,显示满血;
+    敌方没有数据 → "？")。后来又发现"什么都不写"更糟:session 里留着
+    回合开始前的旧快照(finished=False),`in_battle()` 仍为 True,
+    玩家每发一次 `/对战` 就会用旧状态重新结算一次败北。
+    """
+    import importlib
+
+    from pw import battle as B
+
+    rendered: list[tuple] = []
+    br = importlib.import_module("pw_plugin.pw.battle_render")
+    monkeypatch.setattr(
+        br, "render_battle",
+        lambda my, foe, log, **kw: (rendered.append((my, foe, kw)), b"")[1],
+    )
+
+    with tempfile.TemporaryDirectory() as tmp:
+        p, ev = _start(tmp)
+        t = p._load(ev)
+        t.data["region"] = "kanto"
+        t.data["location"] = "kanto-route-1"
+        t.data["party"][0].update({"species": "caterpie", "level": 3})
+        p.config = {"ui_image": False, "battle_image": True, "battle_image_scale": 2}
+        p._save(t)
+        t = p._load(ev)
+        B.start(t, [{"species": "dragonite", "level": 70}], kind="trainer",
+                wild=False, meta={"kind": "trainer", "title": "训练家战"}, day=1)
+        p._save(t)
+        money0 = p._load(ev).money
+
+        ev = _Event("/对战 move 1")
+        run_cmd(p, ev, p.cmd_battle)
+        # 画面参数:我方是**真的倒下**的那只(HP 0),敌方是真实对手而不是空
+        assert rendered, "没有渲染战斗画面"
+        my, foe, kw = rendered[-1]
+        assert my.get("cur_hp") == 0, f"我方应显示已倒下,实际 {my}"
+        assert foe.get("name") and foe.get("level"), f"敌方不能是空的: {foe}"
+        assert kw.get("title") == "训练家战"
+
+        # 打完立刻就不算"对战中",再发指令不能重复结算
+        assert not B.in_battle(p._load(ev)), "结束后 in_battle 必须为 False"
+        money1 = p._load(ev).money
+        ev2 = _Event("/对战 move 1")
+        run_cmd(p, ev2, p.cmd_battle)
+        assert "当前没有对战" in "".join(ev2.outputs), ev2.outputs
+        assert p._load(ev2).money == money1, "不能重复扣败北罚金"
+        assert money1 < money0, "非野生战失败应扣一半金钱"
+        # 画面发完清掉 session
+        assert not B.session(p._load(ev2)).get("battle")

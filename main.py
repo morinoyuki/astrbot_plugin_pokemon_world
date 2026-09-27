@@ -878,19 +878,40 @@ class PokemonWorldPlugin(Star):
         if not items:
             yield event.plain_result("背包是空的。")
             return
-        lines = [f"🎒 {t.name} 的背包({fmt_money(t.money)})"]
-        for _k, entry, n in items:
-            # 文本回退没有分页,直接全列出来,并带上"这道具到底做什么"
-            eff = effect_text(_k)
-            lines.append(
-                f"· {entry['zh']} ×{n}"
-                + (f" —— {eff}" if eff else "")
-                + (f"({entry['desc']})" if entry.get("desc") else "")
-            )
         pocket_arg, want_index, want_page = _parse_page_args(
             self._args(event, ("背包", "bag", "道具")), numeric_is_page=False
         )
         payload = self._bag_payload(t, pocket_arg, index=want_index, page=want_page)
+        # 文本回退:**按口袋过滤**(以前不管写哪个口袋都列全部,切分类等于没做),
+        # 并在最上面列出各口袋数量,让"怎么切分类"一眼可见。
+        groups = payload["groups"]
+        counts = " · ".join(
+            f"{label} {len(groups.get(pk) or [])}"
+            + (f"({len(groups.get(pk) or [])} 种)" if False else "")
+            for pk, label in UI.POCKETS
+        )
+        lines = [
+            f"🎒 {t.name} 的背包({fmt_money(t.money)})",
+            f"分类:{counts}",
+            f"── {dict(UI.POCKETS).get(payload['pocket'], payload['pocket'])} ──",
+        ]
+        rows = payload["items"]
+        if not rows:
+            lines.append("这个分类是空的。")
+        for i, row in enumerate(rows, 1):
+            mark = "▶" if i - 1 == payload["selected"] else " "
+            lines.append(
+                f"{mark}{i}. {row['zh']} ×{row['count']}"
+                + (f" —— {row['effect']}" if row.get("effect") else "")
+                + (f"({row['desc']})" if row.get("desc") else "")
+            )
+        sel_row = rows[payload["selected"]] if rows else None
+        if sel_row and (sel_row.get("effect") or sel_row.get("desc")):
+            lines.append(
+                f"详情:{sel_row['zh']} —— "
+                + (sel_row.get("effect") or sel_row.get("desc") or "")
+            )
+
         async for r in self._emit_ui(
             event, "bag",
             lambda: UI.render_bag(
@@ -898,7 +919,8 @@ class PokemonWorldPlugin(Star):
                 selected=payload["selected"], scale=self._img_scale(),
             ),
             text="\n".join(lines),
-            hint="使用:`/使用 <道具> [序号]` · 携带:`/持有 <道具> [序号]` · 交换:`/交换`",
+            hint="切换分类:`/背包 <分类>`(道具/精灵球/回复/招式机/重要)· "
+                 "看第 N 件:`/背包 <分类> <序号>`",
         ):
             yield r
 
@@ -1321,6 +1343,10 @@ class PokemonWorldPlugin(Star):
                     yield r
                 async for r in self._emit_result_cards(event, t, meta, res):
                     yield r
+                # 画面都发完了,这时才清掉"已结束的对战数据"(它在渲染期间要留着,
+                # 否则败北画面会退化成 我方=队伍第一只 / 敌方="？")
+                B.clear_finished(t)
+                self._save(t)
                 return
             # 战斗画面的对话框只放得下 4 行,长战报会被截断 —— 所以完整战报
             # 再用文本发一遍(用户反馈"避免过长导致省略一部分")。

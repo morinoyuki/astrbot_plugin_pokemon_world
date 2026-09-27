@@ -379,8 +379,10 @@ def render_shop(
             # 传 key 而不是大类:否则 15 种球、9 种药在货架上长得一模一样
             icon = str(it.get("key") or it.get("kind") or "")
             sc.item_icon(icon, 11, y0 + 1.5, 9)
-            sc.text(24, y0 + 1.5,
-                    _fit(sc, str(it.get("zh") or it.get("key") or "?"), 96, 8.4),
+            # 行首序号:玩家要能指着"第 N 件"看详情
+            sc.text(23, y0 + 2.2, f"{idx + 1}.", size=6.6, fill=TEXT_DIM)
+            sc.text(35, y0 + 1.5,
+                    _fit(sc, str(it.get("zh") or it.get("key") or "?"), 88, 8.4),
                     size=8.4, fill=TEXT)
             try:
                 price = round(float(it.get("price") or 0) * disc)
@@ -395,9 +397,9 @@ def render_shop(
                 sc.text_right(226 - pw, y0 + 2.5, f"×{count}", size=7.4,
                               fill=TEXT_DIM)
             # 每行都写效果 —— 否则玩家只看得到"选中那一件"的说明
-            eff = _fit(sc, str(it.get("effect") or it.get("desc") or ""), 208, 6.4)
+            eff = _fit(sc, str(it.get("effect") or it.get("desc") or ""), 198, 6.4)
             if eff:
-                sc.text(24, y0 + row_h - 7.6, eff, size=6.4, fill=TEXT_DIM)
+                sc.text(35, y0 + row_h - 7.6, eff, size=6.4, fill=TEXT_DIM)
         if not shown:
             sc.text(14, list_top + 6, "这里暂时没有商品。", size=8.5, fill=TEXT_DIM)
 
@@ -409,7 +411,8 @@ def render_shop(
                 price = round(float(cur.get("price") or 0) * disc)
             except (TypeError, ValueError):
                 price = 0
-            head = (f"{sel + 1}. {cur.get('zh') or cur.get('key') or '—'}"
+            head = (f"第 {sel + 1}/{max(1, total)} 件 · "
+                    f"{cur.get('zh') or cur.get('key') or '—'}"
                     f" · 持有 ×{int(cur.get('count') or 0)} · {price:,}₽")
         else:
             head = "—"
@@ -432,9 +435,7 @@ def render_shop(
             sc.text(10, y, ln, size=7.8, fill=TEXT)
             y += 8.6
 
-        tail = "◆ /商店 买 <道具> [数量] · /商店 卖 <道具> [数量]"
-        if pages > 1:
-            tail += " · 翻页写序号"
+        tail = "◆ 买:`/商店 买 <道具> [数量]` · 看第 N 件:`/商店 <序号>`"
         sc.footer(_fit(sc, tail, 226, 7.0), size=7.0)
         return sc.finish()
     except Exception as e:  # 渲染失败回退文本

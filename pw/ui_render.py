@@ -1632,20 +1632,22 @@ def render_bag(
             if idx == sel:
                 sc.highlight((7, y0, 233, y0 + row_h - 1))
             sc.item_icon(str(it.get("key") or it.get("kind") or ""), 10, y0 + 1.5, 9)
-            sc.text(23, y0 + 1.5,
-                    _fit(sc, str(it.get("zh") or it.get("key") or ""), 120, 8.4),
+            # 行首显示**序号**:不然玩家根本没法指定"看第几件"
+            sc.text(22, y0 + 2.2, f"{idx + 1}.", size=6.6, fill=TEXT_DIM)
+            sc.text(34, y0 + 1.5,
+                    _fit(sc, str(it.get("zh") or it.get("key") or ""), 112, 8.4),
                     size=8.4, fill=TEXT)
             sc.text_right(228, y0 + 1.5, f"×{int(it.get('count') or 0)}",
                           size=8.4, fill=TEXT)
             # 每行都写自己的效果:以前只有"被选中那一件"有说明,
             # 默认选中第 0 件 ⇒ 玩家看到的永远只有第一件的说明
-            eff = _fit(sc, str(it.get("effect") or it.get("desc") or ""), 208, 6.4)
+            eff = _fit(sc, str(it.get("effect") or it.get("desc") or ""), 198, 6.4)
             if eff:
-                sc.text(23, y0 + row_h - 7.6, eff, size=6.4, fill=TEXT_DIM)
+                sc.text(34, y0 + row_h - 7.6, eff, size=6.4, fill=TEXT_DIM)
         # 说明框:选中那一件的效果 + 说明(标题行右侧放页码,避免压住列表)
         cur = items[sel] if total else {}
         sc.window((5, 106, 235, sc.content_bottom), radius=2)
-        head = f"{sel + 1}. {cur.get('zh') or cur.get('key') or '—'}"
+        head = f"第 {sel + 1}/{max(1, total)} 件 · {cur.get('zh') or cur.get('key') or '—'}"
         if cur.get("kind"):
             head += f" · {KIND_ZH.get(str(cur['kind']), cur['kind'])}"
         sc.text(10, 108.5, _fit(sc, head, 150, 7.6), size=7.6, fill=TEXT_DIM)
@@ -1667,9 +1669,9 @@ def render_bag(
         for ln in sc.wrap(str(cur.get("desc") or "—"), 220, size=7.8, limit=max(1, room)):
             sc.text(10, y, ln, size=7.8, fill=TEXT)
             y += 8.6
-        tail = "◆ 使用:`/使用 <道具> [序号]`"
-        if pages > 1:
-            tail += " · 翻页写序号"
+        # 提示里写**中文分类名**,别把内部 key(items/balls)抖给玩家
+        pk_label = next((lb for pk, lb in pockets if pk == active_pocket), "道具")
+        tail = f"◆ 切换分类:`/背包 <分类>` · 看第 N 件:`/背包 {pk_label} <序号>`"
         sc.footer(_fit(sc, tail, 226, 7.0), size=7.0)
         return sc.finish()
     except Exception as e:  # 渲染失败回退文本

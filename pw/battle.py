@@ -133,7 +133,16 @@ def session(trainer: Trainer) -> dict:
 
 
 def in_battle(trainer: Trainer) -> bool:
-    return bool(session(trainer).get("battle"))
+    """是否有一场**进行中**的对战(已结束但留着给画面用的不算)。"""
+    b = session(trainer).get("battle")
+    return bool(b) and not bool(b.get("finished"))
+
+
+def clear_finished(trainer: Trainer) -> None:
+    """清掉"已经打完、只为渲染而留着"的对战数据。"""
+    b = session(trainer).get("battle")
+    if b and b.get("finished"):
+        trainer.data["battle"] = None
 
 
 class BattleError(Exception):
@@ -352,7 +361,17 @@ def take_turn(
         res.outcome = "loss" if action.get("type") != "forfeit" else "forfeit"
         _finish_loss(trainer, battle, meta, res, forfeit=action.get("type") == "forfeit")
 
-    trainer.data["battle"] = None
+    # 把"刚打完的这一场"写回 session(**带 finished=True**)。
+    #
+    # 这里有两个坑:
+    # ① 直接清空(旧实现)→ `view()` 退到"待机"分支:我方变成队伍第一只(还是刚被
+    #    `heal_party()` 治好的满血值)、敌方变成"？" —— 用户反馈的败北界面错乱。
+    # ② 什么都不写 → session 里留着**回合开始前**那份旧快照(finished=False):
+    #    画面同样错(我方还是满血),更糟的是 `in_battle()` 仍为 True,玩家每发一次
+    #    `/对战` 就会用旧状态**重新结算一次败北**(非野生战反复扣一半金钱)。
+    # 正确做法:写入已结束的终局状态。渲染层拿到真实的我方(已倒下)/敌方,
+    # `in_battle()` 因为 finished=True 立即返回 False;画面发完再 `clear_finished()`。
+    trainer.data["battle"] = {**data, "battle": battle.to_dict()}
     return res
 
 
