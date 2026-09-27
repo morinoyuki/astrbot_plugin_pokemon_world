@@ -184,7 +184,13 @@ def _web_handler(func):
 
     return wrapper
 
-DEFAULT_STARTERS = ["新叶喵", "呆火鳄", "润水鸭", "皮卡丘", "伊布", "小火龙", "杰尼龟", "妙蛙种子"]
+# 开局可选伙伴(中文名;`starter_choices` 配置留空时用这份)
+DEFAULT_STARTERS = [
+    "新叶喵", "呆火鳄", "润水鸭",      # 帕底亚御三家
+    "火斑喵",                          # 阿罗拉火系御三家
+    "皮卡丘", "伊布",                  # 人气款
+    "小火龙", "杰尼龟", "妙蛙种子",    # 关都御三家
+]
 EXPLORE_ITEM_POOL = ["potion", "poke-ball", "antidote", "oran-berry", "super-potion"]
 
 

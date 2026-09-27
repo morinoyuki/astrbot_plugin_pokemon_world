@@ -144,3 +144,39 @@ def test_obtainable_set_covers_starters_and_fossils():
     got = PM._obtainable_set()
     for sp in ("litten", "torracat", "incineroar", "rowlet", "cranidos", "rampardos"):
         assert sp in got, f"{sp} 不在可得集合里"
+
+
+def test_litten_is_a_default_starter():
+    """`/开始` 的默认名单里要有火斑喵(玩家要求),且名单里每一项都能解析。
+
+    名单是**中文名**,写错一个字就会在开局时报"不在候选里" ——
+    所以这里逐项校验。
+    """
+    import pw_plugin.main as PM
+
+    from pw.dex import get_dex
+
+    assert "火斑喵" in PM.DEFAULT_STARTERS
+    assert PM.DEFAULT_STARTERS[0:3] == ["新叶喵", "呆火鳄", "润水鸭"], "帕底亚御三家要保留在最前"
+    dex = get_dex()
+    bad = [n for n in PM.DEFAULT_STARTERS if not dex.resolve_species(n)]
+    assert not bad, f"名单里有解析不了的宝可梦:{bad}"
+
+
+def test_can_start_with_litten():
+    """真的能用 `/开始 小智 火斑喵` 开局。"""
+    with tempfile.TemporaryDirectory() as tmp:
+        p = _Cmd(tmp)
+        p.config = {"ui_image": False, "quest_enable": False}
+        ev = _Event("/开始 小智 火斑喵")
+        run_cmd(p, ev, p.cmd_start)
+        t = p._load(ev)
+        assert t is not None
+        assert [m["species"] for m in t.data["party"]] == ["litten"]
+        assert t.caught("litten")
+        # 名单外的仍然要拒绝(防超梦开局)
+        p2 = _Cmd(tempfile.mkdtemp())
+        p2.config = {"ui_image": False, "quest_enable": False}
+        ev2 = _Event("/开始 小智 超梦")
+        run_cmd(p2, ev2, p2.cmd_start)
+        assert "不在初始宝可梦候选里" in "".join(str(x) for x in ev2.outputs)
