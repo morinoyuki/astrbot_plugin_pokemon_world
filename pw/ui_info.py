@@ -461,15 +461,17 @@ def render_battle_result(*, outcome: str, title: str = "", lines: list[str] = ()
         # 而且旧实现还会把战斗里发放的少量奖励(如经验)一并列出来。
         show_reward = key in ("win", "caught")
         rlabel = "◆ 奖励"
-        rtext = " · ".join(_lines(rewards, limit=4)) if show_reward else ""
+        rtext = "\n".join(_lines(rewards, limit=4)) if show_reward else ""
         if not show_reward:
             # 战败/认输/逃跑**没有奖励**(引擎也确实不发),但引擎会把
             # "被送回宝可梦中心、队伍已恢复"这类结算信息放进 rewards ——
             # 这些要照常展示,只是不该挂在"奖励"标题下面。
-            info = " · ".join(_lines(rewards, limit=2))
+            info = "\n".join(_lines(rewards, limit=2))
             if info:
                 rlabel, rtext = "◆ 结果", info
-        gtext = " · ".join(_lines(growth, limit=4)) or "这次没有新的感悟。"
+        # 每条独立成行(`Screen.wrap` 认 \n):用 " · " 连成一段会把换行位置
+        # 落在条目中间,导致成长信息错挂到别的宝可梦名下
+        gtext = "\n".join(_lines(growth, limit=4)) or "这次没有新的感悟。"
         lw = sc.tw("◆ 奖励 ", 7.6)
         bw = 235 - rx0 - 12 - lw
         lim_r = lim_g = 2
@@ -500,6 +502,9 @@ def render_battle_result(*, outcome: str, title: str = "", lines: list[str] = ()
 
 
 # ══════════════════════════════════════════════════════════════════
+from .growth import move_brief  # noqa: E402  (成长/待学列表要显示招式效果)
+
+
 # 5. 成长 / 进化
 # ══════════════════════════════════════════════════════════════════
 def render_growth(mon: dict, *, before_level: int = 0, after_level: int = 0,
@@ -548,7 +553,9 @@ def render_growth(mon: dict, *, before_level: int = 0, after_level: int = 0,
         lb = (5, 69, 235, 105)
         sc.window(lb, radius=2, shadow=False)
         sc.text(10, 71.5, "◆ 学会了", size=7.8, fill=(56, 96, 60))
-        learnt = "、".join(_lines(learned, limit=4)) or "这次没有学会新招式。"
+        # 写出招式**效果**(只给名字看不出这招做什么)
+        learnt = "\n".join(move_brief(mv) for mv in list(learned)[:4]) \
+            or "这次没有学会新招式。"
         for i, ln in enumerate(sc.wrap(learnt, 214, size=8, limit=3)):
             sc.text(12, 81 + i * 9, ln, size=8, fill=TEXT if learned else TEXT_DIM)
 
@@ -556,7 +563,8 @@ def render_growth(mon: dict, *, before_level: int = 0, after_level: int = 0,
         pb = (5, 108, 235, sc.content_bottom)
         sc.window(pb, radius=2, shadow=False)
         sc.text(10, 110.5, "○ 待替换招式", size=7.8, fill=(140, 96, 56))
-        pend = "、".join(_lines(pending, limit=4)) or "招式栏还有空位,不用替换。"
+        pend = "\n".join(move_brief(mv) for mv in list(pending)[:4]) \
+            or "招式栏还有空位,不用替换。"
         for i, ln in enumerate(sc.wrap(pend, 214, size=8, limit=3)):
             sc.text(12, 120 + i * 9, ln, size=8, fill=TEXT if pending else TEXT_DIM)
 

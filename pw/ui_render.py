@@ -1268,17 +1268,27 @@ class Screen:
         return fonts.measure(sanitize(s), round(size * self.scale)) / self.scale
 
     def wrap(self, s: str, max_w: float, *, size: float = 9, limit: int = 6) -> list[str]:
-        out, cur = [], ""
-        for ch in sanitize(s):
-            if self.tw(cur + ch, size) > max_w and cur:
+        """按宽度折行;**显式换行符 `\n` 是强制换行**。
+
+        以前 `\n` 被当普通字符(还会被 sanitize 丢掉),于是"多条信息用 \n 拼"
+        再交给 wrap 就等于把内容连成一整段,换行位置落在条目中间
+        (战斗结算的成长条目就这样把"学会了「X」"错挂到下一只宝可梦头上)。
+        """
+        out: list[str] = []
+        for hard in str(s or "").split("\n"):
+            cur = ""
+            for ch in sanitize(hard):
+                if self.tw(cur + ch, size) > max_w and cur:
+                    out.append(cur)
+                    cur = ch
+                    if len(out) >= limit:
+                        return out[:limit]
+                else:
+                    cur += ch
+            if cur:
                 out.append(cur)
-                cur = ch
                 if len(out) >= limit:
-                    return out
-            else:
-                cur += ch
-        if cur:
-            out.append(cur)
+                    return out[:limit]
         return out[:limit]
 
     # ── 组件(逻辑坐标)──

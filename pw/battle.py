@@ -42,6 +42,10 @@ class TurnResult:
     item_key: str = ""  # 本次投出的精灵球 key(捕获画面要显示实际用的球)
     awaiting_switch: bool = False
     growth: list[str] = field(default_factory=list)
+    # **按宝可梦分开**的成长明细:结算后要单独给"升级的那一只"出成长卡,
+    # 光靠 growth 里的文字行去反推会把别的队员的"学会/待学"也算进去
+    # (实测:杰尼龟的"想学「缩入壳中」"出现在了波波的成长卡上)。
+    growth_detail: list[dict] = field(default_factory=list)
     levels_gained: int = 0          # 本次战斗累计升了几级(任务系统用)
     evolved: list[str] = field(default_factory=list)  # 本次战斗发生进化的物种 key
     rewards: list[str] = field(default_factory=list)
@@ -412,6 +416,7 @@ def _finish_win(
     share = max(1, int(total_exp / len(participants)))
     for i in participants:
         cur = dict_to_mon(trainer.party[i])
+        _lv_before = int(cur.level)
         g = growth.gain_exp(
             cur, share, daytime=daytime,
             party=[str(m.get("species") or "") for m in trainer.party],
@@ -422,15 +427,32 @@ def _finish_win(
             f"{cur.display}: +{share} EXP"
             + (f" → Lv{cur.level}" if g.levels_gained else "")
         )
+        # 每条都**自带宝可梦名字**:结算卡空间有限会截断条目,只靠"上一行是谁"
+        # 来推断归属会把"学会了「缩入壳中」"读到下一只头上(实测踩过)。
         for mv in g.learned:
-            res.growth.append(f"　└ 学会了「{growth.move_zh(mv)}」!")
+            res.growth.append(f"　└ {cur.display} 学会了「{growth.move_zh(mv)}」!")
         for mv in g.pending:
             res.growth.append(
-                f"　└ 想学「{growth.move_zh(mv)}」但招式已满,用 /学招 选择替换。"
+                f"　└ {cur.display} 想学「{growth.move_brief(mv)}」"
+                "(招式已满,用 /学招 替换)"
             )
         if g.pending:
             trainer.party[i]["pending"] = list(g.pending)
         res.levels_gained += int(g.levels_gained or 0)
+        res.growth_detail.append(
+            {
+                "index": i,
+                "name": cur.display,
+                "levels": int(g.levels_gained or 0),
+                "exp": int(share),
+                "from_level": _lv_before,
+                "to_level": int(cur.level),
+                "learned": list(g.learned),
+                "pending": list(g.pending),
+                "evolved_from": str(g.evolved_from or ""),
+                "evolved_to": str(g.evolved_to or ""),
+            }
+        )
         if g.evolved_to:
             res.evolved.append(str(g.evolved_to))
             res.growth.append(

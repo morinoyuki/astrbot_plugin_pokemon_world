@@ -896,6 +896,11 @@ class PokemonWorldPlugin(Star):
         desc = str(payload.get("ability_desc") or "")
         if ab:
             lines.append(f"◆ 特性 {ab}:{desc}" if desc else f"◆ 特性 {ab}")
+        lines.extend(
+            f"◆ 待学「{growth.move_brief(mv)}」"
+            f" —— 用 `/学招 {int(payload.get('index') or 1)} <招式> 替换 <序号>`"
+            for mv in (payload.get("pending") or [])
+        )
         moves = payload.get("moves") or []
         if moves:
             lines.append("◆ 招式")
@@ -1911,8 +1916,11 @@ class PokemonWorldPlugin(Star):
         pending = list(t.party[idx - 1].get("pending") or [])
         if len(mon.moves) >= 4 and not replace:
             yield event.plain_result(
-                f"⚠️ {mon.display} 已会 4 个招式,请指定替换哪一个:\n"
-                + "\n".join(f"{i}. {growth.move_zh(m)}" for i, m in enumerate(mon.moves, 1))
+                f"⚠️ {mon.display} 已会 4 个招式 —— 要学的「{growth.move_brief(mr[0])}」"
+                "需替换掉下面一个:\n"
+                + "\n".join(
+                    f"{i}. {growth.move_brief(m)}" for i, m in enumerate(mon.moves, 1)
+                )
                 + f"\n可用:`/学招 {idx} {tokens[1]} 替换 <序号|招式>`"
             )
             return
@@ -1939,8 +1947,11 @@ class PokemonWorldPlugin(Star):
         self._save(t)
         yield event.plain_result(f"✅ {mon.display} 学会了「{mr[1].get('zh')}」!")
         if pending:
+            # 待替换的招式也要能看出"这招做什么",否则玩家没法决定要不要换
             yield event.plain_result(
-                "仍待决定:" + "、".join(growth.move_zh(m) for m in pending)
+                "仍待决定(用 `/学招 "
+                f"{idx} <招式> 替换 <序号>` 决定):\n"
+                + "\n".join(f"· {growth.move_brief(m)}" for m in pending)
             )
 
     @filter.command("进化", alias={"evolve"})
@@ -2418,9 +2429,21 @@ class PokemonWorldPlugin(Star):
             t.commit(num - 1, mon)
             self._save(t)
             lines = [f"🍬 {mon.display} 使用了 {entry['zh']},升到了 Lv{mon.level}!"]
-            lines.extend(f"　└ 学会了「{growth.move_zh(mv)}」!" for mv in res.learned)
+            # 每条都带名字与招式效果:只写名字看不出这招做什么,也不该让玩家
+            # 去猜"这一行是谁学的"
+            lines.extend(
+                f"　└ {mon.display} 学会了「{growth.move_brief(mv)}」!"
+                for mv in res.learned
+            )
+            lines.extend(
+                f"　└ {mon.display} 想学「{growth.move_brief(mv)}」"
+                "(招式已满,用 `/学招` 替换)"
+                for mv in res.pending
+            )
             if res.evolved_to:
-                lines.append(f"　└ ✨ 进化成了 {growth.species_zh(res.evolved_to)}!")
+                lines.append(
+                    f"　└ ✨ {mon.display} 进化成了 {growth.species_zh(res.evolved_to)}!"
+                )
             yield event.plain_result("\n".join(lines))
             return
 
@@ -3515,20 +3538,26 @@ class PokemonWorldPlugin(Star):
                     yield r
             return
         if res.growth:
-            learned = [ln.split("「")[1].rstrip("」!") for ln in res.growth if "学会了" in ln]
-            pending = [ln.split("「")[1].split("」")[0] for ln in res.growth if "想学" in ln]
-            evo_to = ""
-            evo_from = ""
-            for ln in res.growth:
-                if "进化了!" in ln:
-                    part = ln.split("进化了!")[-1]
-                    if "→" in part:
-                        evo_from, evo_to = (x.strip() for x in part.split("→", 1))
+            # 成长卡只讲**升级的那一只**。以前是从 res.growth 的所有文字行里
+            # 刮 `「…」` 来拼 learned/pending,结果全队的"学会/待学"都堆到
+            # 当前出战的那只头上(杰尼龟的"想学「缩入壳中」"出现在波波卡上)。
+            detail = next((d for d in res.growth_detail if d.get("levels")), None)
+            if detail is None and res.growth_detail:
+                detail = res.growth_detail[-1]
+            idx = int((detail or {}).get("index") or 0)
+            md = t.party[idx] if 0 <= idx < len(t.party) else None
+            view_g = B._mon_view(B.dict_to_mon(md)) if md else mon
+            learned = list((detail or {}).get("learned") or [])
+            pending = list((detail or {}).get("pending") or [])
+            evo_from = growth.species_zh(str((detail or {}).get("evolved_from") or ""))
+            evo_to = growth.species_zh(str((detail or {}).get("evolved_to") or ""))
+            before_level = int((detail or {}).get("from_level") or 0)
+            after_level = int((detail or {}).get("to_level") or 0)
             async for r in self._emit_ui(
                 event, "growth",
                 lambda: UII.render_growth(
-                    mon, before_level=int(mon.get("level") or 0) - 1,
-                    after_level=int(mon.get("level") or 0), learned=learned,
+                    view_g, before_level=before_level,
+                    after_level=after_level, learned=learned,
                     pending=pending, evolved_from_zh=evo_from, evolved_to_zh=evo_to,
                     scale=self._img_scale(),
                 ),
@@ -3658,6 +3687,8 @@ class PokemonWorldPlugin(Star):
             )
         return {
             "species": mon.species,
+            "index": int(index),                       # 给"待学招式"提示里的 /学招 用
+            "pending": list(d.get("pending") or []),    # 招式已满、还没决定替换的
             "name": mon.nickname or entry.get("zh") or mon.species,
             "level": int(mon.level),
             "gender": str(mon.gender or ""),

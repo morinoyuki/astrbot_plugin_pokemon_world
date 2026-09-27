@@ -34,6 +34,25 @@ def move_zh(key: str) -> str:
     return ((get_dex().moves.get(key) or {}).get("zh")) or key
 
 
+def move_brief(key: str | None) -> str:
+    """招式**一行简介**:名字 [属性/分类] 威力 + 一句效果。
+
+    给"待替换招式"这类列表用 —— 只写名字玩家不知道这招做什么
+    (完整资料走 `/招式 <序号>`;这里必须塞得进一行)。
+    """
+    d = get_dex()
+    k = str(key or "")
+    e = d.moves.get(k) or {}
+    zh = e.get("zh") or move_zh(k)
+    head = f"{zh} [{d.type_label(str(e.get('type') or ''))}/" \
+           f"{d.move_category_zh(str(e.get('category') or ''))}]"
+    base = int(e.get("basePower") or 0)
+    if base:
+        head += f" 威力{base}"
+    eff = d.move_short_desc(k)
+    return f"{head} —— {eff}" if eff else head
+
+
 def species_zh(key: str) -> str:
     return ((get_dex().species.get(key) or {}).get("zh")) or key
 
