@@ -39,6 +39,7 @@ from .prompts import (
     narration_facts,
 )
 from .pw import battle as B
+from .pw import battle_render as BR
 from .pw import daily as D
 from .pw import events as EV
 from .pw import growth, legendary, npc, story
@@ -1660,16 +1661,40 @@ class PokemonWorldPlugin(Star):
 
     @filter.command("对战", alias={"battle", "出招", "move"})
     async def cmd_battle(self, event: AstrMessageEvent):
-        """/对战 <行动> —— 出招 / 换人 / 道具 / 逃跑"""
+        """/对战 <行动> —— 出招/换人/道具;`/对战 @某人` 发起玩家对战"""
+        arg = self._args(event, ("对战", "battle", "出招", "move")).strip()
+        low = arg.strip().lower()
+        uid = str(event.get_sender_id() or "")
+        ats = [x for x in _at_users(event) if x[0] and x[0] != 'all']
+
+        # ── 跨会话:玩家对战开在群里,出招可以在**私聊**发(私聊 scope 没有存档,
+        #    所以按 uid 去各个群找会话)──
+        if not ats:
+            mine = self._find_pvp(uid)
+            if mine is not None:
+                scope, _row, me = mine
+                async for r in self._pvp_submit(event, me, arg, scope=scope):
+                    yield r
+                return
+            if low in ("接受", "accept", "同意", "应战", "拒绝", "refuse",
+                       "reject", "不了"):
+                off = self._find_offer(uid)
+                if off is not None:
+                    scope, _r2 = off
+                    me = self._trainer_in(scope, uid)
+                    if me is not None:
+                        fn = (self._pvp_accept if low.startswith(("接受", "accept", "同意", "应战"))
+                              else self._pvp_decline)
+                        async for r in fn(event, me, scope=scope):
+                            yield r
+                        return
+
         t, err = self._require(event, in_battle_ok=True)
         if err:
             yield event.plain_result(err)
             return
-        arg = self._args(event, ("对战", "battle", "出招", "move")).strip()
-        low = arg.strip().lower()
 
         # ── 玩家对玩家:挑战 / 接受 / 拒绝 / 取消 / 出招 ──
-        ats = [x for x in _at_users(event) if x[0] and x[0] != 'all']
         if ats and not B.in_battle(t) and not self._pvp_key_of(t):
             async for r in self._pvp_challenge(event, t, ats[0][0], ats[0][1], arg):
                 yield r
@@ -4808,6 +4833,9 @@ class PokemonWorldPlugin(Star):
             wager = coerce_int(toks[i + 1], 0) if len(toks) > i + 1 else 0
         async with self._lock(t.scope):
             state = self._state(t.scope)
+            # 记下群会话:玩家可能在私聊出招,战报要发回群里
+            if event.unified_msg_origin:
+                state.data["umo"] = event.unified_msg_origin
             other = self._trainer_in(t.scope, target_uid)
             if other is None:
                 yield event.plain_result(
@@ -4840,16 +4868,17 @@ class PokemonWorldPlugin(Star):
             f"{name} 用 `/对战 接受` 应战,或 `/对战 拒绝`;5 分钟内有效。"
         )
 
-    async def _pvp_accept(self, event, t: Trainer):
-        """`/对战 接受` —— 应战并开打。"""
-        async with self._lock(t.scope):
-            state = self._state(t.scope)
+    async def _pvp_accept(self, event, t: Trainer, *, scope: str = ""):
+        """`/对战 接受` —— 应战并开打(私聊里应战也走这里)。"""
+        scope = scope or t.scope
+        async with self._lock(scope):
+            state = self._state(scope)
             rows = PVP.incoming(state, t.uid)
             if not rows:
                 yield event.plain_result("❌ 没有人正在挑战你。")
                 return
             row = rows[0]
-            other = self._trainer_in(t.scope, str(row.get("from")))
+            other = self._trainer_in(scope, str(row.get("from")))
             if other is None:
                 state.data.get(PVP.BOX_KEY, {}).pop(
                     PVP.key_for(str(row.get("from")), t.uid), None
@@ -4874,18 +4903,26 @@ class PokemonWorldPlugin(Star):
             except B.BattleError as e:
                 yield event.plain_result(str(e))
                 return
+            row["place"] = WorldMap().where_am_i(other)
             row["to_name"] = t.name or "训练家"
             row["from_name"] = other.name or row.get("from_name") or "训练家"
             for who in (other, t):
                 who.data["pvp"] = PVP.key_for(str(row.get("from")), t.uid)
                 self._save(who)
             self._save_state(state)
-        yield event.plain_result(self._pvp_text(row, log=log, first=True))
+        async for r in self._emit_pvp(event, row, t.uid, lines=log):
+            yield r
+        await self._announce(
+            scope,
+            f"⚔️ {row.get('from_name')} 与 {row.get('to_name')} 的玩家对战开始了!"
+            + (f"(赌注 {int(row.get('wager') or 0):,}₽)" if row.get("wager") else ""),
+        )
 
-    async def _pvp_decline(self, event, t: Trainer):
+    async def _pvp_decline(self, event, t: Trainer, *, scope: str = ""):
         """`/对战 拒绝` —— 拒掉别人对我的挑战。"""
-        async with self._lock(t.scope):
-            state = self._state(t.scope)
+        scope = scope or t.scope
+        async with self._lock(scope):
+            state = self._state(scope)
             rows = PVP.incoming(state, t.uid)
             if not rows:
                 yield event.plain_result("❌ 没有人正在挑战你。")
@@ -4928,6 +4965,132 @@ class PokemonWorldPlugin(Star):
 
     def _pvp_key_of(self, t: Trainer) -> str:
         return str(t.data.get("pvp") or "")
+
+    # ── 跨会话查找:私聊也能出招 ──
+    def _find_pvp(self, uid: str) -> tuple[str, dict, Trainer] | None:
+        """找这个人正在进行的玩家对战(**跨 scope**:对战开在群里,出招可以在私聊)。
+
+        私聊时 `scope` 是 `u<uid>`,那里没有群存档,所以必须按 uid 扫各个群的世界状态。
+        """
+        if not uid:
+            return None
+        for scope in self.worlds.list_scopes():
+            state = self._state(scope)
+            for row in (state.data.get(PVP.BOX_KEY) or {}).values():
+                if not isinstance(row, dict) or row.get("stage") != "battle":
+                    continue
+                if uid not in (str(row.get("from")), str(row.get("to"))):
+                    continue
+                me = self._trainer_in(scope, uid)
+                if me is not None:
+                    return scope, row, me
+        return None
+
+    def _find_offer(self, uid: str) -> tuple[str, dict] | None:
+        """找别人对他发出、还没回应的挑战(同样跨 scope)。"""
+        if not uid:
+            return None
+        for scope in self.worlds.list_scopes():
+            state = self._state(scope)
+            for row in (state.data.get(PVP.BOX_KEY) or {}).values():
+                if (isinstance(row, dict) and row.get("stage") == "offer"
+                        and str(row.get("to")) == str(uid)):
+                    return scope, row
+        return None
+
+    def _pvp_payload(self, row: dict) -> dict:
+        """把会话整理成画面需要的字段(镜像渲染由渲染层负责)。"""
+        from .pw.pvp import battle_of
+
+        battle = battle_of(row)
+        a_uid, b_uid = PVP.side_names(row)
+
+        def side(mon, party):
+            if mon is None:
+                return {}, []
+            return (
+                {
+                    "species": mon.species, "name": mon.display,
+                    "level": int(mon.level), "gender": str(mon.gender or ""),
+                    "cur_hp": int(mon.cur_hp), "max_hp": int(max(1, mon.max_hp)),
+                    "status": str(mon.status or ""),
+                },
+                [{"cur_hp": int(m.cur_hp), "max_hp": int(max(1, m.max_hp))}
+                 for m in party[:6]],
+            )
+
+        left, lp = side(battle.player.mon, battle.player.party)
+        right, rp = side(battle.enemy.mon, battle.enemy.party)
+        names = {str(row.get("from")): str(row.get("from_name") or ""),
+                 str(row.get("to")): str(row.get("to_name") or "")}
+        return {
+            "left": left, "right": right, "left_party": lp, "right_party": rp,
+            "left_name": names.get(a_uid) or self._player_name(a_uid),
+            "right_name": names.get(b_uid) or self._player_name(b_uid),
+            "turn": int(row.get("turn") or 0) + 1,
+            "wager": int(row.get("wager") or 0),
+            "weather": str((row.get("battle") or {}).get("weather") or ""),
+            "location": self._pvp_place(row),
+            "log": list(row.get("log") or []),
+        }
+
+    def _pvp_place(self, row: dict) -> str:
+        return str(row.get("place") or "")
+
+    def _pvp_hint(self, row: dict, uid: str) -> str:
+        """每个玩家看到的一行提示(自己的招式 + 怎么出招)。"""
+        from .pw.pvp import battle_of, move_list
+
+        battle = battle_of(row)
+        first = str(uid) == str(row.get("from"))
+        mine = move_list(battle, first)
+        waiting = PVP.pending_side(row)
+        head = f"🔵 你的招式:{mine or '无'}"
+        if waiting == str(uid):
+            return (
+                f"{head}\n轮到你了:`/对战 <招式序号>`、`/对战 switch <序号>`、"
+                "`/对战 item <道具>`;投降 `/对战 弃权`。\n"
+                "(私聊我出招也行 —— 群里发也可以)"
+            )
+        return f"{head}\n⏳ 等对方出招…(90 秒不动会自动出招)"
+
+    async def _emit_pvp(self, event, row: dict, uid: str, *, lines=None,
+                        fallback: str = ""):
+        """玩家对战画面(图片)+ 一行提示;渲染失败回退整段文本。"""
+        payload = self._pvp_payload(row)
+        if lines is not None:
+            payload["log"] = list(lines)[-4:]
+        hint = self._pvp_hint(row, uid)
+        if self._cfg_bool("ui_image", True):
+            try:
+                data = BR.render_pvp_battle(
+                    payload["left"], payload["right"], payload["log"],
+                    left_name=payload["left_name"], right_name=payload["right_name"],
+                    left_party=payload["left_party"], right_party=payload["right_party"],
+                    turn=payload["turn"], wager=payload["wager"],
+                    weather=payload["weather"], location=payload["location"],
+                    scale=self._img_scale(),
+                )
+                if data:
+                    path = self._temp_image(data, "pw_pvp")
+                    yield event.chain_result(
+                        [Image.fromFileSystem(path), Plain(hint)]
+                    )
+                    return
+            except Exception as e:
+                logger.debug("宝可梦世界: 玩家对战画面渲染失败: %s", e)
+        yield event.plain_result((fallback or self._pvp_text(row)) + "\n" + hint)
+
+    async def _announce(self, scope: str, text: str) -> None:
+        """把战报推到**群**里(玩家可能在私聊出招,群里的人也要看到结果)。"""
+        umo = str(self._state(scope).data.get("umo") or "")
+        send = getattr(self.context, "send_message", None)
+        if not umo or send is None or not self._cfg_bool("pvp_announce", True):
+            return
+        try:
+            await send(umo, [Plain(text)])
+        except Exception as e:
+            logger.debug("宝可梦世界: 玩家对战播报失败: %s", e)
 
     def _pvp_row(self, state, t: Trainer) -> dict | None:
         key = self._pvp_key_of(t)
@@ -4978,10 +5141,11 @@ class PokemonWorldPlugin(Star):
         """没有名字时的兜底显示(会话里通常存了真名)。"""
         return f"玩家{str(uid)[-4:]}" if uid else "对手"
 
-    async def _pvp_submit(self, event, t: Trainer, arg: str):
-        """PvP 中提交自己的行动;双方齐了就结算。"""
-        scope = t.scope
+    async def _pvp_submit(self, event, t: Trainer, arg: str, *, scope: str = ""):
+        """PvP 中提交自己的行动;双方齐了就结算(私聊提交也走这里)。"""
+        scope = scope or t.scope
         out = ""
+        image_lines = None
         async with self._lock(scope):
             state = self._state(scope)
             row = self._pvp_row(state, t)
@@ -5014,17 +5178,26 @@ class PokemonWorldPlugin(Star):
                         out = self._pvp_finish(state, row, winner=win,
                                                log=res["lines"], keep=False)
                     else:
-                        out = self._pvp_text(row, turn=res["lines"])
+                        out = ""
+                        image_lines = res["lines"]
                 else:
                     self._save_state(state)
-                    yield event.plain_result(
-                        "⏳ 收到你的行动,等对方出招……(90 秒不动自动出招)\n"
-                        + self._pvp_text(row, note="你的行动已记录。")
-                    )
+                    async for r in self._emit_pvp(
+                        event, row, t.uid,
+                        fallback="⏳ 收到你的行动,等对方出招……(90 秒不动自动出招)\n"
+                                 + self._pvp_text(row, note="你的行动已记录。"),
+                    ):
+                        yield r
                     return
             self._save_state(state)
         if out:
+            # 战报推到群里(玩家可能在私聊出招,群里的人也该看到结果)
+            await self._announce(scope, out)
             yield event.plain_result(out)
+            return
+        if image_lines is not None:
+            async for r in self._emit_pvp(event, row, t.uid, lines=image_lines):
+                yield r
 
     def _pvp_finish(self, state, row: dict, *, winner: str, reason: str = "",
                     log=None, keep: bool = True) -> str:

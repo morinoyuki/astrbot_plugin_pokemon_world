@@ -96,5 +96,10 @@
     "type": "int",
     "hint": "同一地点一个月内最多能捡到的道具数;0 表示不限",
     "default": 10
+  },
+  "pvp_announce": {
+    "type": "bool",
+    "description": "玩家对战的战报推到群里(玩家可能在私聊出招)",
+    "default": true
   }
 }
