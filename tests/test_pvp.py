@@ -166,3 +166,29 @@ def test_pvp_gives_no_exp_or_quest_progress():
         assert exp0 == exp1, f"PvP 不该给经验:{exp0} → {exp1}"
 
 
+def test_timeout_turn_is_announced_to_group():
+    """超时自动出招/超时结束都必须播报到群里。
+
+    否则玩家要等自己下一次操作才发现“对战早就结束了”—— 赌注转移也看不到。
+    """
+    import asyncio
+
+    with tempfile.TemporaryDirectory() as tmp:
+        p = setup(tmp)
+        sent: list[str] = []
+
+        async def fake_announce(scope, text):
+            sent.append(text)
+
+        p._announce = fake_announce
+        _start(p, wager=300)
+        act(p, "/对战 1")                     # 只有 u1 出招
+        st = p._state("g10086")
+        row = next(iter((st.data.get("pvp") or {}).values()))
+        row["acted_at"] = dict.fromkeys(row["acted_at"], 0)   # 视为很久以前
+        p._save_state(st)
+        asyncio.run(p._pvp_tick())            # 调度器那一跳
+        assert any("超时" in x for x in sent), f"超时推进没播报:{sent}"
+        assert any("玩家对战" in x for x in sent), sent
+
+

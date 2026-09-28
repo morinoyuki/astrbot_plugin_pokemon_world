@@ -4932,8 +4932,11 @@ class PokemonWorldPlugin(Star):
                 state = self._state(scope)
                 if not ((state.data.get(PVP.BOX_KEY)) or {}):
                     continue
-                if self._pvp_sweep(state):
+                texts = self._pvp_sweep(state)
+                if texts:
                     self._save_state(state)
+                    for txt in texts:
+                        await self._announce(scope, txt)
 
     def _trainer_in(self, scope: str, uid: str) -> Trainer | None:
         """载入**别的玩家**的存档并包成 Trainer(load 返回的是裸 dict)。"""
@@ -5154,17 +5157,6 @@ class PokemonWorldPlugin(Star):
         elif out:
             yield event.plain_result(out)
 
-    async def _announce(self, scope: str, text: str) -> None:
-        """把战报推到**群**里(玩家可能在私聊出招,群里的人也要看到结果)。"""
-        umo = str(self._state(scope).data.get("umo") or "")
-        send = getattr(self.context, "send_message", None)
-        if not umo or send is None or not self._cfg_bool("pvp_announce", True):
-            return
-        try:
-            await send(umo, [Plain(text)])
-        except Exception as e:
-            logger.debug("宝可梦世界: 玩家对战播报失败: %s", e)
-
     def _pvp_row(self, state, t: Trainer) -> dict | None:
         key = self._pvp_key_of(t)
         if not key:
@@ -5265,11 +5257,11 @@ class PokemonWorldPlugin(Star):
         要不要落盘:以前只在"结束"时保存,自动推进的回合没写回,
         重启后就白打了。
 
-        战报不能主动推送(插件没有可移植的主动发消息接口),所以结果留在会话里,
-        双方下一次操作时会看到。
+        返回**该播报到群里的文本**:超时推进的回合与超时结束的结果都要让群里看到,
+        否则玩家要等自己下一次操作才发现"对战早就结束了"。
         """
         done: list[str] = []
-        for key, row in list((state.data.get(PVP.BOX_KEY) or {}).items()):
+        for row in list((state.data.get(PVP.BOX_KEY) or {}).values()):
             if not isinstance(row, dict) or row.get("stage") != "battle":
                 continue
             late = PVP.timeout_side(row)
@@ -5282,11 +5274,14 @@ class PokemonWorldPlugin(Star):
                     break
             if not PVP.pending_side(row):
                 res = PVP.advance(row)
-                done.append(key)
                 if res["finished"]:
                     win = PVP.winner_uid(row, res["winner"]) or PVP.side_names(row)[1]
-                    self._pvp_finish(state, row, winner=win, log=res["lines"],
-                                    reason="⌛ 有一方超时未出招。", keep=False)
+                    done.append(self._pvp_finish(
+                        state, row, winner=win, log=res["lines"],
+                        reason="⌛ 有一方超时未出招。", keep=False))
+                else:
+                    done.append(self._pvp_text(
+                        row, turn=res["lines"], note="⌛ 有一方超时,已自动出招。"))
         return done
 
     # ════════════════════════════════════════════════════════════
