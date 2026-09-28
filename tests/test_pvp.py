@@ -215,3 +215,42 @@ def test_timeout_turn_is_announced_to_group():
         assert any("玩家对战" in x for x in sent), sent
 
 
+
+
+def test_timeout_announce_sends_message_chain_to_group():
+    """超时自动出招的群播报必须用真 MessageChain 发送。
+
+    回归:以前 `_announce` 把**裸 list** 传给 send_message,平台适配器拿
+    `.chain` 抛 AttributeError 被吞掉 —— 群里什么都收不到,玩家以为
+    “自动出招没用”。这里用真实约定(第二参数必须是 MessageChain)的
+    假 context 端到端跑 `_pvp_tick`。
+    """
+    from astrbot.api.event import MessageChain
+
+    class FakeCtx:
+        def __init__(self):
+            self.sent: list[str] = []
+
+        async def send_message(self, umo, chain):
+            assert isinstance(chain, MessageChain), f"send_message 收到裸对象:{type(chain)}"
+            self.sent.append(
+                "".join(str(getattr(c, "text", "") or "") for c in chain.chain)
+            )
+
+    with tempfile.TemporaryDirectory() as tmp:
+        p = setup(tmp)
+        # 真实玩家跑过指令后,世界状态才会落盘并带上 umo(群播报的会话地址)
+        run_cmd(p, _Event("/状态"), p.cmd_status)
+        p.context = FakeCtx()
+        _start(p, wager=300)
+        act(p, "/对战 1")                     # 只有 u1 出招
+        st = p._state("g10086")
+        row = next(iter((st.data.get("pvp") or {}).values()))
+        row["acted_at"] = dict.fromkeys(row["acted_at"], 0)   # 视为很久以前
+        p._save_state(st)
+        asyncio.run(p._pvp_tick())            # 调度器那一跳(走真 _announce)
+        assert any("超时" in x for x in p.context.sent), f"没播报:{p.context.sent}"
+        assert any("玩家对战" in x for x in p.context.sent), p.context.sent
+        # 回合确实被自动推进并落盘
+        row2 = next(iter((p._state("g10086").data.get("pvp") or {}).values()))
+        assert int(row2.get("turn") or 0) == 1, row2.get("turn")

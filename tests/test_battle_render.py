@@ -311,3 +311,40 @@ def test_scale_one_still_shrinks_but_keeps_rendering():
     img = br._load_sprite(br.sprite_for("blastoise", back=False),
                           br.FOE_SCALE, (64, 58))
     assert img.width < 96, "scale=1 时敌方应当真的缩小"
+
+
+def test_dialog_layer_is_above_sprites():
+    """战报对话框(窗口+文本)的图层必须高于宝可梦。
+
+    回归:精灵改到放大画布上贴之后,对话框先画、精灵后贴 → 我方高个子精灵
+    会压在战报框和第一行文字上。现在精灵贴完后再把对话框原样贴回,
+    对话框区域应与"没画精灵"时逐像素一致。
+    """
+    import io
+
+    from pw import battle_render as br
+
+    my = {"species": "diglett", "name": "地鼠", "level": 50,
+          "cur_hp": 80, "max_hp": 120}
+    foe = {"species": "onix", "name": "大岩蛇", "level": 48,
+           "cur_hp": 90, "max_hp": 150, "status": "psn"}
+    # title + 3 行日志 = 4 行 → 对话框顶到 MSG_TOP_MAX=112,
+    # 我方高个子精灵(左侧,脚踩 120)必然压到对话框区域
+    log = ["地鼠 使用了 挖洞!", "效果拔群!", "大岩蛇 很难受!"]
+    S = 3
+
+    def render():
+        return Image.open(io.BytesIO(br.render_battle(my, foe, log, title="对战", scale=S)))
+
+    img = render()
+    orig = br._paste_small
+    br._paste_small = lambda *a, **k: None      # 对照:不画精灵
+    try:
+        ref = render()
+    finally:
+        br._paste_small = orig
+    dlg = (br.MSG_EDGE_X[0] * S, br.MSG_TOP_MAX * S,
+           br.MSG_EDGE_X[1] * S, br.MSG_BOTTOM * S)
+    assert img.crop(dlg).tobytes() == ref.crop(dlg).tobytes(), (
+        "对话框区域被宝可梦盖住了(图层顺序不对)"
+    )

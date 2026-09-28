@@ -335,12 +335,19 @@ def render_pvp_battle(
 
         big = small.resize((W, H), Image.NEAREST)
 
+        # 战报对话框先快照:精灵贴到放大画布上会盖住对话框区域,
+        # 贴完精灵再原样贴回 —— 战报窗口的图层必须高于宝可梦(与 PvE 一致)
+        dlg = big.crop((mx0 * S, my0 * S, mx1 * S, my1 * S))
+
         # ── 两只精灵贴到**放大后**的画布(面对面:左侧水平翻转)──
         # 直接按最终画布分辨率缩放(细节不丢失),坐标跟着 ×S
         _paste_small(big, left, PVP_A_GROUND, factor=MY_SCALE, bounds=(92, 50),
                      back=False, dim=not _alive(left), flip=True, S=scale)
         _paste_small(big, right, PVP_B_GROUND, factor=MY_SCALE, bounds=(92, 50),
                      back=False, dim=not _alive(right), S=scale)
+
+        # 对话框回到精灵之上
+        big.paste(dlg, (mx0 * S, my0 * S))
 
         d2 = ImageDraw.Draw(big)
         _box_text(big, d2, left, PVP_A_BOX, PVP_A_BAR, f_name, f_small, f_ball, S,
@@ -553,6 +560,11 @@ def render_battle(
         # ── 放大(像素风)──
         big = small.resize((W, H), Image.NEAREST)
 
+        # 战报对话框先快照一份:精灵要贴到放大画布上,会盖住对话框区域;
+        # 先贴精灵、再把对话框原样贴回 —— **战报窗口的图层必须高于宝可梦**
+        # (否则我方的高个子精灵会压在战报框和第一行文字上)
+        dlg = big.crop((mx0 * S, my0 * S, mx1 * S, my1 * S))
+
         # ── 精灵贴到**放大后**的画布(脚底统一踩在落地线上)──
         # 直接按最终画布分辨率缩放:敌方 0.62 在 3 倍画布上是 1.86 倍上采样,
         # 每个源像素都保留;旧实现先缩到逻辑画布(NEAREST 丢 40% 像素)再放大。
@@ -560,6 +572,9 @@ def render_battle(
                      back=True, dim=not _alive(my), S=scale)
         _paste_small(big, foe, FOE_GROUND, factor=FOE_SCALE, bounds=(64, 58),
                      back=False, dim=not _alive(foe), S=scale)
+
+        # 对话框回到精灵之上
+        big.paste(dlg, (mx0 * S, my0 * S))
 
         d2 = ImageDraw.Draw(big)
 

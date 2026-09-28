@@ -1,5 +1,33 @@
 # Changelog
 
+## 1.20.0
+
+### 推送链路:群里终于能收到消息了(裸 list → MessageChain)
+
+- **PvP 超时播报 / 每日推送一直发不出去**:`_announce` / `_notify` 把**裸
+  list** 传给 astrbot 的群发接口,平台适配器(aiocqhttp 等)拿 `.chain` 抛
+  AttributeError 被吞掉 —— 群里什么都收不到,后台也只有 debug 日志。现在两处
+  都改用官方 `MessageChain(chain=[Plain(...)])`(`from astrbot.api.event`
+  导入),与 astrbot 自己内置命令的用法一致
+- **凌晨 4 点玩家指令恰好在调度的同一天先滚好了世界时,今日事件也不推送**:
+  `roll_day` 是同一天幂等的(返回 `rolled=False`),旧代码拿到空事件就直接跳过
+  —— 这一天群里就没有推送。现在若发现玩家已滚好今天,会从世界事件里把
+  `created_day == 今天` 的事件找出来照样推送
+- 新增回归:`test_timeout_announce_sends_message_chain_to_group` /
+  `test_daily_scheduler_push_uses_message_chain` /
+  `test_daily_scheduler_still_pushes_when_player_rolled_first`(都用
+  真 MessageChain 断言,裸 list 会直接卡住)
+
+### 战斗画面:战报窗口图层高于我方宝可梦
+
+- **高个子我方精灵会压住战报框和第一行文字**:精灵改贴到放大画布后,对话框先
+  画、精灵后贴 —— 我方精灵(脚底 120,头顶可到 ~72)会盖住对话框顶部区域
+  (112~120)。现在精灵贴完之后把对话框区域**原样贴回最上层**,战报框连同文字
+  永远在最上
+- PvP 画面同样处理(左右精灵都贴完后再把对话框贴回)
+- 新增回归 `test_dialog_layer_is_above_sprites`:对话框区域与不画精灵的对照
+  逐像素一致
+
 ## 1.19.0
 
 ### 玩家对战:画面路径提示补上"双方"招式

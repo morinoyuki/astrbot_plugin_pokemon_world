@@ -25,7 +25,7 @@ from typing import TYPE_CHECKING
 from uuid import uuid4
 
 from astrbot.api import logger
-from astrbot.api.event import AstrMessageEvent, filter
+from astrbot.api.event import AstrMessageEvent, MessageChain, filter
 from astrbot.api.message_components import Image, Plain
 from astrbot.api.star import Context, Star
 from astrbot.core.star.star_tools import StarTools
@@ -3908,10 +3908,19 @@ class PokemonWorldPlugin(Star):
                         day=day,
                         narrator=self._narrator(),
                     )
-                    if not res["rolled"]:
-                        continue
-                    self._save_state(state)
-                await self._notify(scope, state, res)
+                    if res["rolled"]:
+                        self._save_state(state)
+                events = list(res.get("world_events") or [])
+                if not events and int(state.data.get("last_roll_day") or 0) == day:
+                    # 4 点整恰有玩家在操作:玩家那条指令已经把今天滚好了
+                    # (roll_day 幂等,这里 rolled=False)→ 今日事件照样推给群里
+                    events = [
+                        e for e in state.active_events()
+                        if int(e.get("created_day") or 0) == day
+                    ]
+                if not events:
+                    continue
+                await self._notify(scope, state, {"world_events": events})
             except Exception as e:
                 logger.debug("宝可梦世界: %s 每日刷新失败: %s", scope, e)
 
@@ -3927,7 +3936,10 @@ class PokemonWorldPlugin(Star):
         )
         body = "\n".join(f"· {EV.event_text(e)}" for e in res["world_events"])
         try:
-            await send(umo, [Plain(f"{head}\n{body}\n\n输入 `/今日` 查看详情。")])
+            # 入站消息链必须是 MessageChain:传裸 list 会在平台适配器里
+            # 拿 `.chain` 时抛 AttributeError,被上面捕获后推送静默失败
+            # (1.16.0 起“每天早上推送世界事件”一直发不出去)。
+            await send(umo, MessageChain(chain=[Plain(f"{head}\n{body}\n\n输入 `/今日` 查看详情。")]))
         except Exception as e:
             logger.debug("宝可梦世界: 每日通知失败: %s", e)
 
@@ -5059,7 +5071,9 @@ class PokemonWorldPlugin(Star):
         if not umo or send is None or not self._cfg_bool("pvp_announce", True):
             return
         try:
-            await send(umo, [Plain(text)])
+            # 必须包 MessageChain:裸 list 在平台适配器拿 `.chain` 就抛异常,
+            # 超时自动出招/超时结算的群播报会静默失败(玩家以为自动出招没用)。
+            await send(umo, MessageChain(chain=[Plain(text)]))
         except Exception as e:
             logger.debug("宝可梦世界: 玩家对战播报失败: %s", e)
 
