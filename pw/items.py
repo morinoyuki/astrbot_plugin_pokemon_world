@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 from .dex import _norm, get_dex
+from .mega import build_items as build_mega_items
 
 # effect 支持的键(engine 读取):
 #   stat_mult: {stat: 倍率}              常驻数值倍率(如讲究系列 / 突击背心)
@@ -94,6 +95,16 @@ for _k, (_zh, _t) in _TYPE_ITEMS.items():
         "desc": f"{_t} 属性招式威力 ×1.2。",
         "effect": {"type_mult": {_t: 1.2}},
     }
+
+# ── Mega 石(携带道具)──
+# 形态表来自 pw/mega.py(与图鉴同一份数据);effect["mega"] 列出它能变成的
+# 形态,引擎凭「当前物种 + 携带物」就能挑到正确目标。石头不会被消耗。
+MEGA_STONE_CONFLICTS: list[str] = []
+for _mk, _mv in build_mega_items().items():
+    if _mk in _ITEMS:
+        MEGA_STONE_CONFLICTS.append(_mk)
+        continue
+    _ITEMS[_mk] = _mv
 
 
 ITEMS: dict[str, dict] = _ITEMS
@@ -281,6 +292,15 @@ _BAG: dict[str, dict] = {
     "ability-patch": {"zh": "特性膏药", "kind": "rare", "desc": "切换到隐藏特性。", "effect": {"ability_patch": True}},
 }
 
+# 钥石:训练家持有的重要物品(Mega 进化的前提;不占宝可梦携带位)
+_BAG["key-stone"] = {
+    "zh": "钥石",
+    "kind": "key",
+    "desc": "蕴含着 Mega 进化之力的神秘石头。宝可梦携带对应的 Mega 石时,"
+            "对战中即可 Mega 进化。",
+    "effect": {"key_stone": True},
+}
+
 # 进化道具并入背包(其中的进化石稍后会被 _STONES 覆写为 kind=stone)
 for _ek, (_ezh, _edesc) in _EVO_ITEMS.items():
     _BAG.setdefault(
@@ -428,10 +448,12 @@ KIND_ZH = {
     "stone": "进化石",
     "evo": "进化道具",
     "held": "持有道具",
+    "mega": "Mega 石",
+    "key": "重要物品",
 }
 KIND_ORDER = [
     "ball", "medicine", "status", "revive", "pp", "battle", "berry", "stone", "evo",
-    "rare", "held",
+    "rare", "held", "mega", "key",
 ]
 
 
@@ -487,6 +509,8 @@ _IMPLEMENTED_SPECIAL = {
     "pp_up": "提升一个招式的 PP 上限(每招最多 +3)",
     "ability_switch": "切换成另一个普通特性",
     "ability_patch": "切换成隐藏特性",
+    "mega": "携带后可在对战中 Mega 进化(训练家还需持有钥石)",
+    "key_stone": "解锁 Mega 进化",
 }
 
 

@@ -147,7 +147,8 @@
       },
       {
        "species": "alakazam",
-       "level": 43
+       "level": 43,
+       "item": "alakazite"
       }
      ]
     },
@@ -292,7 +293,8 @@
       },
       {
        "species": "gengar",
-       "level": 58
+       "level": 58,
+       "item": "gengarite"
       }
      ]
     },
@@ -321,7 +323,8 @@
       },
       {
        "species": "dragonite",
-       "level": 60
+       "level": 60,
+       "item": "dragoninite"
       }
      ]
     }
@@ -353,7 +356,8 @@
      },
      {
       "species": "blastoise",
-      "level": 63
+      "level": 63,
+      "item": "blastoisinite"
      }
     ]
    }
@@ -494,7 +498,8 @@
       },
       {
        "species": "steelix",
-       "level": 35
+       "level": 35,
+       "item": "steelixite"
       }
      ]
     },
@@ -664,7 +669,8 @@
       },
       {
        "species": "houndoom",
-       "level": 47
+       "level": 47,
+       "item": "houndoominite"
       }
      ]
     }
@@ -696,7 +702,8 @@
      },
      {
       "species": "dragonite",
-      "level": 50
+      "level": 50,
+      "item": "dragoninite"
      }
     ]
    }
@@ -849,7 +856,8 @@
       },
       {
        "species": "skarmory",
-       "level": 36
+       "level": 36,
+       "item": "skarmorite"
       }
      ]
     },
@@ -940,7 +948,8 @@
       },
       {
        "species": "absol",
-       "level": 52
+       "level": 52,
+       "item": "absolite"
       }
      ]
     },
@@ -1023,7 +1032,8 @@
       },
       {
        "species": "salamence",
-       "level": 55
+       "level": 55,
+       "item": "salamencite"
       }
      ]
     }
@@ -1055,7 +1065,8 @@
      },
      {
       "species": "metagross",
-      "level": 59
+      "level": 59,
+      "item": "metagrossite"
      }
     ]
    }
@@ -1132,7 +1143,8 @@
       },
       {
        "species": "lucario",
-       "level": 32
+       "level": 32,
+       "item": "lucarionite"
       }
      ]
     },
@@ -1232,7 +1244,8 @@
       },
       {
        "species": "abomasnow",
-       "level": 42
+       "level": 42,
+       "item": "abomasite"
       }
      ]
     },
@@ -1378,7 +1391,8 @@
       },
       {
        "species": "gallade",
-       "level": 55
+       "level": 55,
+       "item": "galladite"
       }
      ]
     }
@@ -1410,7 +1424,8 @@
      },
      {
       "species": "garchomp",
-      "level": 58
+      "level": 58,
+      "item": "garchompite"
      }
     ]
    }
@@ -1527,7 +1542,8 @@
       },
       {
        "species": "excadrill",
-       "level": 35
+       "level": 35,
+       "item": "excadrite"
       }
      ]
     },
@@ -1630,7 +1646,8 @@
       },
       {
        "species": "chandelure",
-       "level": 58
+       "level": 58,
+       "item": "chandelurite"
       }
      ]
     },
@@ -1806,7 +1823,8 @@
       },
       {
        "species": "hawlucha",
-       "level": 32
+       "level": 32,
+       "item": "hawluchanite"
       }
      ]
     },
@@ -1902,7 +1920,8 @@
       },
       {
        "species": "meowstic",
-       "level": 48
+       "level": 48,
+       "item": "meowsticite"
       }
      ]
     },
@@ -1978,7 +1997,8 @@
       },
       {
        "species": "barbaracle",
-       "level": 65
+       "level": 65,
+       "item": "barbaracite"
       }
      ]
     },
@@ -2060,7 +2080,8 @@
      },
      {
       "species": "gardevoir",
-      "level": 68
+      "level": 68,
+      "item": "gardevoirite"
      }
     ]
    }
@@ -2411,7 +2432,8 @@
      },
      {
       "species": "charizard",
-      "level": 64
+      "level": 64,
+      "item": "charizardite-x"
      }
     ]
    }

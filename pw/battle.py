@@ -14,6 +14,8 @@ from .dex import get_dex
 from .encounter import roll_level, roll_location_encounter
 from .engine import Pokemon, battle_from_dict, create_pokemon, start_battle
 from .items import BAG_ITEMS, TM_GYM_BY_TYPE, resolve_bag_item, tm_key
+from .mega import KEY_STONE, stone_entry
+from .mega import target_for as mega_target_for
 from .player import Trainer, dict_to_mon, mon_to_dict
 from .util import clamp, hash_int, stable_rng
 from .world import WorldMap
@@ -218,19 +220,83 @@ def _sync(trainer: Trainer, battle) -> None:
 
 
 # ── 行动解析 ─────────────────────────────────────────────────────
+# 这些前缀是「行动类型」而不是招式名:Mega 进化只能和出招一起用
+_NON_MOVE_PREFIX = (
+    "run", "flee", "forfeit", "giveup", "catch", "ball", "throw", "switch",
+    "item ", "use ", "逃跑", "逃走", "投降", "认输", "投球", "捕获", "捕捉",
+    "换人", "替换", "道具", "使用",
+)
+
+
+def _mega_problem(trainer: Trainer | None, battle, mon) -> str:
+    """能不能 Mega 进化;不能则返回给玩家看的原因(空串 = 可以)。"""
+    if trainer is None or trainer.count(KEY_STONE) <= 0:
+        return "❌ 没有钥石,无法 Mega 进化(城镇商店有售)。"
+    if battle is None or getattr(battle, "player", None) is None:
+        return "❌ 现在没有对战。"
+    if getattr(battle.player, "mega_used", False):
+        return "⚠️ 本场对战已经 Mega 进化过了。"
+    if mon is None:
+        return "❌ 场上没有宝可梦。"
+    if mon.mega_from:
+        return f"⚠️ {mon.display} 已经 Mega 进化了。"
+    if not mega_target_for(mon.species, mon.item, mon.moves):
+        if mon.item:
+            held = (BAG_ITEMS.get(mon.item) or {}).get("zh") or mon.item
+            return (
+                f"❌ {mon.display} 携带的{held}与它不匹配 —— "
+                "Mega 进化需要携带它自己的 Mega 石。"
+            )
+        return (
+            f"❌ {mon.display} 没有携带 Mega 石。"
+            "先 `/持有 <Mega 石> <序号>` 装备(商店可买)。"
+        )
+    return ""
+
+
 def parse_action(raw: str, trainer: Trainer, battle) -> dict:
-    """把玩家输入解析成引擎 action;失败抛 BattleError(不消耗回合)。"""
+    """把玩家输入解析成引擎 action;失败抛 BattleError(不消耗回合)。
+
+    前缀(可组合):`太晶`/`tera` = 太晶化;`mega`/`mega进化`/`超级进化`
+    = Mega 进化。`/对战 mega 3` 是先 Mega 再出第 3 招(不占回合),
+    `/对战 mega`(或 `/mega`)则只变身、不消耗回合。
+    """
     dex = get_dex()
     s = str(raw or "").strip()
+    orig = s
     if not s:
         raise BattleError("❌ 请输入行动,例如 `move 十万伏特`、`switch 2`、`item 伤药`。")
-    low = s.lower()
-    tera = False
-    if low.startswith("tera ") or s.startswith("太晶"):
-        tera = True
-        s = s[5:].strip() if low.startswith("tera ") else s[2:].strip()
+    tera = mega = False
+    for _ in range(2):
         low = s.lower()
-
+        if not tera and (low.startswith("tera ") or s.startswith("太晶")):
+            tera = True
+            s = s[5:].strip() if low.startswith("tera ") else s[2:].strip()
+            continue
+        if not mega:
+            if low == "mega":
+                mega, s = True, ""
+            elif low.startswith("mega "):
+                mega, s = True, s[5:].strip()
+            elif s.startswith("mega进化"):
+                mega, s = True, s[6:].strip()
+            elif s.startswith("超级进化"):
+                mega, s = True, s[4:].strip()
+            if mega:
+                continue
+        break
+    if mega and not s:
+        mon = battle.player.mon if getattr(battle, "player", None) else None
+        problem = _mega_problem(trainer, battle, mon)
+        if problem:
+            raise BattleError(problem)
+        return {"type": "mega"}
+    low = s.lower()
+    # Mega 是「出招前的开关」:不能和换人/道具/逃跑一起用(单独 /mega 可以)
+    if mega and low.startswith(_NON_MOVE_PREFIX):
+        raise BattleError(
+            "❌ Mega 进化只能配合出招:`/对战 mega <招式>`;或单独发 `/mega`。"
+        )
     if low in ("run", "flee", "逃跑", "逃走"):
         # 只有野生对战能逃跑:训练家/道馆/联盟/大赛/火箭队一律禁止。
         # 在这里拦住(而不是交给引擎),失败时**不消耗回合** ——
@@ -298,13 +364,24 @@ def parse_action(raw: str, trainer: Trainer, battle) -> dict:
     mon = battle.player.mon
     if mon is None:
         raise BattleError("❌ 场上没有宝可梦。")
+    if mega:
+        # 「mega punch / mega kick / mega drain」这些**招式名本身**以 mega 开头:
+        # 整句能解析成招式时按招式处理,不劫持成 Mega 进化。
+        whole = dex.resolve_move(orig)
+        if whole is not None and whole[0] in mon.moves:
+            mega = False
+            body = whole[0]
+        else:
+            problem = _mega_problem(trainer, battle, mon)
+            if problem:
+                raise BattleError(problem)
     resolved = dex.resolve_move(body)
     if resolved is None:
         # 允许用序号选招
         if body.isdigit():
             i = int(body) - 1
             if 0 <= i < len(mon.moves):
-                return {"type": "move", "move": mon.moves[i], "tera": tera}
+                return {"type": "move", "move": mon.moves[i], "tera": tera, "mega": mega}
         raise BattleError(
             f"❌ 未找到招式「{body}」。可用:"
             + "、".join(growth.move_zh(m) for m in mon.moves)
@@ -312,7 +389,7 @@ def parse_action(raw: str, trainer: Trainer, battle) -> dict:
     key = resolved[0]
     if key not in mon.moves:
         raise BattleError(f"❌ {mon.display} 不会「{growth.move_zh(key)}」。")
-    return {"type": "move", "move": key, "tera": tera}
+    return {"type": "move", "move": key, "tera": tera, "mega": mega}
 
 
 # ── 回合推进 ─────────────────────────────────────────────────────
@@ -338,11 +415,30 @@ def take_turn(
         battle.weather = weather
         battle.weather_turns = max(battle.weather_turns, 5)
 
+    # 单独 Mega(`/对战 mega` 或 `/mega`):变身不消耗回合
+    if action.get("type") == "mega":
+        battle.log = []
+        if not battle.mega_evolve(battle.player):
+            res.error = "❌ 现在无法 Mega 进化。"
+            return res
+        res.lines = list(battle.log)
+        mon = battle.player.mon
+        if mon is not None and mon.mega_from:
+            trainer.mark_seen(mon.species)
+        _sync(trainer, battle)
+        _store(trainer, {**data, "battle": battle.to_dict()}, res.lines)
+        return res
+
     if action.get("type") == "move" and action.get("tera") and battle.player.tera_used:
         res.error = "⚠️ 本场对战已经太晶化过了。"
         return res
     lines = battle.step(action)
     res.lines = list(lines)
+    # 本回合刚 Mega 的形态记进图鉴(与捕获/遭遇一致)
+    if action.get("mega"):
+        mon = battle.player.mon
+        if mon is not None and mon.mega_from:
+            trainer.mark_seen(mon.species)
     _sync(trainer, battle)
 
     if battle.awaiting_switch and not battle.finished:
@@ -406,6 +502,28 @@ def _finish_catch(trainer: Trainer, battle, res: TurnResult, *, day: int = 0) ->
     )
     res.rewards.append(f"📖 图鉴已记录:{len(trainer.data['dex_caught'])} 种。")
     trainer.data["steps"] = int(trainer.data.get("steps", 0)) + 30
+
+
+def _ace_mega_stone(meta: dict) -> str:
+    """对手招牌位真的戴着 Mega 石时返回它(首次击败会掉给玩家)。"""
+    team = meta.get("team") or []
+    if not team:
+        return ""
+    item = str((team[-1] or {}).get("item") or "")
+    return item if item and stone_entry(item) else ""
+
+
+def _mega_drop_line(trainer: Trainer, meta: dict, who: str) -> str:
+    """首次击败带 Mega 石的对手:把他的石头掉给玩家(没有则空串)。"""
+    stone = _ace_mega_stone(meta)
+    if not stone:
+        return ""
+    trainer.add_item(stone, 1)
+    zh = (BAG_ITEMS.get(stone) or {}).get("zh") or stone
+    return (
+        f"💠 {who}的 Mega 石「{zh}」掉了出来!"
+        "(捕获对应宝可梦后用 `/持有` 装备即可 Mega 进化)"
+    )
 
 
 def _finish_win(
@@ -514,12 +632,29 @@ def _finish_win(
                     f"📀 馆主送了你「{entry.get('zh') or tm}」——"
                     "对兼容的宝可梦用 `/使用 <招式机> <队伍序号>` 就能学会。"
                 )
+            # 馆主招牌带着 Mega 石的话,首次打赢就把石头掉给你
+            line = _mega_drop_line(trainer, meta, str(gym.get("leader") or "馆主"))
+            if line:
+                res.rewards.append(line)
     if kind == "elite" and meta.get("elite"):
         e = meta["elite"]
+        first = not trainer.flag(f"elite:{region}:{int(e.get('order', 1))}")
         trainer.set_flag(f"elite:{region}:{int(e.get('order', 1))}")
         res.rewards.append(f"🏆 击败了四天王 {e.get('name', '')}!")
+        if first:
+            line = _mega_drop_line(
+                trainer, meta, f"四天王 {e.get('name', '')}".strip()
+            )
+            if line:
+                res.rewards.append(line)
     if kind == "champion" and not trainer.flag(f"champion:{region}"):
         trainer.set_flag(f"champion:{region}", True)
+        champ = meta.get("champion") or {}
+        line = _mega_drop_line(
+            trainer, meta, f"冠军 {champ.get('name', '')}".strip()
+        )
+        if line:
+            res.rewards.append(line)
         order = list(WorldMap().regions_with_data())
         if region in order:
             idx = order.index(region)
@@ -622,6 +757,12 @@ def status_text(trainer: Trainer) -> str:
             pp = mon.pp.get(m, 0)
             mv.append(f"{i}.{growth.move_zh(m)}({pp})")
         lines.append("招式:" + " ".join(mv))
+        if mon.mega_from:
+            lines.append("✨ 已 Mega 进化")
+        elif not battle.player.mega_used and mega_target_for(
+            mon.species, mon.item, mon.moves
+        ):
+            lines.append("✨ 可以 Mega 进化 → `/mega`(不消耗回合)")
     if battle.awaiting_switch:
         lines.append("⚠️ 需要换人 → `switch <序号>`")
     tail = data.get("log") or []

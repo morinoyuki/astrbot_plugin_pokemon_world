@@ -25,6 +25,7 @@ from typing import ClassVar
 
 from .dex import STAT_ORDER, get_dex
 from .items import BAG_ITEMS, ITEMS, item_label
+from .mega import target_for as mega_target_for
 
 # ──────────────────────────── 常量 ────────────────────────────
 
@@ -137,6 +138,11 @@ class Pokemon:
     item: str = ""
     moves: list[str] = field(default_factory=list)
     tera_type: str = ""
+    # Mega 进化:非空表示「当前处于 Mega 形态」,值是 Mega 前的物种 key。
+    # species 本身直接换成 Mega 形态条目(数值/属性/特性随之变化),
+    # 战斗结束写回存档时由 to_storage_dict() 还原。
+    mega_from: str = ""
+    mega_base_ability: str = ""
     gender: str = ""
     friendship: int = 70
     ivs: dict = field(default_factory=dict)
@@ -231,6 +237,8 @@ class Pokemon:
             "item": self.item,
             "moves": list(self.moves),
             "tera_type": self.tera_type,
+            "mega_from": self.mega_from,
+            "mega_base_ability": self.mega_base_ability,
             "gender": self.gender,
             "friendship": self.friendship,
             "ivs": dict(self.ivs),
@@ -264,6 +272,8 @@ class Pokemon:
             "ability",
             "item",
             "tera_type",
+            "mega_from",
+            "mega_base_ability",
             "gender",
             "friendship",
             "max_hp",
@@ -389,6 +399,60 @@ class Pokemon:
         for mv in self.moves or []:
             self.pp[mv] = max_pp(self, mv)
 
+    # ── Mega 进化 ──
+    def mega_evolve_to(self, target: str) -> bool:
+        """变身成 Mega 形态:换物种与特性、按新种族值重算,HP 按比例保留。"""
+        dex = get_dex()
+        entry = dex.species.get(target) or {}
+        if not entry or self.mega_from or target == self.species:
+            return False
+        old_max, old_hp = self.max_hp, self.cur_hp
+        self.mega_from = self.species
+        self.mega_base_ability = self.ability
+        self.species = target
+        abilities = entry.get("abilities") or {}
+        resolved = dex.resolve_ability(str(abilities.get("0") or ""))
+        if resolved:
+            self.ability = resolved[0]
+        self.stats = dex.compute_stats(target, self.level, self.ivs, self.evs, self.nature)
+        self.max_hp = max(1, int(self.stats.get("hp", 1)))
+        if old_max > 0 and old_hp > 0:
+            self.cur_hp = max(1, min(self.max_hp, round(old_hp * self.max_hp / old_max)))
+        return True
+
+    def revert_mega(self) -> None:
+        """还原成 Mega 前的样子(HP 仍按比例保留)。"""
+        if not self.mega_from:
+            return
+        d = self.to_storage_dict()
+        self.species = d["species"]
+        self.ability = d["ability"]
+        self.stats = d["stats"]
+        self.max_hp = d["max_hp"]
+        self.cur_hp = d["cur_hp"]
+        self.mega_from = ""
+        self.mega_base_ability = ""
+
+    def to_storage_dict(self) -> dict:
+        """写回存档用的序列化:Mega 形态在战斗结束后还原(不消耗、不持久)。"""
+        if not self.mega_from:
+            return self.to_dict()
+        dex = get_dex()
+        d = self.to_dict()
+        d["species"] = self.mega_from
+        d["ability"] = self.mega_base_ability
+        d["mega_from"] = ""
+        d["mega_base_ability"] = ""
+        stats = dex.compute_stats(self.mega_from, self.level, self.ivs, self.evs, self.nature)
+        d["stats"] = dict(stats)
+        new_max = max(1, int(stats.get("hp", 1)))
+        d["max_hp"] = new_max
+        if self.cur_hp > 0 and self.max_hp > 0:
+            d["cur_hp"] = max(1, min(new_max, round(self.cur_hp * new_max / self.max_hp)))
+        else:
+            d["cur_hp"] = 0
+        return d
+
 
 # ──────────────────────────── 一方 / 对战 ────────────────────────────
 
@@ -401,6 +465,7 @@ class Side:
     hazards: dict = field(default_factory=dict)
     screens: dict = field(default_factory=dict)
     tera_used: bool = False
+    mega_used: bool = False
 
     @property
     def mon(self) -> Pokemon | None:
@@ -422,6 +487,7 @@ class Side:
             "hazards": dict(self.hazards),
             "screens": dict(self.screens),
             "tera_used": self.tera_used,
+            "mega_used": self.mega_used,
         }
 
     @classmethod
@@ -432,6 +498,7 @@ class Side:
         s.hazards = dict(d.get("hazards") or {})
         s.screens = dict(d.get("screens") or {})
         s.tera_used = bool(d.get("tera_used", False))
+        s.mega_used = bool(d.get("mega_used", False))
         return s
 
 
@@ -527,6 +594,8 @@ class Battle:
             bits.append(STATUS_ZH.get(poke.status, poke.status))
         if poke.terastallized:
             bits.append(f"太晶{poke.tera_type}")
+        if poke.mega_from:
+            bits.append("Mega")
         if poke.status_turns and poke.status in ("slp", "tox"):
             pass
         return " ".join(bits)
@@ -674,6 +743,12 @@ class Battle:
         # 太晶化在出招前处理
         if player_action.get("type") == "move" and player_action.get("tera"):
             self._terastallize(self.player)
+        # Mega 进化同样在出招前处理(每侧每场一次;不占招式位、不影响出手权,
+        # 但速度会按 Mega 形态重算 —— 与太晶化同一时机)
+        if player_action.get("type") == "move" and player_action.get("mega"):
+            self.mega_evolve(self.player)
+        if enemy_action.get("type") == "move" and enemy_action.get("mega"):
+            self.mega_evolve(self.enemy)
 
         # 计算行动顺序
         order = self._action_order(player_action, enemy_action)
@@ -920,6 +995,30 @@ class Battle:
             self.weather = ""
             self.terrain = ""
             self.log.append(f"{mon.display} 的归零化境消除了天气与场地!")
+
+    # ── Mega 进化 ──
+    def mega_evolve(self, side: Side) -> bool:
+        """让某一侧当前宝可梦 Mega 进化(每侧每场一次)。失败返回 False 并写日志。"""
+        mon = side.mon
+        if side.mega_used:
+            self.log.append("本场对战已经 Mega 进化过了。")
+            return False
+        if mon is None or mon.fainted:
+            return False
+        target = mega_target_for(mon.species, mon.item, mon.moves)
+        if not target:
+            return False
+        before = mon.display
+        if not mon.mega_evolve_to(target):
+            return False
+        side.mega_used = True
+        tag = "我方" if side is self.player else "对方"
+        types = "/".join(get_dex().type_label(t) for t in mon.types)
+        self.log.append(
+            f"✨ {tag} {before} Mega 进化了!"
+            f"({mon.entry.get('zh') or mon.species} · {types} · {mon.ability_name})"
+        )
+        return True
 
     # ── 出招 ──
     def _execute_move(self, side: Side, foe_side: Side, action: dict) -> None:
@@ -2213,6 +2312,9 @@ class Battle:
             and foe.hp_frac() < 0.5
         ):
             action["tera"] = True
+        # Mega 进化:带着对应 Mega 石就尽早变(不占回合,越早收益越大)
+        if not side.mega_used and mega_target_for(mon.species, mon.item, mon.moves):
+            action["mega"] = True
         return action
 
     def _ignores_ability(self, attacker: Pokemon) -> bool:

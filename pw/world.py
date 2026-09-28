@@ -18,6 +18,16 @@ from astrbot.api import logger
 
 from .dex import _norm, get_dex
 from .items import resolve_item
+from .mega import (
+    KEY_STONE,
+    MEGA_STONE_BADGES,
+)
+from .mega import (
+    all_stones as all_mega_stones,
+)
+from .mega import (
+    stones_for as mega_stones_for,
+)
 from .util import clamp, game_day
 
 _STATIC = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
@@ -933,13 +943,16 @@ class WorldMap:
             "nodes": len(self.nodes(region)),
         }
 
-    def shop_stock(self, key: str, badges: int = 0) -> list[str]:
+    def shop_stock(self, key: str, badges: int = 0, *, trainer=None) -> list[str]:
         """商店货架(按徽章数递增);返回道具 key 列表。
 
         注意:`badges` 默认 0 只为兼容旧调用,命令层要传 `trainer.badge_count()`。
         旧实现对所有地点/徽章返回同一份固定清单 —— 于是 60 个道具(11 种特殊球、
         5 种树果、24 个进化道具、PP 药、X 道具、除虫喷雾以外的进化石)
         在游戏里**没有任何获取途径**。
+
+        传了 `trainer` 时,Mega 石会按「已获得钥石 + 已捕获对应原种」过滤:
+        92 块石头全摆在货架上没有意义,还挤爆商店。
         """
         out: list[str] = []
         for tier, keys in SHOP_TIERS:
@@ -947,6 +960,10 @@ class WorldMap:
                 out.extend(keys)
         # 招式机与道具同一份货架(按同一套徽章档位解锁)
         out.extend(tm_stock(badges))
+        visible = _visible_mega_stones(trainer)
+        if visible is not None:
+            all_mega = set(all_mega_stones())
+            out = [k for k in out if k not in all_mega or k in visible]
         return out
 
 
@@ -967,7 +984,9 @@ SHOP_TIERS: list[tuple[int, list[str]]] = [
          "silk-scarf", "charcoal", "mystic-water", "miracle-seed", "magnet",
          "never-melt-ice", "black-belt", "poison-barb", "soft-sand", "sharp-beak",
          "twisted-spoon", "silver-powder", "hard-stone", "spell-tag", "dragon-fang",
-         "black-glasses", "fairy-feather"]),
+         "black-glasses", "fairy-feather",
+         # 钥石:解锁 Mega 进化(Mega 石本身按「已捕获」动态上架,见 main.py)
+         "key-stone"]),
     (4, ["full-heal", "max-potion", "max-revive", "full-restore", "elixir",
          # 化石:在「研究所」用 `/复活 <化石>` 换回古代宝可梦
          "helix-fossil", "dome-fossil", "old-amber", "root-fossil", "claw-fossil",
@@ -1001,6 +1020,27 @@ SHOP_TIERS: list[tuple[int, list[str]]] = [
          "pp-up", "pp-max", "ability-capsule", "ability-patch"]),
     # 大师球 / 究极球 / 特性胶囊 / 膏药 / PP 提升:不进普通商店(大赛奖励或事件获取)
 ]
+
+# Mega 石按同一套档位解锁(膨胀的 92 块石头由 shop_stock 按玩家过滤:
+# 拿到钥石 + 捕获对应原种才展示,没钥石时一块都不卖)
+for _tier_row in SHOP_TIERS:
+    if _tier_row[0] == MEGA_STONE_BADGES:
+        _tier_row[1].extend(all_mega_stones())
+        break
+
+
+def _visible_mega_stones(trainer) -> set[str] | None:
+    """Mega 石展示集合(没传 trainer = 不过滤,返回 None)。"""
+    if trainer is None:
+        return None
+    if trainer.count(KEY_STONE) <= 0:
+        return set()
+    caught = set((trainer.data or {}).get("dex_caught") or [])
+    for row in list(trainer.party or []) + list((trainer.data or {}).get("box") or []):
+        sp = str((row or {}).get("species") or "")
+        if sp:
+            caught.add(sp)
+    return set(mega_stones_for(caught))
 
 SHOP_STOCK = [
     "poke-ball",
@@ -1107,6 +1147,8 @@ def item_price(key: str, *, badge_count: int = 0, discount: float = 1.0) -> int:
         "rare": 4000,
         "stone": 3000,
         "evo": 5000,
+        "mega": 6000,
+        "key": 10000,
     }.get(kind, 500)
     if k in ("master-ball", "rare-candy"):
         base = 20000

@@ -26,8 +26,12 @@ def dict_to_mon(d: dict) -> Pokemon:
 
 
 def mon_to_dict(mon: Pokemon, prev: dict | None = None) -> dict:
-    """序列化并把附加字段(背包格的 id / 待学招式)带回来。"""
-    d = mon.to_dict()
+    """序列化并把附加字段(背包格的 id / 待学招式)带回来。
+
+    走 `to_storage_dict()`:Mega 进化的形态**只在战斗中有效**,写回存档时
+    会自动还原成原种(HP/数值按比例带回去)。
+    """
+    d = mon.to_storage_dict()
     if prev:
         for k in EXTRA_KEYS:
             if prev.get(k):

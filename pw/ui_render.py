@@ -18,6 +18,7 @@ from astrbot.api import logger
 from . import fonts
 from .dex import get_dex
 from .items import KIND_ZH
+from .mega import iter_stones as mega_iter_stones
 from .sprites import back_sprite_path, sprite_path
 
 LOGICAL_W = 240
@@ -1114,6 +1115,11 @@ _ITEM_ICONS = {
     "fairy-feather": _feather((248, 176, 200)),
 }
 
+# Mega 石:按 Mega 形态的主属性配色(每块石头一眼能区分)
+for _sk_key, _sk_zh, _sk_type in mega_iter_stones():
+    if _sk_key not in _ITEM_ICONS:
+        _ITEM_ICONS[_sk_key] = _stone(type_color(_sk_type) if _sk_type else (196, 160, 240))
+
 # 大类型兜底图标(旧界面只传 kind 时的退路)
 def _tm_disc(color=(96, 176, 232)):
     """招式机图标:一张小光盘(圆盘 + 中心孔 + 高光)。"""
@@ -1143,6 +1149,8 @@ _KIND_ICONS = {
     "stone": _stone((168, 176, 196)),
     "evo": _stone((176, 168, 200)),
     "rare": _gem((180, 140, 232)),
+    "mega": _stone((196, 160, 240)),
+    "key": _gem((250, 214, 96)),
     "_default": _panel(),
 }
 

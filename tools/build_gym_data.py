@@ -37,8 +37,56 @@ VERSIONS = {
 INCLUDED = ["kanto", "johto", "hoenn", "sinnoh", "unova", "kalos", "galar", "alola"]
 
 
+_MEGA_STONE_CACHE: dict[str, str] | None = None
+
+
+def _mega_stones() -> dict[str, str]:
+    """原种 → 对应 Mega 石 key(冠军/四天王的招牌位带石头用)。
+
+    只挑一份:同一原种有多块石头(X/Y/Z)时优先没有后缀的那块。
+    """
+    global _MEGA_STONE_CACHE
+    if _MEGA_STONE_CACHE is not None:
+        return _MEGA_STONE_CACHE
+    data = json.loads(SPECIES.read_text(encoding="utf-8"))
+    grouped: dict[str, list[str]] = {}
+    for entry in data.values():
+        if "mega" not in str(entry.get("forme") or "").lower():
+            continue
+        base = str(entry.get("baseSpecies") or "")
+        item = str(entry.get("requiredItem") or "")
+        if not base or not item:
+            continue
+        key = re.sub(r"[^0-9a-z]+", "-", item.lower()).strip("-")
+        grouped.setdefault(base, []).append(key)
+    picked: dict[str, str] = {}
+    for base, keys in grouped.items():
+        plain = sorted(k for k in keys if not re.search(r"-[xyz]$", k))
+        picked[base] = (plain or sorted(keys))[0]
+    _MEGA_STONE_CACHE = picked
+    return picked
+
+
+# 馆主配 Mega 的最低招牌等级:太早的馆主(≤25 级)不给 —— 玩家那时
+# 多半还没拿到钥石(3 徽章解锁),被 Mega 馆主打爆会很挫败。
+# 30 级起的馆主大致对应各地第三至第八关(含原作可尔妮的 Mega 路卡利欧)。
+GYM_MEGA_MIN_LV = 30
+
+
+def attach_ace_mega(team: list[dict], *, min_level: int = 0) -> None:
+    """给「招牌位」(队伍最后一只)带上 Mega 石 —— 馆主/四天王/冠军会用 Mega。"""
+    if not team:
+        return
+    ace = team[-1]
+    if int(ace.get("level") or 0) < int(min_level):
+        return
+    stone = _mega_stones().get(str(ace.get("species") or ""))
+    if stone:
+        ace["item"] = stone
+
+
 def g(location, leader, leader_en, title, type_, badge, badge_en, team):
-    return {
+    entry = {
         "location": location,
         "leader": leader,
         "leader_en": leader_en,
@@ -48,6 +96,8 @@ def g(location, leader, leader_en, title, type_, badge, badge_en, team):
         "badge_en": badge_en,
         "team": [{"species": s, "level": lv} for s, lv in team],
     }
+    attach_ace_mega(entry["team"], min_level=GYM_MEGA_MIN_LV)
+    return entry
 
 
 def e(name, name_en, type_, team, title="四天王"):
@@ -562,6 +612,7 @@ def main() -> int:
                           f"{region} elite4 {order} {member['name']}")
             if member["type"] not in type_keys:
                 problems.append(f"{region} elite4 {order}: bad type {member['type']!r}")
+            attach_ace_mega(entry["team"])
             elite_out.append(entry)
 
         champ = src["champion"]
@@ -573,6 +624,7 @@ def main() -> int:
         }
         validate_team(champ_entry["team"], species_keys, problems,
                       f"{region} champion {champ['name']}")
+        attach_ace_mega(champ_entry["team"])
 
         # ── level monotonicity ──────────────────────────────────────────
         def max_lv(team: list[dict]) -> int:

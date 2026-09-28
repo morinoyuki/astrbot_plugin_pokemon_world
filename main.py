@@ -1523,14 +1523,14 @@ class PokemonWorldPlugin(Star):
                     n = max(1, min(n, cap - used))     # 不许超过当月上限
                 t.add_item(item, n)
                 got = _note_item_finds(t, loc, n)
+                bonus = self._maybe_mega_find(t, rng)
                 self._save(t)
                 zh = (BAG_ITEMS.get(item) or {}).get("zh", item)
                 tail = f"(本月此地 {got}/{cap})" if cap else ""
-                yield event.plain_result(
-                    "\n".join(
-                        [*notice, f"🔍 你在草丛里发现了 {zh} ×{n}!{tail}"]
-                    )
-                )
+                lines = [*notice, f"🔍 你在草丛里发现了 {zh} ×{n}!{tail}"]
+                if bonus:
+                    lines.append(bonus)
+                yield event.plain_result("\n".join(lines))
                 return
 
             # ── 只想找训练家 ──
@@ -1613,12 +1613,43 @@ class PokemonWorldPlugin(Star):
                 n = max(1, min(n, cap - used))
             t.add_item(item, n)
             got = _note_item_finds(t, loc, n)
+            bonus = self._maybe_mega_find(t, rng)
             self._save(t)
             zh = (BAG_ITEMS.get(item) or {}).get("zh", item)
             tail = f"(本月此地 {got}/{cap})" if cap else ""
-            yield event.plain_result(
-                "\n".join([*notice, f"🔍 你在草丛里发现了 {zh} ×{n}!{tail}"])
-            )
+            lines = [*notice, f"🔍 你在草丛里发现了 {zh} ×{n}!{tail}"]
+            if bonus:
+                lines.append(bonus)
+            yield event.plain_result("\n".join(lines))
+
+    def _maybe_mega_find(self, t: Trainer, rng) -> str:
+        """探索捡道具时的稀有附加:Mega 石(约 8%)。
+
+        只掉「已捕获原种、且还没拥有」的石头 —— 捡到没宝可梦能用的石头
+        只会占格子;背包里/正装备着的不会重复掉。
+        """
+        if rng.random() >= 0.08:
+            return ""
+        from .pw.mega import KEY_STONE, stones_for
+
+        rows = list(t.party or []) + list(t.data.get("box") or [])
+        caught = set(t.data.get("dex_caught") or [])
+        owned: set[str] = set()
+        for row in rows:
+            row = row or {}
+            sp = str(row.get("species") or "")
+            if sp:
+                caught.add(sp)
+            if row.get("item"):
+                owned.add(str(row["item"]))
+        cands = [k for k in stones_for(caught) if k not in owned and t.count(k) <= 0]
+        if not cands:
+            return ""
+        stone = rng.choice(cands)
+        t.add_item(stone, 1)
+        zh = (BAG_ITEMS.get(stone) or {}).get("zh") or stone
+        hint = "" if t.count(KEY_STONE) > 0 else "(拿到钥石后就能 Mega 进化)"
+        return f"💠 你还在石缝里发现了一块「{zh}」!{hint}"
 
     def _maybe_rare(self, t: Trainer, state, ev, rng, hit: dict) -> dict:
         """罕见现身事件:有概率把普通遭遇换成稀有/传说宝可梦。"""
@@ -1790,6 +1821,22 @@ class PokemonWorldPlugin(Star):
             return
         ball = self._args(event, ("捕捉", "catch", "投球")).strip() or "精灵球"
         event.message_str = f"/对战 catch {ball}"
+        async for r in self.cmd_battle(event):
+            yield r
+        _ = t  # t 仅用于校验存档存在
+
+    @filter.command("mega", alias={"超级进化", "mega进化"})
+    async def cmd_mega(self, event: AstrMessageEvent):
+        """`/mega` —— 出战宝可梦 Mega 进化(不消耗回合)
+
+        与 `/对战 mega <招式>` 等价,只是不用顺手出招:变完身再慢慢选招。
+        实战入口统一走 `/对战` 那条管线(校验/存档/画面都只有一份)。
+        """
+        t, err = self._require(event, in_battle_ok=True)
+        if err:
+            yield event.plain_result(err)
+            return
+        event.message_str = "/对战 mega"
         async for r in self.cmd_battle(event):
             yield r
         _ = t  # t 仅用于校验存档存在
@@ -2119,7 +2166,7 @@ class PokemonWorldPlugin(Star):
             )
             return
         n = int(clamp(n or 1, 1, 99))
-        stock = set(world.shop_stock(t.location, t.badge_count()))
+        stock = set(world.shop_stock(t.location, t.badge_count(), trainer=t))
         if action in ("买", "buy"):
             key = _resolve_stock(name, stock)
             if not key:
@@ -3031,6 +3078,20 @@ class PokemonWorldPlugin(Star):
         num = coerce_int(nums[0], 1) if nums else 0
         move_idx = coerce_int(nums[1], 0) if len(nums) > 1 else 0
 
+        # ⓪' Mega 石 / 钥石:不是消耗品,给出正确用法(直接 "使用" 不生效)
+        if eff.get("mega"):
+            yield event.plain_result(
+                f"ℹ️ {entry['zh']} 是携带道具:先 `/持有 {entry['zh']} <队伍序号>` 装备,"
+                "对战中用 `/mega`(或 `/对战 mega <招式>`)让对应宝可梦 Mega 进化。"
+            )
+            return
+        if eff.get("key_stone"):
+            yield event.plain_result(
+                "ℹ️ 钥石放在背包里就生效:宝可梦携带对应的 Mega 石,"
+                "对战中即可 Mega 进化(商店可买 Mega 石)。"
+            )
+            return
+
         # ⓪ 招式机:教兼容的宝可梦学招(招式栏满了要玩家先决定,机器先不消耗)
         tm_mv = str(eff.get("teaches") or "")
         if tm_mv:
@@ -3794,13 +3855,13 @@ class PokemonWorldPlugin(Star):
 
     def _shop_text(self, t: Trainer, discount: float) -> str:
         world = WorldMap()
-        stock = world.shop_stock(t.location, t.badge_count())
+        stock = world.shop_stock(t.location, t.badge_count(), trainer=t)
         lines = [
             f"🛒 商店({world.node_zh(t.location)})· 余额 {fmt_money(t.money)}"
             + (f" · 折扣 {int((1 - discount) * 100)}%" if discount < 1 else "")
             + f" · 共 {len(stock)} 种商品"
         ]
-        for key in world.shop_stock(t.location, t.badge_count()):
+        for key in stock:
             entry = BAG_ITEMS.get(key)
             if not entry:
                 continue
@@ -3847,6 +3908,16 @@ class PokemonWorldPlugin(Star):
             f"`/对战 switch <1-{max(1, len(t.party))}>` 换人",
             "`/对战 item <道具>`",
         ]
+        from .pw.mega import KEY_STONE
+        from .pw.mega import target_for as mega_target_for
+
+        if (
+            not mon.mega_from
+            and not bool(side.get("mega_used"))
+            and t.count(KEY_STONE) > 0
+            and mega_target_for(mon.species, mon.item, mon.moves)
+        ):
+            acts.append("`/mega` 进化(不消耗回合)")
         if wild:
             acts.append("`/捕捉 精灵球`")
             acts.append("`/对战 run` 逃跑")
@@ -4188,7 +4259,7 @@ class PokemonWorldPlugin(Star):
     def _shop_payload(self, t: Trainer, discount: float) -> list[dict]:
         world = WorldMap()
         out = []
-        for key in world.shop_stock(t.location, t.badge_count()):
+        for key in world.shop_stock(t.location, t.badge_count(), trainer=t):
             entry = BAG_ITEMS.get(key)
             if not entry:
                 continue
@@ -5116,6 +5187,13 @@ class PokemonWorldPlugin(Star):
             head.append(f"── 第 {int(row.get('turn') or 0) + 1} 回合 ──")
             head.append(f"{a_name} 的招式:{move_list(battle, True) or '无'}")
             head.append(f"{b_name} 的招式:{move_list(battle, False) or '无'}")
+            from .pw.mega import target_for as _mega_target
+            if any(
+                s.mon is not None
+                and _mega_target(s.mon.species, s.mon.item, s.mon.moves)
+                for s in (battle.player, battle.enemy)
+            ):
+                head.append("✨ Mega 进化:`/mega`(需钥石;不消耗回合、不占行动)")
             head.append(
                 "双方各自出招:`/对战 <序号|招式>`、`/对战 switch <序号>`、"
                 "`/对战 item <道具>`;投降 `/对战 弃权`。"
@@ -5150,13 +5228,32 @@ class PokemonWorldPlugin(Star):
                 except B.BattleError as e:
                     yield event.plain_result(str(e))
                     return
-                ready = PVP.submit(row, t.uid, action)
-                # 对方超时没动 → 先替他自动出招,再一起结算
-                late = PVP.timeout_side(row)
-                if late:
+                if action.get("type") == "mega":
+                    # 独立 Mega:不消耗回合、不用提交行动 —— 直接给自己这侧变身
                     bb = PVP.battle_of(row)
-                    PVP.submit(row, late, PVP.auto_action(bb, late == a_uid))
-                    ready = True
+                    side = bb.player if str(t.uid) == a_uid else bb.enemy
+                    bb.log = []
+                    if not bb.mega_evolve(side):
+                        yield event.plain_result("❌ 现在无法 Mega 进化。")
+                        return
+                    mon = side.mon
+                    if mon is not None and mon.mega_from:
+                        t.mark_seen(mon.species)
+                    PVP.store(row, bb)
+                    self._save(t)
+                    out = self._pvp_text(
+                        row, log=bb.log, note="✨ 已 Mega 进化(不消耗回合)。"
+                    )
+                    shot = list(bb.log)
+                    ready = None
+                else:
+                    ready = PVP.submit(row, t.uid, action)
+                    # 对方超时没动 → 先替他自动出招,再一起结算
+                    late = PVP.timeout_side(row)
+                    if late:
+                        bb = PVP.battle_of(row)
+                        PVP.submit(row, late, PVP.auto_action(bb, late == a_uid))
+                        ready = True
                 if ready:
                     res = PVP.advance(row)
                     if res["finished"]:
@@ -5227,6 +5324,13 @@ class PokemonWorldPlugin(Star):
             head.append(f"── 第 {int(row.get('turn') or 0) + 1} 回合 ──")
             head.append(f"{a_name} 的招式:{move_list(battle, True) or '无'}")
             head.append(f"{b_name} 的招式:{move_list(battle, False) or '无'}")
+            from .pw.mega import target_for as _mega_target
+            if any(
+                s.mon is not None
+                and _mega_target(s.mon.species, s.mon.item, s.mon.moves)
+                for s in (battle.player, battle.enemy)
+            ):
+                head.append("✨ Mega 进化:`/mega`(需钥石;不消耗回合、不占行动)")
             head.append(
                 "双方各自出招:`/对战 <序号|招式>`、`/对战 switch <序号>`、"
                 "`/对战 item <道具>`;投降 `/对战 弃权`。"
@@ -6129,6 +6233,7 @@ def _run_selfcheck() -> list[dict]:
         TM_SHOP,
         tm_key,
     )
+    from .pw.mega import mega_report
     from .pw.quests import REWARD_ITEMS
 
     dex = get_dex()
@@ -6234,6 +6339,11 @@ def _run_selfcheck() -> list[dict]:
                f"{[dex.species[k].get('zh', k) for k in normal[:8]]}" if normal else "")
         ),
     })
+
+    # ⑨ Mega 进化数据:形态/石头双向索引必须自洽,否则买了石头也变不了
+    bad_mega = mega_report()
+    add("Mega 进化数据", not bad_mega,
+        f"{len(bad_mega)} 处不一致:{bad_mega[:6]}")
 
     return out
 
