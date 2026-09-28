@@ -5365,6 +5365,111 @@ class PokemonWorldPlugin(Star):
         t.data["explore_n"] = n + 1
         return npcs[n % len(npcs)]
 
+    @filter.command("自动战斗", alias={"自动对战", "auto", "自动"})
+    async def cmd_auto_battle(self, event: AstrMessageEvent):
+        """/自动战斗 [招式序号] —— 一直用同一招,直到打完/PP 耗尽/对方换人。
+
+        野生战:打到这只倒下为止;训练家战:打倒**在场这只**、对方换人、
+        PP 耗尽或自己倒下就停(剩下的交给玩家手动决定)。
+        """
+        t, err = self._require(event, in_battle_ok=True)
+        if err:
+            yield event.plain_result(err)
+            return
+        if not B.in_battle(t):
+            yield event.plain_result("❌ 当前没有对战。用 `/探索` 或 `/道馆 挑战` 开战。")
+            return
+        arg = self._args(event, ("自动战斗", "自动对战", "auto", "自动")).strip()
+        state = self._state(t.scope)
+        async with self._lock(t.scope):
+            await self._ensure_day(event, t)
+            snap = B.session(t) or {}
+            bs = snap.get("battle") or {}
+            if bs.get("doubles"):
+                yield event.plain_result("❌ 合作双打要用 `/双打 <招式序号>`:要等搭档一起出招,不能自动连打。")
+                return
+            view = B.view(t)
+            my, foe = view.get("my") or {}, view.get("foe") or {}
+            pl = bs.get("player") or {}
+            party = list(pl.get("party") or [])
+            act = int(pl.get("active", 0) or 0)
+            md = party[act] if 0 <= act < len(party) else {}
+            moves = [str(x) for x in (md.get("moves") or [])][:4]
+            pp = md.get("pp") or {}
+            dex = get_dex()
+            if arg:
+                idx = coerce_int(arg, 0)
+                if idx < 1 or idx > len(moves):
+                    yield event.plain_result(f"❌ 没有第 {arg} 个招式(你有 {len(moves)} 个)。")
+                    return
+            else:
+                # 不填就自动挑"最有效"的一招(威力 × 克制 × 本系)
+                idx, best = 1, -1.0
+                for i, mk in enumerate(moves, 1):
+                    if int(pp.get(mk, 0) or 0) <= 0:
+                        continue
+                    e = dex.moves.get(mk) or {}
+                    power = float(e.get("basePower", 0) or 0)
+                    mtype = str(e.get("type") or "")
+                    eff = dex.type_multiplier(mtype, foe.get("types") or []) if mtype else 1.0
+                    stab = 1.5 if mtype in (my.get("types") or []) else 1.0
+                    score = (power if e.get("category") != "Status" else 30.0) * eff * stab
+                    if score > best:
+                        idx, best = i, score
+            mv_key = moves[idx - 1]
+            mv_zh = growth.move_zh(mv_key)
+            foe0 = str(foe.get("species") or "")
+            turns = 0
+            logs: list[str] = []
+            stopped = "打满 20 回合,先歇一下(再发一次继续)"
+            res = None
+            for _ in range(20):
+                # PP 归零就停:自己查 PP,而不是等引擎报错 —— 报错路径会把
+                # 会话标成"已结束",让玩家以为对战没了(实测踩到)
+                _snap = B.session(t) or {}
+                _pl = (_snap.get("battle") or {}).get("player") or {}
+                _party = list(_pl.get("party") or [])
+                _act = int(_pl.get("active", 0) or 0)
+                _md = _party[_act] if 0 <= _act < len(_party) else {}
+                if int((_md.get("pp") or {}).get(mv_key, 0) or 0) <= 0:
+                    stopped = f"「{mv_zh}」的 PP 用完了,该换招或换人了"
+                    break
+                res = B.take_turn(t, str(idx), day=state.day)
+                if res.error:
+                    stopped = res.error.strip()
+                    break
+                turns += 1
+                logs.extend(res.lines or [])
+                if res.finished or not B.in_battle(t):
+                    stopped = "对战结束"
+                    break
+                v2 = B.view(t)
+                my2, foe2 = v2.get("my") or {}, v2.get("foe") or {}
+                if int(my2.get("cur_hp") or 0) <= 0:
+                    stopped = "你的宝可梦倒下了,该换人了"
+                    break
+                if str(foe2.get("species") or "") != foe0:
+                    stopped = "对方换上了别的宝可梦"
+                    break
+                if int(foe2.get("cur_hp") or 0) <= 0:
+                    stopped = "打倒了对面的宝可梦(对方还没派下一只)"
+                    break
+            self._save(t)
+            head = f"⚡ 自动战斗:{turns} 回合 × 「{mv_zh}」"
+            if stopped:
+                head += f"\n⏹ 停下原因:{stopped}"
+            tail = "\n".join(f"· {x}" for x in logs[-6:])
+            meta = snap.get("meta") or {}
+            async for r in self._emit_battle(event, t, meta, (res.lines if res else []),
+                                             text=head + ("\n" + tail if tail else ""),
+                                             keep=tail + "\n" + head):
+                yield r
+            if res is not None and res.finished:
+                async for r in self._emit_result_cards(event, t, meta, res):
+                    yield r
+                B.clear_finished(t)
+                self._save(t)
+
     def _coop_field_hint(self, t: Trainer) -> str:
         """双打:把场上**两位玩家**各自的宝可梦与招式都列出来,方便互相配合。
 
