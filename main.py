@@ -977,7 +977,7 @@ class PokemonWorldPlugin(Star):
 
     @filter.command("招式", alias={"技能", "招式表", "move", "moves"})
     async def cmd_move(self, event: AstrMessageEvent):
-        """/招式 [序号|名字] —— 查看招式说明与效果(对战中可随时查,不消耗回合)"""
+        """/招式 [宝可梦序号|名字] [招式序号|名字] —— 任意宝可梦的招式说明\n        (对战中可随时查,不消耗回合)"""
         t, err = self._require(event, in_battle_ok=True)
         if err:
             yield event.plain_result(err)
@@ -995,13 +995,23 @@ class PokemonWorldPlugin(Star):
             where, mon_dict = "box", hit[1]
             move_arg = parts[2] if len(parts) > 2 else ""
         elif len(parts) >= 2 and parts[0].isdigit():
-            # `/招式 <队伍序号> <招式序号>`:指定某只宝可梦
+            # `/招式 <队伍序号> <招式序号|名字>`:任意宝可梦的具体招式
             idx = int(parts[0])
             if not 1 <= idx <= len(t.party):
                 yield event.plain_result(f"❌ 队伍里没有第 {idx} 只。")
                 return
             where, mon_dict = "party", t.party[idx - 1]
             move_arg = parts[1]
+        elif parts and not parts[0].isdigit() and not B.in_battle(t):
+            # 非战斗时先按队伍成员的名字找:
+            # `/招式 皮卡丘`(列它的招式)/ `/招式 皮卡丘 招式名`(查详情);
+            # 队伍里没叫这个的 → 老行为:把第一个参数当招式名查全图鉴
+            found = t.find(parts[0]) if t.party else None
+            if found is not None:
+                where, mon_dict = "party", t.party[found[0]]
+                move_arg = parts[1] if len(parts) > 1 else ""
+            else:
+                where, move_arg = "party", parts[0]
         elif parts:
             where, move_arg = ("party", parts[0]) if not B.in_battle(t) else ("battle", parts[0])
         if mon_dict is None:
@@ -1057,7 +1067,7 @@ class PokemonWorldPlugin(Star):
             yield event.plain_result(self._move_detail(key, mon=mon))
             return
         # 无参数 → 招式列表
-        lines = [head, "（看详情:`/招式 <序号>`;对战中查招式**不消耗回合**）"]
+        lines = [head, "（看详情:`/招式 <序号>` 查当前宝可梦;`/招式 <队伍序号> <序号>` 或 `/招式 <名字> <招式名>` 查队伍里任意一只;对战中查招式**不消耗回合**）"]
         for i, key in enumerate(mon.moves[:4], 1):
             lines.append(self._move_line(
                 key, index=i, pp=int(mon.pp.get(key, 0) or 0),
