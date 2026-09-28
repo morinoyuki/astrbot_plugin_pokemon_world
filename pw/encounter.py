@@ -95,6 +95,11 @@ NIGHT_KEYS = ("夜晚", "夜间", "夜里", "午夜", "深夜", "晚上", "月")
 # 排除的形态(超级进化/极巨化/原始回归/究极爆发等,非野生)
 _FORM_EXCLUDE = ("Mega", "Gmax", "Primal", "Eternamax", "Totem", "Ash")
 
+# 事件限定基础物种:皮卡丘/伊布的各种特殊形态(换装皮卡丘、戴帽皮卡丘、
+# Let's Go 的搭档/初始伙伴)都不该出现在野外或杂兵队伍里。
+# 实测反馈:道路训练家掏出一只「皮卡丘（Cosplay）」,又怪又出戏。
+_EVENT_ONLY_BASE = {"pikachu", "eevee"}
+
 STAT_LABELS = {
     "hp": "HP",
     "atk": "攻击",
@@ -109,6 +114,8 @@ def is_wild_candidate(entry: dict) -> bool:
     if entry.get("battleOnly"):
         return False
     if int(entry.get("num", 0) or 0) <= 0:
+        return False
+    if str(entry.get("baseSpecies") or "") in _EVENT_ONLY_BASE:
         return False
     forme = str(entry.get("forme") or "")
     return not any(x in forme for x in _FORM_EXCLUDE)

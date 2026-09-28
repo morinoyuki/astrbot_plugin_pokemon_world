@@ -47,6 +47,8 @@ _NO_EFFECT_MOVES = {"fling", "beatup"}
 # 不列的话它们会掉进状态招式分支 → 命中但 0 伤害(反击/镜面反射/报恩/撒气/震级)。
 _COMPUTED_POWER_MOVES = {
     "counter", "mirrorcoat", "metalburst", "return", "frustration", "magnitude",
+    # 数据里 basePower=0、威力由 HP/蓄力层数决定的攻击招
+    "hardpress", "crushgrip", "wringout", "spitup", "present",
 }
 
 WEATHER_ZH = {
@@ -143,6 +145,16 @@ class Pokemon:
     # 战斗结束写回存档时由 to_storage_dict() 还原。
     mega_from: str = ""
     mega_base_ability: str = ""
+    # 变身(百变怪的「变身」/「变身者」):非空 = 变身前的老样子备份,
+    # 换下场或战斗结束写回存档时由 revert_transform()/to_storage_dict() 还原。
+    # 存的值:{species, ability, moves, pp, stats, max_hp, shiny}
+    transform_backup: dict = field(default_factory=dict)
+    # 战斗内的数值/属性/特性改写(力量平分、浸水、特性互换、胃液……):
+    # 只在战斗中生效,写回存档时一并丢掉。
+    stat_override: dict = field(default_factory=dict)
+    type_override: list = field(default_factory=list)
+    ability_override: str = ""
+    ability_suppressed: bool = False
     gender: str = ""
     # 闪光(异色)宝可梦:稀有变异体,野生遭遇时按概率抽取,
     # 存档里持久保存(不影响数值,只影响配色与展示)。
@@ -182,6 +194,8 @@ class Pokemon:
     @property
     def types(self) -> list[str]:
         """当前有效属性(太晶化后通常变单一属性;星晶保持原属性)。"""
+        if self.type_override:
+            return list(self.type_override)
         base = list(self.entry.get("types") or [])
         if self.terastallized and self.tera_type and self.tera_type != "Stellar":
             return [self.tera_type]
@@ -196,8 +210,14 @@ class Pokemon:
         a = get_dex().abilities.get(self.ability) or {}
         return a.get("zh") or a.get("name") or self.ability
 
+    def ability_now(self) -> str:
+        """当前实际生效的特性(特性互换/扮演/胃液等会改写)。"""
+        if self.ability_suppressed:
+            return ""
+        return self.ability_override or self.ability
+
     def has_ability(self, *names: str) -> bool:
-        return self.ability in names
+        return self.ability_now() in names
 
     def hp_frac(self) -> float:
         return self.cur_hp / self.max_hp if self.max_hp else 0.0
@@ -242,6 +262,11 @@ class Pokemon:
             "tera_type": self.tera_type,
             "mega_from": self.mega_from,
             "mega_base_ability": self.mega_base_ability,
+            "transform_backup": dict(self.transform_backup),
+            "stat_override": dict(self.stat_override),
+            "type_override": list(self.type_override),
+            "ability_override": self.ability_override,
+            "ability_suppressed": self.ability_suppressed,
             "gender": self.gender,
             "shiny": bool(self.shiny),
             "friendship": self.friendship,
@@ -303,13 +328,18 @@ class Pokemon:
         p.volatiles = dict(d.get("volatiles") or {})
         p.pp = dict(d.get("pp") or {})
         p.pp_bonus = dict(d.get("pp_bonus") or {})
+        p.transform_backup = dict(d.get("transform_backup") or {})
+        p.stat_override = dict(d.get("stat_override") or {})
+        p.type_override = list(d.get("type_override") or [])
+        p.ability_override = str(d.get("ability_override") or "")
+        p.ability_suppressed = bool(d.get("ability_suppressed"))
         return p
 
     # ── 数值(战斗中)──
 
     def battle_stat(self, stat: str, battle: Battle | None = None) -> int:
         """计入道具/特性/状态/能力等级的实战数值。"""
-        base = float(self.stats.get(stat, 1))
+        base = float(self.stat_override.get(stat, self.stats.get(stat, 1)))
         item_eff = (ITEMS.get(self.item) or {}).get("effect") or {}
 
         # 道具常驻数值倍率
@@ -411,6 +441,8 @@ class Pokemon:
         entry = dex.species.get(target) or {}
         if not entry or self.mega_from or target == self.species:
             return False
+        if self.transform_backup:
+            return False          # 变身的宝可梦不能 Mega 进化(正作规则,也避开还原顺序)
         old_max, old_hp = self.max_hp, self.cur_hp
         self.mega_from = self.species
         self.mega_base_ability = self.ability
@@ -438,12 +470,76 @@ class Pokemon:
         self.mega_from = ""
         self.mega_base_ability = ""
 
+    # ── 变身(百变怪)──
+    def transform_into(self, foe: Pokemon) -> bool:
+        """变身成对手:复制物种/特性/数值/招式/能力等级,HP 与等级保留。
+
+        正作规则:变身招式的 PP 统一为 5,能力等级一并复制,HP **不变**。
+        """
+        if self.transform_backup or self.fainted or foe.fainted:
+            return False
+        self.transform_backup = {
+            "species": self.species,
+            "ability": self.ability,
+            "moves": list(self.moves),
+            "pp": dict(self.pp),
+            "stats": dict(self.stats),
+            "max_hp": self.max_hp,
+            "shiny": bool(self.shiny),
+        }
+        self.species = foe.species
+        self.ability = foe.ability
+        self.stats = dict(foe.stats)
+        self.moves = list(foe.moves)
+        self.pp = dict.fromkeys(self.moves, 5)
+        self.stages = dict(foe.stages)
+        self.shiny = bool(foe.shiny)
+        self.choice_locked = ""
+        return True
+
+    def revert_transform(self) -> None:
+        """还原变身前的老样子(HP 仍是自己那条血)。"""
+        b = self.transform_backup
+        if not b:
+            return
+        self.species = str(b.get("species") or self.species)
+        self.ability = str(b.get("ability") or self.ability)
+        self.moves = list(b.get("moves") or [])
+        self.pp = dict(b.get("pp") or {})
+        self.stats = dict(b.get("stats") or {})
+        self.max_hp = max(1, int(b.get("max_hp") or self.max_hp))
+        self.cur_hp = min(self.cur_hp, self.max_hp)
+        self.shiny = bool(b.get("shiny"))
+        self.transform_backup = {}
+        self.choice_locked = ""
+
     def to_storage_dict(self) -> dict:
-        """写回存档用的序列化:Mega 形态在战斗结束后还原(不消耗、不持久)。"""
-        if not self.mega_from:
-            return self.to_dict()
+        """写回存档用的序列化:Mega/变身只在战斗中有效,写回时一律还原。
+
+        注意**不能改自己**:每回合存档都会走这里,就地还原会把战斗中的
+        变身/Mega 状态抹掉(百变怪下一回合就变回去了)。
+        """
         dex = get_dex()
         d = self.to_dict()
+        # 战斗内的改写一律不落地(数值平分/浸水/特性互换/胃液……)
+        d["stat_override"] = {}
+        d["type_override"] = []
+        d["ability_override"] = ""
+        d["ability_suppressed"] = False
+        if self.transform_backup:
+            b = self.transform_backup
+            d["species"] = str(b.get("species") or d["species"])
+            d["ability"] = str(b.get("ability") or "")
+            d["moves"] = list(b.get("moves") or [])
+            d["pp"] = dict(b.get("pp") or {})
+            d["stats"] = dict(b.get("stats") or {})
+            d["max_hp"] = max(1, int(b.get("max_hp") or d["max_hp"]))
+            d["shiny"] = bool(b.get("shiny"))
+            d["transform_backup"] = {}
+            d["cur_hp"] = min(int(d["cur_hp"]), int(d["max_hp"]))
+            return d          # 变身中不能 Mega,这里就是最终样子
+        if not self.mega_from:
+            return d
         d["species"] = self.mega_from
         d["ability"] = self.mega_base_ability
         d["mega_from"] = ""
@@ -536,6 +632,10 @@ class Battle:
     escaped: bool = False
     # 每回合重置的随机数调用计数(避免同 salt 的随机数完全相关)
     _rng_calls: int = 0
+    # 本场战斗里最后被使用的招式(仿效/鹦鹉学舌要拿它来借)
+    _last_move_any: str = ""
+    # 接棒:换人时要接力过去的能力变化(按 player/enemy 分)
+    _baton: dict = field(default_factory=lambda: {"player": {}, "enemy": {}})
 
     # ── 序列化 ──
     def to_dict(self) -> dict:
@@ -560,6 +660,7 @@ class Battle:
             "escaped": self.escaped,
             "stall_turns": self.stall_turns,
             "stalled": self.stalled,
+            "_last_move_any": self._last_move_any,
         }
 
     @classmethod
@@ -687,6 +788,9 @@ class Battle:
         self._rng_calls = 0
         self._send_out(self.player, self.player.active, initial=True)
         self._send_out(self.enemy, self.enemy.active, initial=True)
+        # 开场时我方先上场(此时对手还没出来),变身者要在两边都站好后补一次
+        self._try_imposter(self.player)
+        self._try_imposter(self.enemy)
         self._check_faints()
         return list(self.log)
 
@@ -842,6 +946,16 @@ class Battle:
         ep = self._action_priority(ea, self.enemy)
         if pp != ep:
             return ["player", "enemy"] if pp > ep else ["enemy", "player"]
+        # 您先请 / 延后:无条件把那一方提到最前/最后
+        forced = ""
+        if pm.volatiles.get("move_next") or em.volatiles.get("move_last"):
+            forced = "player"
+        elif em.volatiles.get("move_next") or pm.volatiles.get("move_last"):
+            forced = "enemy"
+        if forced:
+            order = ["player", "enemy"] if forced == "player" else ["enemy", "player"]
+            self._second_mover_side = order[-1]
+            return order
         ps = pm.battle_stat("spe", self)
         es = em.battle_stat("spe", self)
         # 戏法空间:速度慢的先出手(旧实现只记录 field_effects、从不读取 → 招式毫无效果)
@@ -867,6 +981,13 @@ class Battle:
         self.log.append(f"{'我方' if side is self.player else '对方'}派出了 {mon.display}!")
         self._apply_hazards(side, mon)
         self._on_switch_in(side, mon, initial)
+        self._try_imposter(side)
+        # 接棒:继承上一只留下的能力变化
+        baton = self._baton.get(side.name) or {}
+        if baton:
+            mon.stages = dict(baton)
+            self._baton[side.name] = {}
+            self.log.append(f"{mon.display} 接下了接力棒,继承了能力变化!")
 
     def _do_switch(self, side: Side, index: int) -> bool:
         """换人;返回是否真的换成功(失败时调用方不能清 awaiting_switch)。"""
@@ -875,6 +996,13 @@ class Battle:
             return False
         if index == side.active:
             self.log.append("它已经在场上了。")
+            return False
+        mon_now = side.mon
+        if mon_now is not None and not mon_now.fainted and (
+            mon_now.volatiles.get("trapped") or mon_now.volatiles.get("ingrain")
+            or mon_now.volatiles.get("noretreat")
+        ):
+            self.log.append(f"{mon_now.display} 被盯住了,无法换人!")
             return False
         if side.party[index].fainted:
             self.log.append(f"{side.party[index].display} 已倒下,无法上场。")
@@ -944,6 +1072,8 @@ class Battle:
         mon.stages = {}
         mon.volatiles = {}
         mon.choice_locked = ""
+        # 换下场后变身结束(正作行为),同时保证存档里存的还是百变怪
+        mon.revert_transform()
 
     def _apply_hazards(self, side: Side, mon: Pokemon) -> None:
         if mon.has_ability("levitate") or (ITEMS.get(mon.item) or {}).get("effect", {}).get("ground_immune"):
@@ -1026,7 +1156,8 @@ class Battle:
         return True
 
     # ── 出招 ──
-    def _execute_move(self, side: Side, foe_side: Side, action: dict) -> None:
+    def _execute_move(self, side: Side, foe_side: Side, action: dict, *,
+                      called: bool = False) -> None:
         mon = side.mon
         foe = foe_side.mon
         if mon is None or foe is None or mon.fainted or foe.fainted:
@@ -1036,15 +1167,37 @@ class Battle:
             return
         if not self._pre_move_status(mon):
             return
+        # 迷人:50% 概率发不出招
+        if mon.volatiles.get("attract") and self._rng(3).random() < 0.5:
+            self.log.append(f"{mon.display} 被迷住了,使不出招式!")
+            return
 
         move_key = action.get("move", "")
         entry = get_dex().moves.get(move_key)
         if entry is None:
             self.log.append(f"{mon.display} 想使出的招式不存在。")
             return
-        if move_key not in mon.moves:
+        if move_key not in mon.moves and not called:
             self.log.append(f"{mon.display} 不会使用「{self._move_zh(move_key)}」!")
             return
+        if not called and foe.volatiles.get("imprison") and move_key in foe.moves:
+            self.log.append(f"{foe.display} 的封印封住了 {self._move_zh(move_key)}!")
+            return
+        if not called and mon.volatiles.get("taunt") and entry.get("category") == "Status":
+            self.log.append(f"{mon.display} 被挑衅了,无法使用变化招式!")
+            return
+        if not called and mon.volatiles.get("disable") and mon.volatiles.get("disable_move") == move_key:
+            self.log.append(f"{mon.display} 的 {self._move_zh(move_key)} 被定身了,无法使用!")
+            return
+        if not called and mon.volatiles.get("torment") and mon.last_move == move_key:
+            self.log.append(f"{mon.display} 被无理取闹,不能连续使用同一招!")
+            return
+        if not called and mon.volatiles.get("encore"):
+            encored = str(mon.volatiles.get("encore_move") or "")
+            if encored and move_key != encored:
+                self.log.append(f"{mon.display} 被再来一次逼着使用 {self._move_zh(encored)}!")
+                move_key = encored
+                entry = get_dex().moves.get(move_key) or entry
         if mon.choice_locked and mon.choice_locked != move_key:
             self.log.append(f"{mon.display} 被讲究道具锁定,只能使用 {self._move_zh(mon.choice_locked)}!")
             move_key = mon.choice_locked
@@ -1086,14 +1239,35 @@ class Battle:
             self.log.append(f"{mon.display} 虽然混乱,但还是使出了招式!")
             self._dec_volatile(mon, "confusion")
 
-        self.log.append(f"{mon.display} 使用了 {self._move_zh(move_key)}!")
+        if not called:
+            self.log.append(f"{mon.display} 使用了 {self._move_zh(move_key)}!")
 
-        # PP
-        self._spend_pp(mon, move_key)
+        # PP(借来的招式不扣 PP,但仍记为“最后使用的招式”)
+        if called:
+            mon.last_move = move_key
+        else:
+            self._spend_pp(mon, move_key)
+        self._last_move_any = move_key
 
-        # 保护
+        # 保护(尖刺防守/碉堡/线阱……附带接触惩罚)
         if foe.volatiles.get("protect") and entry.get("target") not in ("self", "allySide", "allyTeam"):
             self.log.append(f"{foe.display} 保护了自己,挡住了攻击!")
+            if "contact" in (entry.get("flags") or []):
+                if any(foe.volatiles.get(k) for k in ("spikyshield", "silktrap")) \
+                        or foe.volatiles.get("burningbulwark"):
+                    dmg = max(1, mon.max_hp // 8)
+                    mon.take_damage(dmg)
+                    self.log.append(f"{mon.display} 被扎伤,损失了 {dmg} HP!")
+                elif foe.volatiles.get("banefulbunker"):
+                    self._inflict(mon, "psn")
+                elif foe.volatiles.get("kingsshield"):
+                    msg = mon.boost("atk", -1)
+                    if msg:
+                        self.log.append(msg)
+                elif foe.volatiles.get("obstruct"):
+                    msg = mon.boost("def", -2)
+                    if msg:
+                        self.log.append(msg)
             return
 
         # 特性免疫(先于命中判定:免疫不吃命中)
@@ -1107,8 +1281,9 @@ class Battle:
             self.log.append(f"{foe.display} 的魔法守护挡住了攻击!")
             return
 
-        # 命中判定
-        if not self._accuracy_check(mon, foe, entry):
+        # 命中判定(锁定/心眼:下一招必中)
+        locked_on = bool(mon.volatiles.pop("lockon", 0))
+        if not locked_on and not self._accuracy_check(mon, foe, entry):
             self.log.append("但是没有命中!")
             return
 
@@ -1317,7 +1492,9 @@ class Battle:
         if caught:
             if eff.get("ball_heal"):
                 mon.full_heal()
-            self.captured = mon.to_dict()
+            # 用 to_storage_dict:变身/Mega 只是战斗中的临时形态,
+            # 捕到的必须是它本来的样子(否则会捕到一只“皮卡丘”)。
+            self.captured = mon.to_storage_dict()
             self.log.append(f"恭喜!成功捕获了 {mon.display}!")
             self.finished = True
             self.winner = "player"
@@ -1498,6 +1675,18 @@ class Battle:
             return
 
         power = self._effective_power(mon, foe, move_key, entry)
+        # 礼物:两成概率是“回复礼物”
+        if move_key == "present" and power < 0:
+            healed = foe.heal(max(1, foe.max_hp // 4))
+            self.log.append(
+                f"礼物是回复!{foe.display} 回复了 {healed} HP!" if healed
+                else f"礼物是回复!但 {foe.display} 的 HP 已经满了!"
+            )
+            return
+        # 喷出/吞下都要先蓄力
+        if move_key == "spitup" and not int(mon.volatiles.get("stockpile", 0) or 0):
+            self.log.append(f"{mon.display} 没有蓄力,喷出失败了!")
+            return
         # 一击必杀类招式:数据里没有 ohko 标记(全是 None),按真实规则实现 ——
         # 命中率 30%,对手等级高于自己时必定失败。旧实现走"0 威力"路径 →
         # 命中却 0 伤害,玩家白白浪费回合。
@@ -1537,7 +1726,13 @@ class Battle:
             return
 
         mtype = self._move_type(mon, entry, move_key)
+        # 电磁飘浮:地面招式打不到
+        if mtype == "Ground" and foe.volatiles.get("magnetrise"):
+            self.log.append(f"{foe.display} 浮在空中,地面招式没有效果!")
+            return
         eff = dex.type_multiplier(mtype, foe.types)
+        if eff and mtype == "Fire" and foe.volatiles.get("tarshot"):
+            eff *= 2                              # 沥青射击:火属性弱点
         if eff == 0:
             self.log.append(f"对 {foe.display} 没有效果……")
             return
@@ -1548,8 +1743,12 @@ class Battle:
         for _hit in range(hits):
             crit = self._is_crit(mon, entry)
             damage = self._calc_damage(mon, foe, move_key, entry, power, mtype, eff, crit)
-            # 气息腰带 / 结实 / 太晶壳(只有满血被秒时才触发)
-            if (
+            # 挺住 / 气息腰带 / 结实(只有被一击打倒时才触发)
+            if damage >= foe.cur_hp and foe.volatiles.get("endure"):
+                foe.volatiles.pop("endure", None)
+                damage = foe.cur_hp - 1
+                self.log.append(f"{foe.display} 挺住了!留下 1 HP!")
+            elif (
                 damage >= foe.cur_hp
                 and foe.cur_hp == foe.max_hp
                 and (
@@ -1577,6 +1776,8 @@ class Battle:
         if hits > 1:
             self.log.append(f"连续命中了 {landed} 次!")
         self._log_effectiveness(eff)
+        if move_key == "spitup":
+            mon.volatiles.pop("stockpile", None)
 
         # 吸血 / 反作用力
         drain = entry.get("drain")
@@ -1658,6 +1859,11 @@ class Battle:
         # 爽喉喷雾
         if mon.item == "throat-spray" and "sound" in flags:
             self.log.append(mon.boost("spa", 1))
+        # 同命:被打倒就拉上对手一起倒下
+        if foe.fainted and foe.volatiles.get("destinybond") and not mon.fainted:
+            mon.cur_hp = 0
+            mon.fainted = True
+            self.log.append(f"{foe.display} 的同命生效了!{mon.display} 一起倒下了!")
 
     def _log_effectiveness(self, eff: float) -> None:
         if eff >= 4:
@@ -1785,6 +1991,23 @@ class Battle:
                     self.log.append(f"震级 {mag}!")
                     return float(mag)
             return 70.0
+        # 充电:下一招电属性招式威力翻倍(用完即消)
+        if mon.volatiles.get("charge") and str(entry.get("type") or "") == "Electric":
+            mon.volatiles.pop("charge", None)
+            self.log.append(f"{mon.display} 的电流增强了电属性招式!")
+            power *= 2
+        # 捏碎 / 绞紧 / 硬压:目标 HP 越满威力越高
+        if move_key in ("crushgrip", "wringout", "hardpress"):
+            return max(1.0, (120.0 if move_key != "hardpress" else 100.0) * foe.hp_frac())
+        # 喷出:每层蓄力 100 威力
+        if move_key == "spitup":
+            return float(100 * int(mon.volatiles.get("stockpile", 0) or 0))
+        # 礼物:随机 40/80/120 威力,也可能变成回复(负值由 _resolve_effect 处理)
+        if move_key == "present":
+            roll = self._rng(34).random()
+            if roll < 0.2:
+                return -1.0
+            return 40.0 if roll < 0.6 else 80.0 if roll < 0.9 else 120.0
         targets_hp = foe.hp_frac()
         if move_key in ("lowkick", "grassknot"):
             w = float(foe.entry.get("weightkg", 10) or 10)
@@ -1863,11 +2086,19 @@ class Battle:
             return foe.cur_hp - mon.cur_hp
         if move_key == "psywave":
             return max(1, int(mon.level * self._rng(11).uniform(0.5, 1.5)))
+        if move_key == "comeuppance":
+            mine = "player" if self.player.mon is mon else "enemy"
+            return max(1, int(int(self._taken.get(mine, 0) or 0) * 1.5))
         return None
 
     def _resolve_status_move(self, side, foe_side, mon, foe, move_key, entry) -> None:
         target = entry.get("target", "normal")
         to_self = target in ("self", "allySide", "allyTeam")
+
+        # 变身(百变怪的看家本领,也让对手的百变怪真能“拟态”你)
+        if move_key == "transform":
+            self._transform(mon, foe, label="变身")
+            return
 
         # 恢复
         if entry.get("heal"):
@@ -1877,6 +2108,49 @@ class Battle:
             healed = mon.heal(max(1, int(mon.max_hp * frac)))
             if healed:
                 self.log.append(f"{mon.display} 回复了 {healed} HP!")
+            else:
+                self.log.append(f"{mon.display} 的 HP 已经全满了!")
+        if move_key == "lifedew":
+            healed = mon.heal(max(1, mon.max_hp // 4))
+            self.log.append(
+                f"{mon.display} 回复了 {healed} HP!" if healed
+                else f"{mon.display} 的 HP 已经全满了!"
+            )
+            return
+        if move_key == "rest" and mon.cur_hp >= mon.max_hp:
+            self.log.append(f"{mon.display} 的 HP 已经全满了,睡不着!")
+            return
+        if move_key == "revivalblessing":
+            fallen = next((p for p in side.party if p.fainted), None)
+            if fallen is None:
+                self.log.append("没有倒下需要复活的同伴。")
+            else:
+                fallen.fainted = False
+                fallen.cur_hp = max(1, fallen.max_hp // 2)
+                fallen.status = ""
+                fallen.status_turns = 0
+                self.log.append(f"{fallen.display} 被复活了!(回复一半 HP)")
+            return
+        if move_key == "shedtail":
+            if mon.hp_frac() <= 0.5:
+                self.log.append(f"{mon.display} 的 HP 不够,断尾失败了!")
+                return
+            mon.take_damage(max(1, mon.max_hp // 2))
+            self.log.append(f"{mon.display} 断下尾巴当了替身!(消耗一半 HP)")
+            self._request_switch(side, mon)
+            return
+        if move_key in ("safeguard", "mist"):
+            side.screens[move_key] = 5
+            self.log.append(
+                f"{mon.display} 展开了神秘守护,不会被异常状态缠上!" if move_key == "safeguard"
+                else f"{mon.display} 被白雾包围,能力不会被对手降低!"
+            )
+            return
+        if move_key == "batonpass":
+            self._baton[side.name] = dict(mon.stages)
+            self.log.append(f"{mon.display} 把能力变化接力给了下一只宝可梦!")
+            self._request_switch(side, mon)
+            return
         if move_key == "rest" and mon.cur_hp < mon.max_hp:
             mon.cur_hp = mon.max_hp
             mon.status = "slp"
@@ -1891,6 +2165,68 @@ class Battle:
                     p.status_turns = 0
             if cured:
                 self.log.append("治愈了 " + "、".join(cured) + " 的异常状态!")
+            else:
+                self.log.append("大家都没有异常状态,白忙一场。")
+
+        # ── 气象回复:光合作用 / 月光 / 晨光 / 集沙 ──
+        # 正作:晴天回复 2/3,其它天气只回 1/4(旧实现完全没效果)
+        if move_key in ("synthesis", "moonlight", "morningsun", "shoreup"):
+            frac = 0.5
+            if self.weather == "sun" or (move_key == "shoreup" and self.weather == "sand"):
+                frac = 2 / 3
+            elif self.weather:
+                frac = 0.25
+            healed = mon.heal(max(1, int(mon.max_hp * frac)))
+            self.log.append(
+                f"{mon.display} 回复了 {healed} HP!" if healed
+                else f"{mon.display} 的 HP 已经全满了!"
+            )
+            return
+        if move_key == "lunarblessing":
+            healed = mon.heal(max(1, mon.max_hp // 4))
+            if healed:
+                self.log.append(f"{mon.display} 回复了 {healed} HP!")
+            else:
+                self.log.append(f"{mon.display} 的 HP 已经全满了!")
+            if mon.status:
+                mon.status = ""
+                mon.status_turns = 0
+                self.log.append(f"{mon.display} 的异常状态被治愈了!")
+            return
+        if move_key == "wish":
+            mon.volatiles["wish"] = 2
+            self.log.append(f"{mon.display} 许下了愿,下回合回复 HP!")
+            return
+        if move_key == "aquaring":
+            mon.volatiles["aquaring"] = 1
+            self.log.append(f"{mon.display} 被水环包住,每回合回复 HP!")
+            return
+        if move_key == "ingrain":
+            mon.volatiles["ingrain"] = 1
+            self.log.append(f"{mon.display} 扎下了根,每回合回复 HP(且无法换人)!")
+            return
+        if move_key == "recycle":
+            berry = str(mon.volatiles.get("_eaten_berry") or "")
+            if berry and not mon.item:
+                mon.item = berry
+                mon.volatiles.pop("_eaten_berry", None)
+                self.log.append(f"{mon.display} 回收了 {self._item_zh(berry)}!")
+            else:
+                self.log.append("但是没有能回收的道具。")
+            return
+        # 队友向的招式:单打里没有合法目标(正作里也大多会失败)
+        if move_key in ("healpulse", "floralhealing", "junglehealing", "helpinghand",
+                        "followme", "ragepowder", "allyswitch", "magneticflux",
+                        "teatime", "instruct", "purify", "sketch",
+                        "quickguard", "wideguard"):
+            self.log.append(f"{self._move_zh(move_key)} 是队友向招式,单打里没有效果。")
+            return
+        # 本来就是“什么都不发生”的趣味招式
+        if move_key in ("splash", "celebrate", "happyhour", "holdhands"):
+            self.log.append(
+                f"{mon.display} 使出了 {self._move_zh(move_key)}……但是什么都没有发生!"
+            )
+            return
 
         # 能力变化
         boosts = entry.get("boosts")
@@ -1898,14 +2234,287 @@ class Battle:
             tgt = mon if to_self else foe
             for stat, delta in boosts.items():
                 if stat in STAT_ORDER or stat in ("accuracy", "evasion"):
+                    if int(delta) < 0 and tgt is foe and "mist" in foe_side.screens:
+                        self.log.append(f"{foe.display} 被白雾保护,能力没有被降低!")
+                        continue
                     msg = tgt.boost(stat, int(delta))
                     if msg:
                         self.log.append(msg)
 
-        # 异常状态
+        # ── 数值/状态的重分配:平分、互换、颠倒、复制 ──
+        if move_key == "bellydrum":
+            if mon.hp_frac() <= 0.5:
+                self.log.append(f"{mon.display} 的 HP 不够,腹鼓失败了!")
+            else:
+                mon.take_damage(max(1, mon.max_hp // 2))
+                mon.stages["atk"] = 6
+                self.log.append(f"{mon.display} 鼓起肚子,攻击提升到了最大!")
+            return
+        if move_key == "acupressure":
+            pool = [s for s in ("atk", "def", "spa", "spd", "spe", "accuracy", "evasion")
+                    if mon.stage(s) < 6]
+            if not pool:
+                self.log.append(f"{mon.display} 的能力已经无法再提升了!")
+            else:
+                msg = mon.boost(self._rng(31).choice(pool), 2)
+                if msg:
+                    self.log.append(msg)
+            return
+        if move_key == "psychup":
+            mon.stages = dict(foe.stages)
+            self.log.append(f"{mon.display} 复制了 {foe.display} 的能力变化!")
+            return
+        if move_key == "topsyturvy":
+            foe.stages = {k: -v for k, v in foe.stages.items()}
+            self.log.append(f"{foe.display} 的能力变化被颠倒了!")
+            return
+        if move_key in ("powersplit", "guardsplit"):
+            keys = ("atk", "spa") if move_key == "powersplit" else ("def", "spd")
+            avg = {k: max(1, (self._stat_now(mon, k) + self._stat_now(foe, k)) // 2)
+                   for k in keys}
+            mon.stat_override.update(avg)
+            foe.stat_override.update(avg)
+            label = "攻击与特攻" if move_key == "powersplit" else "防御与特防"
+            self.log.append(f"{mon.display} 与 {foe.display} 平分了{label}!")
+            return
+        if move_key in ("powerswap", "guardswap"):
+            keys = ("atk", "spa") if move_key == "powerswap" else ("def", "spd")
+            for k in keys:
+                mon.stages[k], foe.stages[k] = foe.stage(k), mon.stage(k)
+            label = "攻击与特攻" if move_key == "powerswap" else "防御与特防"
+            self.log.append(f"{mon.display} 与 {foe.display} 互换了{label}的能力变化!")
+            return
+        if move_key == "heartswap":
+            mon.stages, foe.stages = dict(foe.stages), dict(mon.stages)
+            self.log.append(f"{mon.display} 与 {foe.display} 互换了全部能力变化!")
+            return
+        if move_key in ("speedswap", "powertrick"):
+            if move_key == "speedswap":
+                a, b = self._stat_now(mon, "spe"), self._stat_now(foe, "spe")
+                mon.stat_override["spe"], foe.stat_override["spe"] = b, a
+                self.log.append(f"{mon.display} 与 {foe.display} 互换了速度!")
+            else:
+                a, b = self._stat_now(mon, "atk"), self._stat_now(mon, "def")
+                mon.stat_override["atk"], mon.stat_override["def"] = b, a
+                self.log.append(f"{mon.display} 把攻击与防御对调了!")
+            return
+        if move_key == "strengthsap":
+            power = max(1, foe.battle_stat("atk", self))
+            healed = mon.heal(power)
+            self.log.append(f"{mon.display} 吸取了 {foe.display} 的力量,回复了 {healed} HP!")
+            msg = foe.boost("atk", -1)
+            if msg:
+                self.log.append(msg)
+            return
+        if move_key == "takeheart":
+            if mon.status:
+                mon.status = ""
+                mon.status_turns = 0
+                self.log.append(f"{mon.display} 的异常状态被治愈了!")
+            for st in ("spa", "spd"):
+                msg = mon.boost(st, 1)
+                if msg:
+                    self.log.append(msg)
+            return
+        if move_key == "stuffcheeks":
+            berry = mon.item if "berry" in mon.item else ""
+            if not berry:
+                self.log.append("但是没有树果可以吃。")
+            else:
+                mon.item = ""
+                mon.volatiles["_eaten_berry"] = berry
+                self.log.append(f"{mon.display} 吃掉了 {self._item_zh(berry)}!")
+                msg = mon.boost("def", 2)
+                if msg:
+                    self.log.append(msg)
+            return
+        if move_key == "tidyup":
+            side.hazards = {}
+            foe_side.hazards = {}
+            self.log.append("场上的陷阱被清理干净了!")
+            for st in ("atk", "spa"):
+                msg = mon.boost(st, 1)
+                if msg:
+                    self.log.append(msg)
+            return
+        if move_key == "courtchange":
+            side.hazards, foe_side.hazards = dict(foe_side.hazards), dict(side.hazards)
+            side.screens, foe_side.screens = dict(foe_side.screens), dict(side.screens)
+            self.log.append("双方场上的效果被交换了!")
+            return
+        if move_key == "curse":
+            if "Ghost" in mon.types:
+                mon.take_damage(max(1, mon.max_hp // 2))
+                foe.volatiles["curse"] = 1
+                self.log.append(f"{mon.display} 献祭了 HP,诅咒了 {foe.display}!")
+            else:
+                for st, d in (("atk", 1), ("def", 1), ("spe", -1)):
+                    msg = mon.boost(st, d)
+                    if msg:
+                        self.log.append(msg)
+            return
+        if move_key == "spite":
+            if foe.last_move and self._reduce_pp(foe, foe.last_move, 4):
+                self.log.append(f"{foe.display} 的 {self._move_zh(foe.last_move)} PP 被削减了!")
+            else:
+                self.log.append("但是没有效果!")
+            return
+        if move_key == "painsplit":
+            avg = (mon.cur_hp + foe.cur_hp) // 2
+            mon.cur_hp = max(1, min(mon.max_hp, avg))
+            foe.cur_hp = max(1, min(foe.max_hp, avg))
+            self.log.append(f"双方的痛楚被平分了!(各 {avg} HP)")
+            return
+        if move_key == "noretreat":
+            if mon.volatiles.get("noretreat"):
+                self.log.append(f"{mon.display} 已经无路可退了!")
+            else:
+                # 全能力 +1 由数据里的 boosts 统一处理,这里只管“无法换人”
+                mon.volatiles["noretreat"] = 1
+                self.log.append(f"{mon.display} 背水一战,无法换人了!")
+            return
+        if move_key == "tarshot":
+            # 速度 -1 由数据里的 boosts 统一处理,这里只管“怕火”
+            foe.volatiles["tarshot"] = 1
+            self.log.append(f"{foe.display} 被沥青粘住,变得怕火了!")
+            return
+        if move_key == "dragoncheer":
+            mon.volatiles["focusenergy"] = 1     # 单打里就是给自己加会心
+            mon.volatiles["dragoncheer"] = 1
+            self.log.append(f"{mon.display} 受到龙声鼓舞,容易命中要害了!")
+            return
+        if move_key == "stockpile":
+            n = int(mon.volatiles.get("stockpile", 0) or 0)
+            if n >= 3:
+                self.log.append(f"{mon.display} 已经蓄力到极限了!")
+            else:
+                mon.volatiles["stockpile"] = n + 1
+                self.log.append(f"{mon.display} 蓄力了!({n + 1}/3)")
+            return
+        if move_key == "swallow":
+            n = int(mon.volatiles.get("stockpile", 0) or 0)
+            if not n:
+                self.log.append(f"{mon.display} 没有蓄力,吞下失败了!")
+            else:
+                mon.volatiles.pop("stockpile", None)
+                healed = mon.heal(max(1, mon.max_hp * n // 4))
+                self.log.append(f"{mon.display} 吞下了蓄力,回复了 {healed} HP!")
+            return
+
+        # ── 控制类:定身法 / 再来一次 / 无理取闹 / 封印 / 哈欠 / 灭亡之歌 / 同命 / 锁定 ──
+        if move_key == "disable":
+            if not foe.last_move:
+                self.log.append("但是没有效果!")
+            else:
+                foe.volatiles["disable"] = 4
+                foe.volatiles["disable_move"] = foe.last_move
+                self.log.append(f"{foe.display} 的 {self._move_zh(foe.last_move)} 被定身了!")
+            return
+        if move_key == "encore":
+            if not foe.last_move:
+                self.log.append("但是没有效果!")
+            else:
+                foe.volatiles["encore"] = 4
+                foe.volatiles["encore_move"] = foe.last_move
+                self.log.append(f"{foe.display} 被逼着继续用 {self._move_zh(foe.last_move)}!")
+            return
+        if move_key == "torment":
+            foe.volatiles["torment"] = 1
+            self.log.append(f"{foe.display} 被无理取闹了,无法连续使用同一招!")
+            return
+        if move_key == "imprison":
+            mon.volatiles["imprison"] = 1
+            self.log.append(f"{mon.display} 封印了对手会的招式!")
+            return
+        if move_key == "yawn":
+            if foe.status or foe.volatiles.get("yawn"):
+                self.log.append("但是没有效果!")
+            else:
+                foe.volatiles["yawn"] = 2
+                self.log.append(f"{foe.display} 打了个哈欠,下回合就要睡着了……")
+            return
+        if move_key == "perishsong":
+            for p in (mon, foe):
+                p.volatiles["perish"] = 4
+            self.log.append("灭亡之歌响起了!双方 3 回合后倒下!")
+            return
+        if move_key == "destinybond":
+            mon.volatiles["destinybond"] = 2      # 撑过本回合与下一回合
+            self.log.append(f"{mon.display} 拉上了对手同命!")
+            return
+        if move_key in ("lockon", "mindreader"):
+            mon.volatiles["lockon"] = 1
+            self.log.append(f"{mon.display} 锁定了 {foe.display},下一招必中!")
+            return
+        if move_key == "attract":
+            if mon.gender and foe.gender and mon.gender != foe.gender:
+                foe.volatiles["attract"] = 1
+                self.log.append(f"{foe.display} 被迷住了!")
+            else:
+                self.log.append("但是没有效果!")
+            return
+
+        # ── 换人 / 陷阱 ──
+        if move_key in ("roar", "whirlwind", "dragontail", "circlethrow"):
+            self._force_switch(foe_side)
+            return
+        if move_key in ("quash",):
+            foe.volatiles["move_last"] = 1
+            self.log.append(f"{foe.display} 被延后了,这回合最后行动!")
+            return
+        if move_key == "afteryou":
+            foe.volatiles["move_next"] = 1
+            self.log.append(f"{mon.display} 请 {foe.display} 先行动!")
+            return
+        if move_key in ("meanlook", "block", "spiderweb"):
+            if foe.volatiles.get("trapped"):
+                self.log.append("但是没有效果!")
+            else:
+                foe.volatiles["trapped"] = 1
+                self.log.append(f"{foe.display} 被盯住,无法换人了!")
+            return
+
+        # ── 改变属性 ──
+        if move_key in ("soak", "magicpowder", "reflecttype", "conversion", "conversion2",
+                        "camouflage", "trickortreat", "forestscurse"):
+            self._move_type_change(mon, foe, move_key)
+            return
+
+        # ── 改变特性 ──
+        if move_key in ("skillswap", "roleplay", "entrainment", "simplebeam",
+                        "worryseed", "gastroacid", "doodle"):
+            self._move_ability_change(mon, foe, move_key)
+            return
+
+        # ── 道具:戏法 / 掉包 / 传递礼物 ──
+        if move_key in ("trick", "switcheroo", "bestow"):
+            if not mon.item and not foe.item:
+                self.log.append("但是双方都没有携带道具!")
+            elif move_key == "bestow":
+                if mon.item and not foe.item:
+                    foe.item, mon.item = mon.item, ""
+                    self.log.append(f"{mon.display} 把 {self._item_zh(foe.item)} 送给了 {foe.display}!")
+                else:
+                    self.log.append("但是没有效果!")
+            else:
+                mon.item, foe.item = foe.item, mon.item
+                self.log.append(f"{mon.display} 与 {foe.display} 交换了携带道具!")
+            return
+
+        # ── 借用别人的招式:挥指 / 仿效 / 鹦鹉学舌 / 梦话 / 模仿 / 借助 / 自然之力 ──
+        if move_key in ("metronome", "copycat", "mirrormove", "sleeptalk", "mimic",
+                        "assist", "naturepower"):
+            self._call_move(side, foe_side, mon, foe, move_key)
+            return
+
+        # 异常状态(神秘守护能挡下对手造成的异常)
         if entry.get("status"):
             tgt = mon if to_self else foe
-            self._inflict(tgt, entry["status"])
+            guarded = tgt is foe and "safeguard" in foe_side.screens
+            if guarded:
+                self.log.append(f"{tgt.display} 被神秘守护保护着,没有中招!")
+            else:
+                self._inflict(tgt, entry["status"])
         # 说明:灼伤/麻痹等已由上面的 entry["status"] 统一处理
         # (`_inflict` 内部已含地面免疫电磁波等判定),这里不能再重复调用,
         # 否则木子果的解状态日志会出现两次。
@@ -1938,8 +2547,33 @@ class Battle:
                 self.log.append(f"{foe.display} 被挑衅了!")
             elif vs == "focusenergy":
                 mon.volatiles["focusenergy"] = 1
+                self.log.append(f"{mon.display} 集中精神,容易命中要害了!")
+            elif vs in ("safeguard", "mist"):
+                side.screens[vs] = 5
+                self.log.append(
+                    f"{mon.display} 展开了神秘守护!" if vs == "safeguard"
+                    else f"{mon.display} 被白雾包围了!"
+                )
             elif vs == "substitute":
                 self.log.append(f"{mon.display} 使用了替身(本引擎近似处理为无效果)。")
+            elif vs == "endure":
+                mon.volatiles["endure"] = 1
+                self.log.append(f"{mon.display} 摆好了架势,准备挺住这一击!")
+            elif vs in ("spikyshield", "banefulbunker", "burningbulwark",
+                        "silktrap", "kingsshield", "obstruct"):
+                mon.volatiles["protect"] = 1
+                mon.volatiles[vs] = 1
+                self.log.append(f"{mon.display} 保护了自己!")
+            elif vs == "charge":
+                mon.volatiles["charge"] = 1
+                self.log.append(f"{mon.display} 充满了电,下一招电属性招式威力翻倍!")
+            elif vs == "magnetrise":
+                mon.volatiles["magnetrise"] = 5
+                self.log.append(f"{mon.display} 浮到了空中,地面招式无效!")
+            elif vs == "minimize":
+                self.log.append(f"{mon.display} 变小了,更难被击中了!")
+            elif vs in ("defensecurl", "helpinghand"):
+                self.log.append(f"{mon.display} 摆好了架势:" + self._move_zh(move_key) + "!")
 
         # 场地 / 天气 / 陷阱 / 墙
         if entry.get("sideCondition"):
@@ -1971,6 +2605,178 @@ class Battle:
             mon.cur_hp = 0
             mon.fainted = True
             self.log.append(f"{mon.display} 倒下了!")
+
+    def _transform(self, mon: Pokemon, foe: Pokemon, *, label: str = "变身") -> None:
+        """变身招式的日志层:`Pokemon.transform_into` 负责数值,这里只管播报。"""
+        who = mon.display
+        if not mon.transform_into(foe):
+            why = "已经变身过了" if mon.transform_backup else "现在无法变身"
+            self.log.append(f"{who} 的{label}失败了!({why})")
+            return
+        self.log.append(f"{who} {label}成了 {mon.display}!")
+        self.log.append(f"{mon.display} 复制了对手的招式与能力等级!")
+
+    # ── 变化招式用的小工具 ────────────────────────────────────────
+    @staticmethod
+    def _item_zh(key: str) -> str:
+        return str((BAG_ITEMS.get(key) or {}).get("zh") or key)
+
+    @staticmethod
+    def _stat_now(mon: Pokemon, key: str) -> int:
+        """当前实际数值(力量平分/速度互换等会画在 stat_override 上)。"""
+        return int(mon.stat_override.get(key, mon.stats.get(key, 1)) or 1)
+
+    def _reduce_pp(self, mon: Pokemon, move_key: str, amount: int) -> bool:
+        cur = mon.pp.get(move_key)
+        if not cur:
+            return False
+        mon.pp[move_key] = max(0, int(cur) - amount)
+        return True
+
+    def _force_switch(self, foe_side: Side) -> None:
+        """吼叫/吹飞:野生对手直接逃走,训练家对手换上下一只。"""
+        foe = foe_side.mon
+        if foe is None:
+            return
+        if self.wild:
+            self.log.append(f"{foe.display} 被吹飞了 —— 野生的宝可梦逃走了!")
+            self.finished = True
+            self.escaped = True
+            self.winner = "player"
+            return
+        nxt = next((i for i, p in enumerate(foe_side.party)
+                    if i != foe_side.active and not p.fainted), None)
+        if nxt is None:
+            self.log.append(f"{foe.display} 没有可替换的宝可梦!", )
+            return
+        nxt_mon = foe_side.party[nxt]
+        self.log.append(f"{foe.display} 被赶回了精灵球!")
+        self._do_switch(foe_side, nxt)
+        self.log.append(f"{nxt_mon.display} 被赶上了场!")
+
+    def _move_type_change(self, mon: Pokemon, foe: Pokemon, move_key: str) -> None:
+        """浸水/魔法粉/镜面属性/纹理……:战斗中临时改变属性。"""
+        terrain_type = {
+            "electricterrain": "Electric", "grassyterrain": "Grass",
+            "mistyterrain": "Fairy", "psychicterrain": "Psychic",
+        }.get(self.terrain, "")
+        if move_key == "soak":
+            tgt, types, why = foe, ["Water"], "变成了水属性"
+        elif move_key == "magicpowder":
+            tgt, types, why = foe, ["Psychic"], "变成了超能力属性"
+        elif move_key == "reflecttype":
+            tgt, types, why = mon, foe.types, f"变成了 {foe.display} 一样的属性"
+        elif move_key == "conversion":
+            mv = get_dex().moves.get(mon.moves[0]) if mon.moves else None
+            tgt, types = mon, [self._move_type(mon, mv or {}, mon.moves[0] if mon.moves else "")]
+            why = "根据自己的招式改变了属性"
+        elif move_key == "conversion2":
+            table = get_dex().typechart
+            last = self._move_type(mon, get_dex().moves.get(foe.last_move or "") or {}, foe.last_move or "")
+            resist = next((t for t in ("Normal", "Fire", "Water", "Electric", "Grass", "Ice",
+                                       "Fighting", "Poison", "Ground", "Flying", "Psychic", "Bug",
+                                       "Rock", "Ghost", "Dragon", "Dark", "Steel", "Fairy")
+                           if float((table.get(t) or {}).get(last, 1) or 1) < 1), "Normal")
+            tgt, types, why = mon, [resist], "针对对手的招式的属性改变了"
+        elif move_key == "camouflage":
+            tgt, types, why = mon, [terrain_type or "Normal"], "根据场地改变了属性"
+        elif move_key == "trickortreat":
+            tgt, types, why = foe, [*foe.types, "Ghost"], "被加上了幽灵属性"
+        else:
+            tgt, types, why = foe, [*foe.types, "Grass"], "被加上了草属性"
+        tgt.type_override = list(dict.fromkeys(types))
+        self.log.append(f"{tgt.display} {why}!")
+
+    def _move_ability_change(self, mon: Pokemon, foe: Pokemon, move_key: str) -> None:
+        """特性互换 / 扮演 / 找伙伴 / 单纯光束 / 烦恼种子 / 胃液。"""
+        dex = get_dex()
+
+        def zh(key: str) -> str:
+            return str((dex.abilities.get(key) or {}).get("zh") or key)
+
+        if move_key == "gastroacid":
+            if foe.ability_suppressed or not foe.ability_now():
+                self.log.append("但是没有效果!")
+            else:
+                foe.ability_suppressed = True
+                self.log.append(f"{foe.display} 的特性被胃液封住了!")
+        elif move_key == "skillswap":
+            a, b = mon.ability_now(), foe.ability_now()
+            if not a and not b:
+                self.log.append("但是没有效果!")
+            else:
+                mon.ability_override, foe.ability_override = b, a
+                self.log.append(f"{mon.display} 与 {foe.display} 交换了特性!")
+        elif move_key == "roleplay":
+            if not foe.ability_now():
+                self.log.append("但是没有效果!")
+            else:
+                mon.ability_override = foe.ability_now()
+                self.log.append(f"{mon.display} 复制了 {foe.display} 的特性 {zh(mon.ability_override)}!")
+        elif move_key in ("entrainment", "doodle"):
+            src = mon.ability_now()
+            if not src:
+                self.log.append("但是没有效果!")
+            else:
+                if move_key == "entrainment":
+                    foe.ability_override = src
+                else:
+                    mon.ability_override = foe.ability_now()
+                self.log.append(f"{mon.display} 把特性 {zh(src)} 传递了出去!")
+        elif move_key == "simplebeam":
+            foe.ability_override = "simple"
+            self.log.append(f"{foe.display} 的特性变成了单纯!")
+        elif move_key == "worryseed":
+            foe.ability_override = "insomnia"
+            self.log.append(f"{foe.display} 的特性变成了不眠!")
+
+    def _call_move(self, side: Side, foe_side: Side, mon: Pokemon, foe: Pokemon,
+                   move_key: str) -> None:
+        """借用招式:抽一招当场使用(不消耗那一招的 PP,也不会无限递归)。"""
+        dex = get_dex()
+        if move_key == "metronome":
+            pool = [k for k, e in dex.moves.items()
+                    if not e.get("isNonstandard") and not e.get("isZ") and not e.get("isMax")
+                    and not e.get("callsMove") and k != "struggle"]
+        elif move_key == "copycat":
+            pool = [self._last_move_any] if self._last_move_any else []
+        elif move_key == "mirrormove":
+            pool = [foe.last_move] if foe.last_move else []
+        elif move_key == "sleeptalk":
+            pool = [m for m in mon.moves if m != "sleeptalk"]
+        elif move_key == "assist":
+            banned = {"assist", "copycat", "metronome", "mirrormove", "sleeptalk",
+                      "mimic", "sketch", "struggle"}
+            pool = [m for p in side.party for m in p.moves if m not in banned]
+        elif move_key == "naturepower":
+            pool = [{"electricterrain": "thunderbolt", "grassyterrain": "energyball",
+                     "mistyterrain": "moonblast", "psychicterrain": "psychic"
+                     }.get(self.terrain, "triattack")]
+        else:  # mimic:把「模仿」的格子换成对手刚用过的招式
+            if not foe.last_move or foe.last_move in mon.moves:
+                self.log.append("但是没有效果!")
+                return
+            mon.moves = [foe.last_move if m == "mimic" else m for m in mon.moves]
+            mon.pp[foe.last_move] = 5
+            self.log.append(f"{mon.display} 模仿了 {self._move_zh(foe.last_move)}!")
+            return
+        pool = [k for k in pool if dex.moves.get(k) and k != move_key]
+        if not pool:
+            self.log.append("但是没有效果!")
+            return
+        called = self._rng(33).choice(pool)
+        self.log.append(f"{self._move_zh(move_key)} 使出了 {self._move_zh(called)}!")
+        self._execute_move(side, foe_side, {"type": "move", "move": called}, called=True)
+
+    def _try_imposter(self, side: Side) -> None:
+        """变身者(百变怪的隐藏特性):上场即变身成对手。"""
+        mon = side.mon
+        if mon is None or mon.fainted or not mon.has_ability("imposter"):
+            return
+        foe = (self.enemy if side is self.player else self.player).mon
+        if foe is None or foe.fainted:
+            return
+        self._transform(mon, foe, label="的变身者发动,化身")
 
     def _request_switch(self, side, mon: Pokemon) -> None:
         """换人招式结算:我方要求下回合换人,对方自动换上下一只。"""
@@ -2040,6 +2846,7 @@ class Battle:
             # 必须**消耗道具**:旧实现直接 return,道具永不消耗 →
             # 等于永久免疫所有异常状态(而且 thunderwave 走了两条分支、日志重复)
             cured = (ITEMS.get(target.item) or {}).get("zh") or "树果"
+            target.volatiles["_eaten_berry"] = target.item   # 回收利用要用
             target.item = ""
             self.log.append(f"{target.display} 的{cured}治愈了异常状态!")
             return
@@ -2201,6 +3008,7 @@ class Battle:
         # 树果
         if mon.item == "sitrus-berry" and mon.hp_frac() <= 0.5:
             healed = mon.heal(max(1, mon.max_hp // 4))
+            mon.volatiles["_eaten_berry"] = mon.item
             mon.item = ""
             self.log.append(f"{mon.display} 吃下文柚果,回复了 {healed} HP!")
         # 自我状态道具
@@ -2224,6 +3032,51 @@ class Battle:
                 healed = mon.heal(max(1, mon.max_hp // 16))
                 if healed:
                     self.log.append(f"{mon.display} 因青草场地回复 {healed} HP。")
+        # 水流环 / 扎根:每回合回复 1/16
+        if mon.volatiles.get("aquaring") or mon.volatiles.get("ingrain"):
+            healed = mon.heal(max(1, mon.max_hp // 16))
+            if healed:
+                self.log.append(f"{mon.display} 回复了 {healed} HP。")
+        # 祈愿:过一回合回复一半 HP
+        if mon.volatiles.get("wish"):
+            self._dec_volatile(mon, "wish")
+            if not mon.volatiles.get("wish"):
+                healed = mon.heal(max(1, mon.max_hp // 2))
+                self.log.append(f"祈愿成真了!{mon.display} 回复了 {healed} HP!")
+        # 被诅咒:每回合损失 1/4(无视魔法守护)
+        if mon.volatiles.get("curse"):
+            dmg = max(1, mon.max_hp // 4)
+            mon.take_damage(dmg)
+            self.log.append(f"{mon.display} 受到诅咒伤害 {dmg}。")
+        # 哈欠:熬过一回合就睡着
+        if mon.volatiles.get("yawn"):
+            self._dec_volatile(mon, "yawn")
+            if not mon.volatiles.get("yawn") and not mon.status:
+                self._inflict(mon, "slp")
+        # 灭亡之歌:倒计时归零就倒下
+        if mon.volatiles.get("perish"):
+            self._dec_volatile(mon, "perish")
+            left = int(mon.volatiles.get("perish", 0) or 0)
+            if left:
+                self.log.append(f"{mon.display} 的灭亡倒计时:{left} 回合。")
+            else:
+                mon.cur_hp = 0
+                mon.fainted = True
+                self.log.append(f"{mon.display} 被灭亡之歌带走了!")
+        if mon.fainted:
+            return
+        # 有时限的变化状态(定身法/再来一次/挑衅/电磁飘浮/您先请/延后)
+        for k, companion in (("disable", "disable_move"), ("encore", "encore_move"),
+                             ("taunt", ""), ("magnetrise", ""), ("move_last", ""),
+                             ("move_next", ""), ("destinybond", "")):
+            if not mon.volatiles.get(k):
+                continue
+            if k in ("move_last", "move_next"):
+                mon.volatiles.pop(k, None)      # 只管这一回合
+                continue
+            self._dec_volatile(mon, k)
+            if not mon.volatiles.get(k) and companion:
+                mon.volatiles.pop(companion, None)
 
     def _check_faints(self) -> bool:
         any_faint = False
@@ -2282,9 +3135,18 @@ class Battle:
             return {"type": "move", "move": (mon.moves[0] if mon and mon.moves else "")}
         dex = get_dex()
         best: tuple[float, str] | None = None
+        encored = str(mon.volatiles.get("encore_move") or "") if mon.volatiles.get("encore") else ""
         for mk in mon.moves:
             entry = dex.moves.get(mk)
             if entry is None:
+                continue
+            if encored and mk != encored:
+                continue
+            if mon.volatiles.get("disable") and mon.volatiles.get("disable_move") == mk:
+                continue
+            if mon.volatiles.get("torment") and mon.last_move == mk:
+                continue
+            if foe.volatiles.get("imprison") and mk in foe.moves:
                 continue
             if int(mon.pp.get(mk, (entry.get("pp", 10) or 10)) or 0) <= 0:
                 continue  # PP 已尽,不再选
@@ -2341,6 +3203,7 @@ def _is_fixed_damage(move_key: str) -> bool:
         "finalgambit",
         "endeavor",
         "psywave",
+        "comeuppance",
     }
 
 

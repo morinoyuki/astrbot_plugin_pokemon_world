@@ -6564,6 +6564,15 @@ def _run_selfcheck() -> list[dict]:
         f"{shiny_n}/{total_sp} 张(缺失的自动回退普通图);"
         f"野生闪光概率默认 1/{DEFAULT_SHINY_RATE},配置项 shiny_rate 可调")
 
+    # ⑪ 形态名中文化:上游数据的中文名把形态写成英文括号(「皮卡丘（Cosplay）」),
+    #    漏翻译时战斗日志里会直接冒英文 —— 群里看着很出戏(实测反馈)。
+    from .pw.dex import untranslated_forme_keys
+
+    left_forms = untranslated_forme_keys()
+    add("形态名", not left_forms,
+        "所有形态名都是中文标签" if not left_forms
+        else f"{len(left_forms)} 个形态名仍是英文:{'、'.join(left_forms[:3])}…")
+
     return out
 
 

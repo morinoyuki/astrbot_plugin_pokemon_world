@@ -26,6 +26,8 @@ from typing import ClassVar
 DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
 
 STAT_ORDER = ["hp", "atk", "def", "spa", "spd", "spe"]
+# 生成的数据只带六项种族值,命中/闪避在这里补(不然变化招式的日志会冒英文)
+STAT_EXTRA_ZH = {"accuracy": "命中", "evasion": "闪避"}
 
 # 归一化时要剔除的分隔符(便于「皮卡丘」「Pikachu」「Mr. Mime」「mr-mime」互查)
 _SEP = set(" -_.·'’:\u3000()（）[]【】")
@@ -37,6 +39,212 @@ def _norm(text: str) -> str:
     # 全角→半角(数字/拉丁字母),让 "２０１号道路" 也能命中 "201号道路"
     s = unicodedata.normalize("NFKC", str(text).strip().lower())
     return "".join(ch for ch in s if ch not in _SEP)
+
+
+# ── 形态标签中文化 ────────────────────────────────────────────────
+# PokeAPI 的中文名把形态直接写成英文括号(「皮卡丘（Cosplay）」「九尾（Alola）」),
+# 在战斗日志 / 队伍页里很出戏 —— 载入时统一换成正体中文标签。
+# 数据更新若带来新标签,自检 ⑪ 与 tests 会报出来,提醒补翻译。
+FORM_LABEL_ZH: dict[str, str] = {
+    "10%": "10%",
+    "Alola": "阿罗拉",
+    "Alola-Totem": "阿罗拉·霸主",
+    "Antique": "真品",
+    "Artisan": "真品",
+    "Ash": "小智版",
+    "Attack": "攻击",
+    "Belle": "偶像",
+    "Black": "暗黑",
+    "Blade": "刀剑",
+    "Bloodmoon": "赫月",
+    "Blue": "蓝羽",
+    "Blue-Striped": "蓝条纹",
+    "Bond": "羁绊",
+    "Bug": "虫",
+    "Burn": "火焰卡带",
+    "Busted": "现形",
+    "Busted-Totem": "现形·霸主",
+    "Chill": "冰冻卡带",
+    "Complete": "完全体",
+    "Cornerstone": "础石面具",
+    "Cornerstone-Tera": "础石·太晶",
+    "Cosplay": "换装",
+    "Crowned": "王",
+    "Curly-Mega": "卷曲·Mega",
+    "Dada": "父亲",
+    "Dark": "恶",
+    "Dawn-Wings": "拂晓之翼",
+    "Defense": "防御",
+    "Douse": "水流卡带",
+    "Dragon": "龙",
+    "Droopy": "下垂",
+    "Droopy-Mega": "下垂·Mega",
+    "Dusk": "黄昏",
+    "Dusk-Mane": "黄昏之鬃",
+    "Electric": "电",
+    "Eternal": "永恒之花",
+    "Eternamax": "无极巨",
+    "F": "雌性",
+    "F-Mega": "雌性·Mega",
+    "Fairy": "妖精",
+    "Fan": "旋转",
+    "Fancy": "华丽花纹",
+    "Fighting": "格斗",
+    "Fire": "火",
+    "Flying": "飞行",
+    "Four": "四只",
+    "Frost": "结冰",
+    "Galar": "伽勒尔",
+    "Galar-Zen": "伽勒尔·达摩",
+    "Ghost": "幽灵",
+    "Gmax": "超极巨",
+    "Gorging": "吐出",
+    "Grass": "草",
+    "Ground": "地面",
+    "Gulping": "吞入",
+    "Hangry": "空腹",
+    "Hearthflame": "火灶面具",
+    "Hearthflame-Tera": "火灶·太晶",
+    "Heat": "加热",
+    "Hero": "英雄",
+    "Hisui": "洗翠",
+    "Hoenn": "丰缘帽",
+    "Ice": "冰",
+    "Kalos": "卡洛斯帽",
+    "Large": "大",
+    "Libre": "自由摔角",
+    "Low-Key": "低调",
+    "Low-Key-Gmax": "低调·超极巨",
+    "M-Mega": "雄性·Mega",
+    "Masterpiece": "杰作",
+    "Mega": "Mega",
+    "Mega-X": "Mega-X",
+    "Mega-Y": "Mega-Y",
+    "Mega-Z": "Mega-Z",
+    "Meteor": "流星",
+    "Midnight": "午夜",
+    "Mow": "切割",
+    "Neutral": "普通",
+    "Noice": "冻头",
+    "Origin": "起源",
+    "Original": "原始",
+    "Original-Mega": "原始·Mega",
+    "Pa'u": "呼拉",
+    "Paldea": "帕底亚",
+    "Paldea-Aqua": "帕底亚·水",
+    "Paldea-Blaze": "帕底亚·火",
+    "Paldea-Combat": "帕底亚·格斗",
+    "Partner": "搭档",
+    "PhD": "博士",
+    "Pirouette": "舞步",
+    "Poison": "毒",
+    "Pokeball": "球球花纹",
+    "Pom-Pom": "啪啪",
+    "Pop-Star": "流行巨星",
+    "Primal": "原始回归",
+    "Psychic": "超能力",
+    "Rainy": "雨天",
+    "Rapid-Strike": "连击",
+    "Rapid-Strike-Gmax": "连击·超极巨",
+    "Resolute": "觉悟",
+    "Roaming": "徘徊",
+    "Rock": "岩石",
+    "Rock-Star": "摇滚巨星",
+    "Sandy": "砂土",
+    "School": "群聚",
+    "Sensu": "艳艳",
+    "Shadow": "暗影",
+    "Shock": "电流卡带",
+    "Sinnoh": "神奥帽",
+    "Sky": "天空",
+    "Small": "小",
+    "Snowy": "雪天",
+    "Speed": "速度",
+    "Spiky-eared": "刺刺耳",
+    "Starter": "伙伴",
+    "Steel": "钢",
+    "Stellar": "星晶",
+    "Stretchy": "伸展",
+    "Stretchy-Mega": "伸展·Mega",
+    "Sunny": "晴天",
+    "Sunshine": "阳光",
+    "Super": "特大",
+    "Teal-Tera": "碧草·太晶",
+    "Terastal": "太晶",
+    "Therian": "灵兽",
+    "Three-Segment": "三段",
+    "Totem": "霸主",
+    "Trash": "垃圾",
+    "Ultra": "究极",
+    "Unbound": "解放",
+    "Unova": "合众帽",
+    "Wash": "清洗",
+    "Water": "水",
+    "Wellspring": "水井面具",
+    "Wellspring-Tera": "水井·太晶",
+    "White": "焰白",
+    "White-Striped": "白条纹",
+    "World": "世界帽",
+    "Yellow": "黄羽",
+    "Zen": "达摩",
+}
+
+# 同名标签在不同物种上含义不同的例外:
+# 戴帽皮卡丘的「Alola」不是阿罗拉形态,玛机雅娜的「Original」是原始颜色。
+SPECIES_FORM_ZH: dict[str, str] = {
+    "pikachualola": "阿罗拉帽",
+    "pikachuoriginal": "初始帽",
+}
+
+_FORM_RE = re.compile(r"（([^（）]*)）")
+
+
+def localize_form_zh(zh: str, key: str = "") -> str:
+    """「皮卡丘（Cosplay）」→「皮卡丘（换装）」;无需改动时原样返回。"""
+    if not zh:
+        return ""
+    label = SPECIES_FORM_ZH.get(str(key))
+    if not label:
+        m = _FORM_RE.search(zh)
+        if not m:
+            return zh
+        label = FORM_LABEL_ZH.get(m.group(1))
+    if not label:
+        return zh
+    return _FORM_RE.sub(f"（{label}）", zh, count=1)
+
+
+def untranslated_forme_keys() -> list[str]:
+    """还没中文化的形态名(给自检用):数据更新带来的新标签会在这里现身。
+
+    直接读文件而不是走 `_load`(它被 Dex 就地改写过,读回来已经是中文了)。
+    """
+    path = os.path.join(DATA_DIR, "species.json")
+    try:
+        with open(path, encoding="utf-8") as f:
+            raw = json.load(f)
+    except (OSError, ValueError):
+        return []
+    bad: list[str] = []
+    for key, s in raw.items():
+        if key in SPECIES_FORM_ZH:
+            continue
+        m = _FORM_RE.search(str(s.get("zh") or ""))
+        if m and m.group(1) not in FORM_LABEL_ZH:
+            bad.append(str(s.get("zh")))
+    return bad
+
+
+def _localize_species_forms(species: dict[str, dict]) -> None:
+    """就地中文化形态名,并把原英文写法留作别名(旧查询/存档仍能命中)。"""
+    for key, s in species.items():
+        zh = str(s.get("zh") or "")
+        fixed = localize_form_zh(zh, key)
+        if fixed and fixed != zh:
+            aliases = s.setdefault("aliases", [])
+            if zh not in aliases:
+                aliases.append(zh)
+            s["zh"] = fixed
 
 
 # 遭遇方法分组(用于按环境筛选地点分布)
@@ -121,6 +329,7 @@ class Dex:
 
     def __init__(self) -> None:
         self.species: dict[str, dict] = _load("species")
+        _localize_species_forms(self.species)
         self.moves: dict[str, dict] = _load("moves")
         # 搏命(PokeAPI/Showdown 已有条目):无属性克制、1/4 最大 HP 反作用
         self.moves.setdefault(
@@ -152,7 +361,7 @@ class Dex:
         # 索引:_norm(别名) -> 正式 key
         self._species_idx: dict[str, str] = {}
         for key, s in self.species.items():
-            for alias in (key, s.get("name"), s.get("zh")):
+            for alias in (key, s.get("name"), s.get("zh"), *(s.get("aliases") or [])):
                 if alias:
                     self._species_idx.setdefault(_norm(alias), key)
         self._move_idx: dict[str, str] = {}
@@ -239,7 +448,7 @@ class Dex:
         return self.type_zh.get(t, t)
 
     def stat_label(self, s: str) -> str:
-        return self.stat_zh.get(s, s)
+        return self.stat_zh.get(s) or STAT_EXTRA_ZH.get(s) or s
 
     # ─────────────── 属性相克 ───────────────
 

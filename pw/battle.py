@@ -855,7 +855,9 @@ def _mon_view(mon: Pokemon | None, *, exp_pct: float = 0.0) -> dict:
 def exp_progress(mon: Pokemon) -> float:
     """当前等级内的经验进度(0-100),用于战斗界面经验条。"""
     dex = get_dex()
-    growth = dex.growth_of(mon.species)
+    # 变身中的宝可梦经验属于它自己:进度条按变身前的成长曲线算
+    sp = str((mon.transform_backup or {}).get("species") or mon.species)
+    growth = dex.growth_of(sp)
     lo = dex.exp_for_level(growth, mon.level)
     hi = dex.exp_for_level(growth, min(100, mon.level + 1))
     if hi <= lo:
