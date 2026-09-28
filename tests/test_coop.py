@@ -193,3 +193,45 @@ def test_turn_shows_both_players_field_moves():
         assert "主位" in out and "副位" in out, out[:300]
         # 并且要真的列出招式(带 PP),不只是名字
         assert "1." in out and "(" in out, out[:300]
+
+
+def test_single_trainer_brings_two_mons_instead_of_silent_wild():
+    """只有 1 位训练家时:让他带两只打双打,而不是默默变成野生(实测反馈)。"""
+    import tempfile
+
+    from test_commands import _Event, run_cmd
+
+    import pw.npc as NPC
+    from pw import battle as B
+    from pw.player import Trainer
+
+    with tempfile.TemporaryDirectory() as tmp:
+        p, scope, _t1 = _setup(tmp)
+        for who in ("u1", "u2"):
+            d = p.trainers.load(scope, who)
+            d["location"] = "kanto-route-1"
+            p.trainers.save(scope, who, d)
+        host = Trainer(p.trainers.load(scope, "u1"), uid="u1", scope=scope)
+        # 从今天所有关都地点里挑一位真实训练家,再把他"伪装"成这里唯一的一位
+        orig = NPC.route_trainers
+        probe = None
+        for loc in ("kanto-route-1", "kanto-route-2", "kanto-route-3", "kanto-route-4",
+                    "kanto-route-5", "kanto-route-6", "kanto-route-7", "kanto-route-8",
+                    "viridian-city", "pewter-city", "cerulean-city"):
+            got = orig(host, loc, day=1)
+            if got:
+                probe = got[0]
+                break
+        assert probe is not None, "今天所有地点都没训练家,无法构造用例"
+        NPC.route_trainers = lambda *a, **k: [probe]
+        try:
+            ev = _Event("/双打")
+            run_cmd(p, ev, p.cmd_coop)
+        finally:
+            NPC.route_trainers = orig
+        out = "\n".join(ev.outputs)
+        assert "一个" in out and "两只" in out, out[:400]
+        data = p.trainers.load(scope, "u1")
+        assert (data.get("battle") or {}).get("kind") == "trainer", out[:400]
+        v = B.view(Trainer(data, uid="u1", scope=scope))
+        assert v["doubles"] is True and len(v["foes"]) == 2, out[:400]

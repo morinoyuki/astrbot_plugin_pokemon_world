@@ -5204,82 +5204,131 @@ class PokemonWorldPlugin(Star):
             yield r
 
     async def _coop_start(self, event, t: Trainer, state, first_idx: int = 1):
-        """由邀请方发起合作双打:附近训练家优先,**每人只出场一只**。"""
-        pair = COOP.pair_for(state, t.uid)
-        if pair is None or str(pair.get("a")) != t.uid:
-            yield event.plain_result(
-                "❌ 先 `/组队 @某人` 找到搭档,再由**邀请方**发 `/双打` 开打。"
-            )
+        """/双打 开打:优先凑**两位训练家**(一人一只),只剩一位就让他带两只;
+
+        真的没有对手时才转野生双打 —— 而且一定要说明**原因**,不能默默变成野生。
+        """
+        row = COOP.pair_for(state, t.uid)
+        if row is None or COOP.battle_of(row):
+            yield event.plain_result("❌ 现在没有可用的搭档会话,先 `/组队 @某人` 邀请搭档并让 TA `/组队 接受`。")
             return
-        other = COOP.partner_of(pair, t.uid)
-        ally_data = self.trainers.load(t.scope, other)
-        if ally_data is None:
+        if str(row.get("a")) != str(t.uid):
+            yield event.plain_result("❌ 由发出邀请的那位发 `/双打` 开打。")
+            return
+        ally_uid = COOP.partner_of(row, t.uid)
+        ally_data = self.trainers.load(t.scope, ally_uid)
+        if not ally_data:
             yield event.plain_result("❌ 搭档还没有开始旅程。")
             return
-        ally = Trainer(ally_data, uid=other, scope=t.scope)
+        ally = Trainer(ally_data, uid=ally_uid, scope=t.scope)
         if B.in_battle(t) or B.in_battle(ally):
-            yield event.plain_result("❌ 有一方正在别的对战里,先打完再说。")
+            yield event.plain_result("❌ 你或搭档正在别的对战里,先打完再开双打。")
             return
         if str(ally.data.get("location") or "") != str(t.location or ""):
             yield event.plain_result("❌ 你们不在同一地点 —— 先 `/前往` 会合再开双打。")
             return
-        npcs = npc.route_trainers(t, t.location, day=state.day)
+
+        world = WorldMap()
+        loc = str(t.location or "")
+        loc_zh = world.node_zh(loc) or loc
+        npcs = list(npc.route_trainers(t, loc, day=state.day) or [])
+        start_i = max(0, int(first_idx or 1) - 1)
+        picked = npcs[start_i:start_i + 2]
+
         specs: list[dict] = []
         names: list[str] = []
-        pick = list(npcs[max(0, int(first_idx) - 1):])[:2]
-        for n in pick:
-            team = list((npc.build_route_battle(t, n, day=state.day) or {}).get("team") or [])
+        title = f"双打对战:{loc_zh}"
+        kind = "trainer"
+        why = ""
+        solo = ""
+        for who in picked:                      # ① 两位训练家:一人派一只
+            try:
+                b = npc.build_route_battle(t, who, day=state.day) or {}
+            except Exception:
+                b = {}
+            team = list(b.get("team") or [])
             if team:
-                specs.append(team[0])      # 每位训练家只派出首发一只
-                names.append(str(n.get("name") or "训练家"))
-        _ally_ready = any(int(x.get("cur_hp") or 0) > 0 for x in ally.party)
-        _wild = False
-        _why = "" if _ally_ready else "\n· 搭档现在没有能出场的宝可梦,TA 的位置先空着"
-        if len(specs) < 2:
-            # 没有训练家就改成**野生双打**(正作里也有):现抽两只当地的野生宝可梦
-            specs, names = [], []
+                specs.append(dict(team[0]))
+                names.append(str(who.get("name") or "训练家"))
+        if len(specs) < 2 and picked:           # ② 只剩一位:他一个人带两只上
+            try:
+                b = npc.build_route_battle(t, picked[0], day=state.day) or {}
+            except Exception:
+                b = {}
+            team = list(b.get("team") or [])
+            if len(team) >= 2:
+                specs = [dict(team[0]), dict(team[1])]
+                names = [str(picked[0].get("name") or "训练家")]
+                solo = (f"💬 今天这里只有 {names[0]} 一位训练家 —— 他说「你们两个一起上吧」,"
+                        "于是**他一个人带两只**。")
+        if len(specs) < 2:                      # ③ 野生双打(必须说明原因)
+            specs = []
+            wnames: list[str] = []
             for i in range(2):
-                hit = B.roll_wild(t, rng=stable_rng("coop-wild", t.scope, t.uid, state.day, i),
-                                  shiny_rate=self._shiny_rate())
-                if not hit:
-                    specs = []
-                    break
-                specs.append({"species": str(hit.get("species")),
-                              "level": int(hit.get("level") or 5),
-                              "shiny": bool(hit.get("shiny"))})
-                names.append(growth.species_zh(str(hit.get("species"))))
-            _wild = bool(specs)
-            if _wild:
-                _why = "\n· 今天这里没有训练家(用 `/探索 训练家` 查),先打野生双打"
-        if len(specs) < 2:
-            yield event.plain_result("❌ 这附近找不到愿意和你们俩对战的对手。")
-            return
-        who = " 与 ".join(dict.fromkeys(names)) or "训练家"
-        kind = "wild" if _wild else "trainer"
-        meta = {
-            "kind": kind,
-            "title": (f"野生的 {' 与 '.join(names)} 出现了!(双打)" if _wild
-                      else f"双打:{who} 的挑战"),
-            "coop": {"host": t.uid, "ally": other},
-        }
+                try:
+                    hit = B.roll_wild(
+                        t, rng=stable_rng("coop-wild", t.scope, t.uid, state.day, i),
+                        shiny_rate=self._shiny_rate(),
+                    ) or {}
+                except Exception:
+                    hit = {}
+                if hit.get("species"):
+                    specs.append({
+                        "species": str(hit["species"]),
+                        "level": int(hit.get("level") or 5),
+                        "shiny": bool(hit.get("shiny")),
+                    })
+                    wnames.append(growth.species_zh(str(hit["species"])))
+            kind = "wild"
+            title = f"野生双打:{loc_zh}"
+            if npcs:
+                why = (f"💬 这里今天只有 {len(npcs)} 位训练家,凑不成「两人各带一只」的双打 —— "
+                       "先打一场**野生双打**。" + chr(10) +
+                       "　想单挑:`/训练家战`;想看名单:`/探索 训练家`(训练家每天刷新)")
+            else:
+                why = ("💬 这里今天没有训练家,凑不成训练家双打 —— 先打一场**野生双打**。"
+                       + chr(10)
+                       + "　训练家每天刷新:换个地点、或明天再来(`/训练家战` 单挑也一样)")
+            if not wnames:
+                yield event.plain_result("❌ 这附近找不到愿意和你们俩对战的对手。")
+                return
+
+        host_len = len(t.party)
+        meta = {"title": title, "kind": kind,
+                "coop": {"host": t.uid, "ally": ally_uid, "host_len": host_len}}
         try:
             B.start_doubles(t, specs, kind=kind, meta=meta, day=state.day,
                             ally_party=list(ally.party))
         except B.BattleError as e:
             yield event.plain_result(str(e))
             return
-        COOP.start_battle(state, pair, kind=kind, title=meta["title"],
-                          host_len=len(t.party), host=t.uid, ally=other)
+        COOP.start_battle(state, row, kind=kind, title=title, host_len=host_len,
+                          host=t.uid, ally=ally_uid)
         self._save(t)
+        self.trainers.save(t.scope, ally_uid, ally.data)
         self._save_state(state)
+
+        if why:                                 # 兜底原因:先说清楚再开打
+            yield event.plain_result(why)
+        if solo:
+            yield event.plain_result(solo)
+
         view = B.view(t)
-        async for r in self._coop_emit(
-            event, t, view, [],
-            hint="各打各的:`/双打 <招式序号>`(对第二只用 `/双打 <序号> 2`,对队友用 "
-                 "`/双打 <序号> 队友`)、`/双打 switch <你队伍序号>`、`/双打 run`",
-            text=f"⚔️ 合作双打开始!{meta['title']}{_why}\n双方都交出行动后就会推进一回合。",
+        log = [f"· {x}" for x in list((B.session(t) or {}).get("log") or [])[-4:]]
+        prefix = "⚔️ 合作双打开始了!" + (chr(10) + why if why else chr(10) + solo)
+        async for r in self._emit_ui(
+            event, "coop_battle",
+            lambda: BR.render_battle_doubles(
+                view.get("mine") or [], view.get("foes") or [],
+                log or [title], title=title, location=loc_zh, turn=0,
+                my_names=[t.name, ally.name], scale=self._img_scale(),
+            ),
+            text=prefix,
+            hint="各打各的:`/双打 <招式序号>`(第二只用 `/双打 <序号> 2`、队友用 `/双打 <序号> 队友`)、"
+                 "`/双打 switch <你队伍序号>`、`/双打 run`",
         ):
             yield r
+
 
     async def _coop_emit(self, event, t: Trainer, view: dict, lines: list[str], *,
                          hint: str = "", text: str = ""):
