@@ -25,13 +25,14 @@ TRIO_MOTTO = [
 ]
 TRIO_BATTLE = (
     "「{motto}」\n"
-    "—— {names} 跳了出来,盯上了你的宝可梦!\n"
+    "—— 喵喵、谜拟Ｑ、莫鲁贝可和果然翁 跳了出来,盯上了你的宝可梦!\n"
     "(一句台词都不许抢,老老实实先挨完这段开场白)"
 )
 TRIO_LOSE = (
     "「好讨厌的感觉啊 —— !」\n"
     "{names} 又一次被你们打飞到了天边,化作一颗流星消失了。\n"
-    "喵喵在半空中还不忘补一句:「下次我们还会回来的,喵!」"
+    "喵喵在半空中还不忘补一句:「下次我们还会回来的,喵!」
+果然翁也「嗖」地一声跟着飞了出去,一脸茫然 —— 它这一整场其实什么都没做。"
 )
 
 # ── 各地区反派组织:登场宣言 + 撤退台词 ─────────────────────
@@ -213,11 +214,15 @@ def defeat(kind: str, meta: dict | None = None, *, rng=None, region: str = "") -
     return ""
 
 
-TRIO_TEAM = (("arbok", "阿柏怪"), ("weezing", "双弹瓦斯"), ("meowth", "喵喵"))
+# 三人组的现行阵容(阿罗拉→伽勒尔时代,比初代的阿柏怪/双弹瓦斯新):
+# 喵喵(队魂/翻译) + 谜拟Ｑ(武藏的阿罗拉主力) + 莫鲁贝可(伽勒尔新成员)
+# + 果然翁(小次郎那位,永远会自己蹦出来的肉盾)
+TRIO_TEAM = (("meowth", "喵喵"), ("mimikyu", "谜拟丘"),
+             ("morpeko", "莫鲁贝可"), ("wobbuffet", "果然翁"))
 
 
 def trio_team(trainer) -> list[dict]:
-    """三人组的队伍:阿柏怪 / 双弹瓦斯 / 喵喵,等级跟玩家首发走(略低一点,好打)。"""
+    """三人组的队伍:喵喵 / 谜拟Ｑ / 莫鲁贝可 / 果然翁,等级跟玩家首发走(低一点,好打)。"""
     lead = 5
     try:
         party = list(getattr(trainer, "party", []) or [])
@@ -225,7 +230,7 @@ def trio_team(trainer) -> list[dict]:
             lead = int(party[0].get("level") or 5)
     except (TypeError, ValueError, IndexError):
         lead = 5
-    lv = max(3, min(100, lead - 1))
+    lv = max(3, min(100, lead - 2))      # 四只,比玩家首发略低,才打得动
     return [{"species": sp, "level": lv, "zh": zh} for sp, zh in TRIO_TEAM]
 
 
