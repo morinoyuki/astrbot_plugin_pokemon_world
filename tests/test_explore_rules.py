@@ -68,7 +68,9 @@ def test_item_cap_is_per_node():
         t.data["location"] = "kanto-route-2"
         p._save(t)
         out = _explore(p)
-        assert "发现" in out and "1/2" in out, out
+        # 换到新节点后**能捡到**(按节点分别计数)—— 具体是 1/2 还是 2/2 取决于
+        # 这一次掷到几个,别写死数字(写死过,结果随机失败)
+        assert "发现" in out and ("1/2" in out or "2/2" in out), out
 
 
 def test_item_cap_resets_next_month():

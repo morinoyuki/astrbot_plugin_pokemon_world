@@ -99,7 +99,7 @@
   },
   "pvp_announce": {
     "type": "bool",
-    "description": "玩家对战的战报推到群里(玩家可能在私聊出招)",
-    "default": true
+    "default": true,
+    "description": "玩家对战把开局/出招/结果播报到群里"
   }
 }
