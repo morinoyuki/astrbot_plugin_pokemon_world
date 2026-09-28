@@ -248,3 +248,66 @@ def test_pvp_battle_layout_round_trips():
         left_party=[left, {"cur_hp": 0}], right_party=[right], scale=2)
     assert data[:8] == b"\x89PNG\r\n\x1a\n", "没有返回 PNG"
     assert len(data) > 2000, len(data)
+
+
+# ── 敌方/精灵缩放:直接在最终画布分辨率上缩放,缩小不再丢细节 ──────────
+
+def test_enemy_sprite_is_upscaled_on_final_canvas_losslessly():
+    """敌方 0.62 倍在默认 3 倍画布 = 1.86 倍上采样,一个源像素都不丢。
+
+    旧实现:96px 先 NEAREST 缩到 ~60px(直接扔掉 40% 像素,眼睛/轮廓消失),
+    再整图 3 倍放大,丢了找不回来。新实现:目标 = 逻辑尺寸 × final_scale,
+    ≥1 时纯 NEAREST 上采样 → 输出与"源图直接放大到同尺寸"逐字节一致。
+    """
+    from pw import battle_render as br
+
+    path = br.sprite_for("diglett", back=False)   # 高个子,缩小时损失最明显
+    img = br._load_sprite(path, br.FOE_SCALE, (64, 58), final_scale=3)
+    with Image.open(path) as im:
+        src = im.convert("RGBA").crop(im.convert("RGBA").getbbox())
+    # 必须还是上采样(不小于源图),才谈得上"无损失"
+    assert img.width >= src.width and img.height >= src.height, img.size
+    assert img.tobytes() == src.resize(img.size, Image.NEAREST).tobytes(), (
+        "敌方精灵不是从源图直接上采样,中间丢了像素"
+    )
+
+
+def test_sprites_paste_on_upscaled_canvas_bottom_aligned():
+    """S>1 时精灵贴到放大画布,脚底仍对齐落地线,且敌方向保持源图分辨率。"""
+    from pw import battle_render as br
+
+    S = 3
+    canvas = Image.new("RGBA", (br.LOGICAL_W * S, br.LOGICAL_H * S),
+                       (0, 0, 0, 0))
+    br._paste_small(canvas, {"species": "diglett"}, br.FOE_GROUND,
+                    factor=br.FOE_SCALE, bounds=(64, 58), back=False, S=S)
+    w, h = canvas.size
+    rows = [
+        y for y in range(h)
+        if any(canvas.getpixel((x, y))[3] > 16 for x in range(w))
+    ]
+    assert rows and max(rows) == br.FOE_GROUND[1] * S - 1, max(rows)
+    cols = [
+        x for x in range(w)
+        if any(canvas.getpixel((x, y))[3] > 16 for y in range(h))
+    ]
+    sprite_w = max(cols) - min(cols) + 1
+    with Image.open(br.sprite_for("diglett", back=False)) as im:
+        src_w = im.convert("RGBA").crop(im.convert("RGBA").getbbox()).width
+    # 敌方向 3 倍画布 = 1.86 倍上采样:宽度 ≥ 源图裁剪宽(旧实现 < 源图)
+    assert sprite_w >= src_w, f"敌方精灵被缩小了:{sprite_w} < {src_w}"
+
+
+def test_scale_one_still_shrinks_but_keeps_rendering():
+    """scale=1 的小画面仍能缩小渲染(真缩小走 BOX),不崩、脚底对齐。"""
+    from pw import battle_render as br
+
+    my = {"species": "charizard", "name": "喷火龙", "level": 60,
+          "cur_hp": 180, "max_hp": 200}
+    foe = {"species": "blastoise", "name": "水箭龟", "level": 58,
+           "cur_hp": 90, "max_hp": 190}
+    data = br.render_battle(my, foe, ["测试"], scale=1)
+    assert data[:8] == b"\x89PNG\r\n\x1a\n", "scale=1 渲染失败"
+    img = br._load_sprite(br.sprite_for("blastoise", back=False),
+                          br.FOE_SCALE, (64, 58))
+    assert img.width < 96, "scale=1 时敌方应当真的缩小"

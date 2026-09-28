@@ -150,11 +150,19 @@ def sprite_for(species: str, *, back: bool = False, base: str = "") -> str:
 
 
 # ── 绘制辅助 ─────────────────────────────────────────────────────
-def _load_sprite(path: str, factor: float, bounds: tuple[int, int]):
-    """读图 → 裁掉透明边距 → 按固定倍率缩放。
+def _load_sprite(path: str, factor: float, bounds: tuple[int, int],
+                 *, final_scale: float = 1.0):
+    """读图 → 裁掉透明边距 → 缩放(目标 = 逻辑尺寸 × final_scale)。
 
     裁边距是关键:官方 96×96 图的底部透明边距从 10px 到 32px 不等
     (皮卡丘 26px、地鼠 32px、暴鲤龙 10px),若按画布底对齐,脚底会差出 20 多像素。
+
+    缩放策略(修"敌方缩得很糊"):精灵直接按**最终画布**分辨率缩放。
+    默认 3 倍画面下敌方 0.62 → 目标 ≈ 96×0.62×3 ≈ 179px,**大于源图**,
+    走 NEAREST 上采样 —— 每个源像素都保留(变成 1~2px 的块);旧实现先把
+    96px 缩到 ~60px(NEAREST 直接扔掉 40% 像素),再整图 3 倍放大,丢掉的
+    细节找不回来。万一真的缩小(final_scale=1 的小画面),改用 BOX 平均采样,
+    细节变成邻近色平均而不是整块消失。
     """
     from PIL import Image
 
@@ -168,12 +176,16 @@ def _load_sprite(path: str, factor: float, bounds: tuple[int, int]):
     bbox = img.getbbox()
     if bbox:
         img = img.crop(bbox)
-    scale = factor
-    max_w, max_h = bounds
+    S = max(0.0, float(final_scale or 1.0))
+    scale = factor * S
+    max_w = bounds[0] * S
+    max_h = bounds[1] * S
     if img.width * scale > max_w or img.height * scale > max_h:
         scale = min(max_w / img.width, max_h / img.height)
     new = (max(1, round(img.width * scale)), max(1, round(img.height * scale)))
-    return img.resize(new, Image.NEAREST)
+    # 放大保像素风(NEAREST);真缩小保细节(BOX 平均采样,无振铃)
+    resample = Image.NEAREST if scale >= 1.0 else Image.BOX
+    return img.resize(new, resample)
 
 
 def _silhouette(size: tuple[int, int]):
@@ -276,12 +288,6 @@ def render_pvp_battle(
         d = ImageDraw.Draw(small)
         _draw_scene(d, weather, platforms=(PVP_A_PLATFORM, PVP_B_PLATFORM))
 
-        # 左侧用正面图**水平翻转**,与右侧面对面
-        _paste_small(small, left, PVP_A_GROUND, factor=MY_SCALE, bounds=(92, 50),
-                     back=False, dim=not _alive(left), flip=True)
-        _paste_small(small, right, PVP_B_GROUND, factor=MY_SCALE, bounds=(92, 50),
-                     back=False, dim=not _alive(right))
-
         # 左右对称的信息框
         _draw_box(d, PVP_A_BOX)
         _draw_box(d, PVP_B_BOX)
@@ -328,6 +334,14 @@ def render_pvp_battle(
         d.rounded_rectangle([mx0 + 4, my0 + 4, mx1 - 4, my1 - 4], radius=3, fill=MSG_FILL)
 
         big = small.resize((W, H), Image.NEAREST)
+
+        # ── 两只精灵贴到**放大后**的画布(面对面:左侧水平翻转)──
+        # 直接按最终画布分辨率缩放(细节不丢失),坐标跟着 ×S
+        _paste_small(big, left, PVP_A_GROUND, factor=MY_SCALE, bounds=(92, 50),
+                     back=False, dim=not _alive(left), flip=True, S=scale)
+        _paste_small(big, right, PVP_B_GROUND, factor=MY_SCALE, bounds=(92, 50),
+                     back=False, dim=not _alive(right), S=scale)
+
         d2 = ImageDraw.Draw(big)
         _box_text(big, d2, left, PVP_A_BOX, PVP_A_BAR, f_name, f_small, f_ball, S,
                   mine=True)
@@ -482,12 +496,6 @@ def render_battle(
         # ── 背景:天气配色 + 地平线 + 竞技场椭圆 + 两个站台 ──
         _draw_scene(d, weather)
 
-        # ── 精灵(我方背面图):脚底统一踩在各自站台的落地线上 ──
-        _paste_small(small, my, MY_GROUND, factor=MY_SCALE, bounds=(92, 96),
-                     back=True, dim=not _alive(my))
-        _paste_small(small, foe, FOE_GROUND, factor=FOE_SCALE, bounds=(64, 58),
-                     back=False, dim=not _alive(foe))
-
         # ── 信息框与血条(逻辑层)──
         _draw_box(d, FOE_BOX)
         _draw_box(d, MY_BOX)
@@ -544,6 +552,15 @@ def render_battle(
 
         # ── 放大(像素风)──
         big = small.resize((W, H), Image.NEAREST)
+
+        # ── 精灵贴到**放大后**的画布(脚底统一踩在落地线上)──
+        # 直接按最终画布分辨率缩放:敌方 0.62 在 3 倍画布上是 1.86 倍上采样,
+        # 每个源像素都保留;旧实现先缩到逻辑画布(NEAREST 丢 40% 像素)再放大。
+        _paste_small(big, my, MY_GROUND, factor=MY_SCALE, bounds=(92, 96),
+                     back=True, dim=not _alive(my), S=scale)
+        _paste_small(big, foe, FOE_GROUND, factor=FOE_SCALE, bounds=(64, 58),
+                     back=False, dim=not _alive(foe), S=scale)
+
         d2 = ImageDraw.Draw(big)
 
         # 敌方信息
@@ -657,16 +674,22 @@ def _ratio(mon: dict) -> float:
 
 
 def _paste_small(small, mon: dict, ground, *, factor: float, bounds, back: bool,
-                 dim: bool = False, flip: bool = False) -> None:
-    """按"脚底对齐"把精灵贴到逻辑画布:水平居中于站台,底边压在落地线上。"""
+                 dim: bool = False, flip: bool = False, S: int = 1) -> None:
+    """把精灵贴到画布(脚底对齐,水平居中于站台)。
+
+    S=1 贴到逻辑画布;S>1 贴到**放大后**的画布 —— 精灵按最终分辨率缩放,
+    敌方 0.62 倍不再"先丢像素、后放大"(见 `_load_sprite`)。
+    坐标(站台中心、落地线)也要跟着 ×S。
+    """
     from PIL import ImageEnhance, ImageOps
 
     cx, base_y = ground
     species = str(mon.get("species") or "")
     path = sprite_for(species, back=back)
-    img = _load_sprite(path, factor, bounds)
+    img = _load_sprite(path, factor, bounds, final_scale=S)
     if img is None:
-        img = _silhouette((bounds[0], min(bounds[1], 48)))
+        img = _silhouette((max(1, round(bounds[0] * S)),
+                           max(1, round(min(bounds[1], 48) * S))))
     elif back and path and os.path.basename(os.path.dirname(path)) != "sprites_back":
         # 退回正面图时镜像,近似"从背后看"的观感
         img = ImageOps.mirror(img)
@@ -675,8 +698,8 @@ def _paste_small(small, mon: dict, ground, *, factor: float, bounds, back: bool,
         img = ImageOps.mirror(img)
     if dim:
         img = ImageEnhance.Brightness(img).enhance(0.45)
-    px = cx - img.width // 2
-    py = base_y - img.height
+    px = cx * S - img.width // 2
+    py = base_y * S - img.height
     small.paste(img, (px, py), img)
 
 
