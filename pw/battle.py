@@ -202,8 +202,15 @@ def start(
     log = battle.start()
     # 开战前的台词(馆主/组织/四天王/冠军/训练家各有各的人设)
     _pre = banter.pre_battle(kind, dict(meta or {}), region=str(trainer.data.get("region") or ""))
+    _banter_long = ""
     if _pre:
-        log = [*_pre.split("\n"), *log]
+        _plines = [x for x in _pre.split("\n") if x.strip()]
+        if len(_plines) > 2:
+            # 名场面级的长台词(如火箭队三人组的开场白)塞进战报只会被滚掉,
+            # 交给命令层**单独发一条完整消息**(见 main.py 的 _emit_battle)
+            _banter_long = _pre
+        else:
+            log = [*_plines, *log]
     for mon in enemy:
         trainer.mark_seen(mon.species)
     trainer.data["battle"] = {
@@ -211,6 +218,8 @@ def start(
         "wild": bool(wild),
         "battle": battle.to_dict(),
         "meta": dict(meta or {}),
+        "banter_long": _banter_long,
+        "banter_shown": False,
         "started_day": int(day or 0),
         "log": list(log)[-12:],
     }

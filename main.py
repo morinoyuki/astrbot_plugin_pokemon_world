@@ -38,12 +38,12 @@ from .prompts import (
     WELCOME_TEMPLATE,
     narration_facts,
 )
+from .pw import banter, growth, legendary, npc, story
 from .pw import battle as B
 from .pw import battle_render as BR
 from .pw import coop as COOP
 from .pw import daily as D
 from .pw import events as EV
-from .pw import growth, legendary, npc, story
 from .pw import pvp as PVP
 from .pw import quests as QT
 from .pw import ui_info as UII
@@ -1540,6 +1540,27 @@ class PokemonWorldPlugin(Star):
                         text="\n".join(notice) + "\n" + _hint,
                         keep="\n".join(notice) + "\n" + self._battle_intro(meta, log)
                         + "\n" + _hint,
+                        status=True,
+                    ):
+                        yield r
+                    return
+
+            # ── 火箭队三人组:时不时出来刷存在感(按玩家+游戏日确定性,一天一次)──
+            if mode in ("all", "wild", "trainer", "item") and not t.flag(f"trio:{state.day}"):
+                _trio = banter.trio_event(t, state.day)
+                if _trio is not None:
+                    t.set_flag(f"trio:{state.day}")
+                    _trio["team"] = banter.trio_team(t)
+                    _tmeta = {k: v for k, v in _trio.items() if k not in ("pre", "lose")}
+                    _tmeta["runtime"] = "trio"
+                    _tlog = B.start(t, _trio["team"], kind="rocket", meta=_tmeta, day=state.day)
+                    self._save(t)
+                    notice.append("🚀 火箭队三人组 冒了出来 —— 打完这场他们就会被打飞!")
+                    async for r in self._emit_battle(
+                        event, t, _tmeta, _tlog,
+                        text="\n".join(notice) + "\n" + self._battle_intro(_tmeta, _tlog),
+                        keep="\n".join(notice) + "\n" + self._battle_intro(_tmeta, _tlog)
+                        + "\n" + self._battle_hint(t),
                         status=True,
                     ):
                         yield r
@@ -5030,6 +5051,14 @@ class PokemonWorldPlugin(Star):
         这样图片路径不会再额外跟一条重复的状态文本 —— 之前
         `cmd_battle` 每回合都无条件再发一次 `status_text`,和图片内容完全重复。
         """
+        # 长台词(三人组开场白这类名场面)单独发一条完整消息 —— 战报窗口只滚动
+        # 显示最后几行,塞进去会被滚掉
+        _bdata = t.data.get("battle") or {}
+        _banner = str(_bdata.get("banter_long") or "")
+        if _banner and not _bdata.get("banter_shown"):
+            _bdata["banter_shown"] = True
+            yield event.plain_result(f"💬 {_banner}")
+
         if self._cfg_bool("battle_image", True):
             try:
                 from .pw import battle_render

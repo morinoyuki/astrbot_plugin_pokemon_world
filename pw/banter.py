@@ -213,6 +213,22 @@ def defeat(kind: str, meta: dict | None = None, *, rng=None, region: str = "") -
     return ""
 
 
+TRIO_TEAM = (("arbok", "阿柏怪"), ("weezing", "双弹瓦斯"), ("meowth", "喵喵"))
+
+
+def trio_team(trainer) -> list[dict]:
+    """三人组的队伍:阿柏怪 / 双弹瓦斯 / 喵喵,等级跟玩家首发走(略低一点,好打)。"""
+    lead = 5
+    try:
+        party = list(getattr(trainer, "party", []) or [])
+        if party:
+            lead = int(party[0].get("level") or 5)
+    except (TypeError, ValueError, IndexError):
+        lead = 5
+    lv = max(3, min(100, lead - 1))
+    return [{"species": sp, "level": lv, "zh": zh} for sp, zh in TRIO_TEAM]
+
+
 def trio_event(trainer, day: int) -> dict | None:
     """火箭队三人组时不时出来刷存在感(确定性:同一天同一训练家结果一致)。
 
