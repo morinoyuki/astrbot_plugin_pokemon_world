@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime
 
-from . import growth
+from . import banter, growth
 from .dex import get_dex
 from .encounter import roll_level, roll_location_encounter
 from .engine import Pokemon, battle_from_dict, create_pokemon, start_battle
@@ -200,6 +200,10 @@ def start(
         bag=dict(trainer.bag),
     )
     log = battle.start()
+    # 开战前的台词(馆主/组织/四天王/冠军/训练家各有各的人设)
+    _pre = banter.pre_battle(kind, dict(meta or {}), region=str(trainer.data.get("region") or ""))
+    if _pre:
+        log = [*_pre.split("\n"), *log]
     for mon in enemy:
         trainer.mark_seen(mon.species)
     trainer.data["battle"] = {
@@ -641,6 +645,13 @@ def _finish_win(
         money = sum(m.level for m in enemy) * 20
     if kind == "gym" and meta.get("gym"):
         money += int(meta["gym"].get("order", 1)) * 500
+    _lose = banter.defeat(
+        str((meta or {}).get("kind") or "wild"), dict(meta or {}),
+        region=str(meta.get("region") or ""),
+    )
+    if _lose:
+        res.rewards.append("— " + _lose)
+
     money = int(money * float(money_mult or 1.0))
     if money:
         trainer.add_money(money)

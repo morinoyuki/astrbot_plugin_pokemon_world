@@ -438,7 +438,7 @@ def render_battle_result(*, outcome: str, title: str = "", lines: list[str] = ()
             panel = (5, 44, 82, sc.content_bottom)
             sc.window(panel, radius=3)
             sp = _str(mon.get("species"))
-            sc.sprite(sp, ground=(43, 108), factor=0.95, bounds=(66, 60))
+            sc.sprite(sp, ground=(43, 108), factor=0.95, bounds=(66, 60), hires=True)
             name = _fit(sc, _str(mon.get("name"), "?"), 66, 9)
             sc.text(11, 110, name, size=9, fill=TEXT)
             gender, gcolor = gender_symbol(_str(mon.get("gender")))
@@ -558,7 +558,7 @@ def render_growth(mon: dict, *, before_level: int = 0, after_level: int = 0,
         side = (154, 19, 235, 66)
         sc.window(side, radius=3)
         sc.sprite(sp, ground=(194, 62), factor=0.72, bounds=(58, 38),
-                  shiny=bool(mon.get("shiny")))
+                  shiny=bool(mon.get("shiny")), hires=True)
 
         # ── 学会的招式 ──
         lb = (5, 69, 235, 105)
@@ -598,10 +598,11 @@ def _growth_evolution(sc: Screen, mon: dict, sp: str, name: str, from_zh: str,
     # 原有的招式信息留在下方
     sc.d.rectangle([4, 44, 236, 122], fill=BG)
     before_sp = _str(mon.get("pre_species")) or _species_key(from_zh) or sp
-    sc.sprite(before_sp, ground=(56, 106), factor=0.85, bounds=(74, 62), silhouette=True)
+    sc.sprite(before_sp, ground=(56, 106), factor=0.85, bounds=(74, 62),
+              silhouette=True, hires=True)
     # 闪光个体进化后仍然是闪光:进化瞬间也要用异色立绘
     sc.sprite(sp, ground=(184, 106), factor=1.0, bounds=(82, 62),
-              shiny=bool(mon.get("shiny")))
+              shiny=bool(mon.get("shiny")), hires=True)
     sc.text_center(120, 78, "→", size=22, fill=(96, 94, 80))
     sc.text_center(56, 109, _str(from_zh, "之前"), size=8, fill=TEXT_DIM)
     sc.text_center(184, 109, _str(to_zh, name), size=9.4, fill=(40, 88, 44))

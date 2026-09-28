@@ -1172,6 +1172,7 @@ class Screen:
         self.big = None
         self.d2 = None
         self._ops: list[tuple] = []  # 延迟的文字绘制指令
+        self._hires: list[dict] = []  # 延迟的“高分辨率精灵”绘制指令
 
     # ── 生命周期 ──
     def upscale(self):
@@ -1186,6 +1187,8 @@ class Screen:
             (self.w * self.scale, self.h * self.scale), Image.NEAREST
         )
         self.d2 = ImageDraw.Draw(self.big)
+        for req in self._hires:
+            self._paste_hires(req)
         for x, y, text, kw in self._ops:
             size = round(kw.get("size", 9) * self.scale)
             if not text or not self.f(kw.get("size", 9)):
@@ -1242,6 +1245,53 @@ class Screen:
         if py + by1 > limit_y:
             py = max(0, limit_y - by1)
         return px, py, s
+
+    def _paste_hires(self, req: dict) -> None:
+        """把立绘直接贴到放大层:与 `_trimmed` 同一套尺寸规则,但只重采样一次。"""
+        from PIL import Image, ImageEnhance, ImageOps
+
+        if self.big is None:
+            return
+        S = self.scale
+        path = req.get("path") or ""
+        img = None
+        if path and os.path.exists(path):
+            try:
+                with Image.open(path) as im:
+                    img = im.convert("RGBA")
+            except (OSError, ValueError):
+                img = None
+        bounds = (int(req["bounds"][0] * S), int(req["bounds"][1] * S))
+        if img is None:
+            img = _blob((max(8, bounds[0] // 2), max(8, bounds[1] // 2)))
+        else:
+            bbox = img.getbbox()
+            if bbox:
+                img = img.crop(bbox)
+            scale = float(req.get("factor") or 1.0)
+            if img.width * scale > bounds[0] or img.height * scale > bounds[1]:
+                scale = min(bounds[0] / img.width, bounds[1] / img.height)
+            target = (max(1, round(img.width * scale)), max(1, round(img.height * scale)))
+            # 缩小 → LANCZOS(细节保真);纯放大 → NEAREST(不引入插值噪声)
+            resample = Image.LANCZOS if target[0] < img.width or target[1] < img.height else Image.NEAREST
+            img = img.resize(target, resample)
+        if req.get("silhouette") and path and os.path.exists(path):
+            with Image.open(path) as im:
+                alpha = im.convert("RGBA")
+            bbox = alpha.getbbox()
+            if bbox:
+                alpha = alpha.crop(bbox)
+            alpha = alpha.resize(img.size, Image.NEAREST).getchannel("A")
+            img = ImageOps.colorize(ImageOps.grayscale(img).point(
+                lambda v: 0 if v < 200 else 255), black=(0, 0, 0),
+                white=(40, 40, 48)).convert("RGBA")
+            img.putalpha(alpha)
+        if req.get("back"):
+            img = ImageOps.mirror(img)
+        if req.get("dim"):
+            img = ImageEnhance.Brightness(img).enhance(0.45)
+        cx, base_y = req["ground"]
+        self.big.paste(img, (round(cx * S - img.width / 2), round(base_y * S - img.height)), img)
 
     def finish(self) -> bytes:
         try:
@@ -1460,16 +1510,24 @@ class Screen:
     def sprite(self, species: str, *, ground: tuple[float, float], factor: float = 1.0,
                bounds: tuple[int, int] = (64, 64), back: bool = False,
                dim: bool = False, silhouette: bool = False,
-               shiny: bool = False) -> None:
+               shiny: bool = False, hires: bool = False) -> None:
         """按"脚底对齐"贴图:水平居中于 ground[0],底边压在 ground[1]。
 
         shiny=True 用闪光图(缺图自动回退普通图)。
+        hires=True:不在逻辑层贴图,而是记下来、`finish()` 时**直接贴在放大层**
+        —— 立绘只经过一次重采样(缩小用 LANCZOS),不会出现"先缩到 240×160
+        再 NEAREST 放大"导致的糊边与糊字。
         """
         from PIL import Image, ImageEnhance, ImageOps
 
         cx, base_y = ground
         path = (back_sprite_path(species, shiny=shiny) if back
                 else sprite_path(species, shiny=shiny))
+        if hires:
+            self._hires.append({"path": path, "ground": (cx, base_y),
+                                "factor": factor, "bounds": bounds,
+                                "back": back, "dim": dim, "silhouette": silhouette})
+            return
         img = _trimmed(path, factor, bounds, mirror=back)
         if img is None:
             img = _blob(bounds)
