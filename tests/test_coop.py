@@ -50,6 +50,15 @@ def _setup(tmp):
     return p, scope, t1
 
 
+
+def _plugin_npc():
+    """插件内部用的是 `pw_plugin.pw.npc` 这个模块对象,patch 错对象=白 patch。"""
+    import sys
+
+    import pw.npc as plain
+
+    return sys.modules.get("pw_plugin.pw.npc") or plain
+
 def test_team_up_then_start_a_double_battle():
     with tempfile.TemporaryDirectory() as tmp:
         p, scope, t1 = _setup(tmp)
@@ -154,6 +163,7 @@ def test_no_npc_today_falls_back_to_a_wild_double_battle():
             d = p.trainers.load(scope, who)
             d["location"] = "kanto-route-3"
             p.trainers.save(scope, who, d)
+        NPC = p.cmd_coop.__globals__["npc"]
         orig = NPC.route_trainers
         NPC.route_trainers = lambda *a, **k: []
         try:
@@ -195,13 +205,14 @@ def test_turn_shows_both_players_field_moves():
         assert "1." in out and "(" in out, out[:300]
 
 
+
 def test_single_trainer_brings_two_mons_instead_of_silent_wild():
-    """只有 1 位训练家时:让他带两只打双打,而不是默默变成野生(实测反馈)。"""
+    """只有 1 位训练家时:让他带两只打训练家双打,而不是默默变成野生。"""
+    import sys
     import tempfile
 
     from test_commands import _Event, run_cmd
 
-    import pw.npc as NPC
     from pw import battle as B
     from pw.player import Trainer
 
@@ -211,27 +222,45 @@ def test_single_trainer_brings_two_mons_instead_of_silent_wild():
             d = p.trainers.load(scope, who)
             d["location"] = "kanto-route-1"
             p.trainers.save(scope, who, d)
-        host = Trainer(p.trainers.load(scope, "u1"), uid="u1", scope=scope)
-        # 从今天所有关都地点里挑一位真实训练家,再把他"伪装"成这里唯一的一位
-        orig = NPC.route_trainers
-        probe = None
-        for loc in ("kanto-route-1", "kanto-route-2", "kanto-route-3", "kanto-route-4",
-                    "kanto-route-5", "kanto-route-6", "kanto-route-7", "kanto-route-8",
-                    "viridian-city", "pewter-city", "cerulean-city"):
-            got = orig(host, loc, day=1)
-            if got:
-                probe = got[0]
-                break
-        assert probe is not None, "今天所有地点都没训练家,无法构造用例"
-        NPC.route_trainers = lambda *a, **k: [probe]
+        # 插件把 npc 模块加载成 pw_plugin.pw.npc —— 按名字扫出所有别名一起打桩
+        mods = [mod for name, mod in list(sys.modules.items())
+                if name == "pw.npc" or name.endswith(".pw.npc")]
+        assert mods, "找不到 npc 模块"
+        fakes = {mod: (mod.route_trainers, mod.build_route_battle) for mod in mods}
+        probe = {"id": "x:1:0", "name": "测试 训练家", "tier": 3,
+                 "location": "kanto-route-1"}
+        fake_team = {"team": [{"species": "pidgey", "level": 5},
+                              {"species": "rattata", "level": 5}], "meta": {}}
+        for mod in mods:
+            mod.route_trainers = lambda *a, **k: [probe]
+            mod.build_route_battle = lambda *a, **k: fake_team
         try:
             ev = _Event("/双打")
             run_cmd(p, ev, p.cmd_coop)
         finally:
-            NPC.route_trainers = orig
+            for mod, (rt, bb) in fakes.items():
+                mod.route_trainers, mod.build_route_battle = rt, bb
         out = "\n".join(ev.outputs)
-        assert "一个" in out and "两只" in out, out[:400]
+        assert "一个人带两只" in out, out[:400]
         data = p.trainers.load(scope, "u1")
         assert (data.get("battle") or {}).get("kind") == "trainer", out[:400]
         v = B.view(Trainer(data, uid="u1", scope=scope))
         assert v["doubles"] is True and len(v["foes"]) == 2, out[:400]
+
+def test_low_tier_locations_offer_several_trainers_and_rotate():
+    """低等级地点也要有 ≥2 位训练家,且反复探索要轮到不同的人(实测反馈)。"""
+    import tempfile
+
+    from pw.npc import route_trainers
+    from pw.player import Trainer
+
+    for loc in ("kanto-route-1", "viridian-forest", "viridian-city"):
+        for day in (1, 2, 3):
+            got = route_trainers(Trainer({"party": []}, uid="u1", scope="s1"), loc, day=day)
+            assert len(got) >= 2, f"{loc} 第 {day} 天只有 {len(got)} 位训练家(凑不成双打)"
+    with tempfile.TemporaryDirectory() as tmp:
+        p, scope, _t1 = _setup(tmp)
+        host = Trainer(p.trainers.load(scope, "u1"), uid="u1", scope=scope)
+        npcs = route_trainers(host, "kanto-route-1", day=1)
+        seen = [p._pick_trainer(host, npcs)["name"] for _ in range(len(npcs))]
+        assert len(set(seen)) == len(npcs), f"反复探索应轮换到每个人:{seen}"

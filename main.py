@@ -1627,7 +1627,7 @@ class PokemonWorldPlugin(Star):
                 npcs = npc.route_trainers(t, loc, day=state.day)
                 self._save(t)
                 if npcs:
-                    cand = npcs[0]
+                    cand = self._pick_trainer(t, npcs)
                     yield event.plain_result(
                         "\n".join(notice)
                         + f"\n👀 你看到一位训练家:{cand['name']}。"
@@ -1679,7 +1679,7 @@ class PokemonWorldPlugin(Star):
             if roll < min(0.95, wild_p + npc_p):
                 npcs = npc.route_trainers(t, loc, day=state.day)
                 if npcs:
-                    cand = npcs[0]
+                    cand = self._pick_trainer(t, npcs)
                     self._save(t)
                     yield event.plain_result(
                         "\n".join(notice)
@@ -5315,7 +5315,7 @@ class PokemonWorldPlugin(Star):
 
         view = B.view(t)
         log = [f"· {x}" for x in list((B.session(t) or {}).get("log") or [])[-4:]]
-        prefix = "⚔️ 合作双打开始了!" + (chr(10) + why if why else chr(10) + solo)
+        prefix = "⚔️ 合作双打开始了!"
         async for r in self._emit_ui(
             event, "coop_battle",
             lambda: BR.render_battle_doubles(
@@ -5352,6 +5352,18 @@ class PokemonWorldPlugin(Star):
             hint=hint,
         ):
             yield r
+
+    def _pick_trainer(self, t: Trainer, npcs: list[dict]) -> dict | None:
+        """轮换着遇到训练家:同一天反复探索不会永远是同一张脸(实测反馈)。
+
+        以前两处都取 `npcs[0]`,而训练家名单是按「玩家+地点+日期」确定性生成的,
+        所以在同一个地点怎么刷都是同一个人。
+        """
+        if not npcs:
+            return None
+        n = int(t.data.get("explore_n") or 0)
+        t.data["explore_n"] = n + 1
+        return npcs[n % len(npcs)]
 
     def _coop_field_hint(self, t: Trainer) -> str:
         """双打:把场上**两位玩家**各自的宝可梦与招式都列出来,方便互相配合。

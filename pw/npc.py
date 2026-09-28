@@ -50,7 +50,9 @@ def route_trainers(trainer, location: str, *, day: int = 0) -> list[dict]:
         return []
     rng = stable_rng("npc", trainer.scope, location, day)
     budget = world.tier(location)
-    n = rng.randint(1, min(3, max(1, budget // 2 + 1)))
+    # 至少两位:低等级地点(1 号道路/常青市…)以前一整天只有一个人 ——
+    # 重复探索都是同一张脸,而且凑不成双打(实测反馈)
+    n = clamp(2 + (budget - 1) // 3 + rng.randint(0, 1), 2, 4)
     out = []
     for i in range(n):
         title = rng.choice(ROUTE_TRAINER_NAMES)
