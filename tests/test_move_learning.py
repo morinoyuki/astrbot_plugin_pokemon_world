@@ -438,3 +438,200 @@ def test_pending_footer_is_drawn_on_the_result_card(monkeypatch):
     )
     assert data
     assert any("待决定" in x for x in drawn), drawn[-8:]
+
+
+# ══════════════════════════════════════════════════════════════════
+# 进化必须有画面:每只升级/进化的各出一张成长卡
+# ══════════════════════════════════════════════════════════════════
+def _spy_growth(p):
+    """拦截 render_growth,记下每张卡的参数(仍照常渲染,顺便覆盖渲染层)。"""
+    import pw_plugin.pw.ui_info as UII
+
+    calls: list[dict] = []
+    orig = UII.render_growth
+
+    def spy(view, **kw):
+        calls.append(kw)
+        return orig(view, **kw)
+
+    UII.render_growth = spy
+    return calls, lambda: setattr(UII, "render_growth", orig)
+
+
+def _battle_to_win(tmp, p, extra_party=(), *, starter="杰尼龟"):
+    """打一场真实指令流的野生对战并打到胜利(敌人换成 2 级鲤鱼王,稳赢)。
+
+    返回 (存档, 最后一回合发出的全部内容) —— 奖励行有没有发出去也要能断言。
+    """
+    from pw import battle as B
+    from pw.dex import get_dex
+    from pw.util import game_day
+
+    dex = get_dex()
+    day = game_day()
+    run_cmd(p, _Event(f"/开始 小智 {starter}"), p.cmd_start)
+    t = p._load(_Event())
+    # 出战的那只也压到"差 1 点升级",才能制造"多只同时升级、只有后一只进化"
+    sq = t.data["party"][0]
+    sq["exp"] = dex.exp_for_level(dex.growth_of(sq["species"]), sq["level"] + 1) - 1
+    for sp, lv in extra_party:
+        md = B.create_pokemon(sp, lv).to_dict()
+        md["id"] = f"m{len(t.data['party'])}"
+        md["exp"] = dex.exp_for_level(dex.growth_of(sp), lv + 1) - 1
+        t.data["party"].append(md)
+    B.start(t, [{"species": "magikarp", "level": 2, "shiny": False}],
+            kind="wild", wild=True, meta={"title": "野生的鲤鱼王"}, day=day)
+    p._save(t)
+    out: list[str] = []
+    for _ in range(10):
+        t = p._load(_Event())
+        if not B.in_battle(t):
+            break
+        ev = _Event("/对战 1")
+        run_cmd(p, ev, p.cmd_battle)
+        out = ev.outputs
+    return p._load(_Event()), "\n".join(out)
+
+
+def test_every_evolved_mon_gets_its_own_growth_card():
+    """多只同时升级时,进化也必须有画面。
+
+    实测反馈:战斗胜利升级,队伍里一只进化了却"没显示相关的图片画面" ——
+    旧实现只给**第一只升级的**出卡,进化的那只被一行文字带过
+    (杰尼龟升到 Lv6 的卡 + 绿毛虫→铁甲蛹 只出现在文本里)。
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        p = _Cmd(tmp)
+        calls, restore = _spy_growth(p)
+        try:
+            t, _out = _battle_to_win(tmp, p, extra_party=[("caterpie", 6)])
+        finally:
+            restore()
+        assert [m["species"] for m in t.data["party"]] == ["squirtle", "metapod"]
+        evos = [c for c in calls if c.get("evolved_to_zh")]
+        assert evos, f"进化没有画面:{calls}"
+        assert evos[0]["evolved_to_zh"] == "铁甲蛹"
+        assert (evos[0]["before_level"], evos[0]["after_level"]) == (6, 7)
+        # 两只都升级 → 两张卡(进化那张排前面)
+        assert len(calls) == 2, f"两只升级应各有一张成长卡:{calls}"
+        assert calls[0].get("evolved_to_zh"), "进化卡要排在前面(卡片多了也不能被截掉)"
+
+
+def test_level_up_win_still_reports_rewards():
+    """成长卡顶替结果卡时,奖励行(经验)不能一起消失。
+
+    结果卡才有奖励栏,而"有人升级"时发的是成长卡 —— 图片路径又不会发 text,
+    于是升级的那一场玩家看不到经验(实测反馈的姊妹问题)。
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        p = _Cmd(tmp)
+        p.config = {"ui_image": True}
+        t, out = _battle_to_win(tmp, p, extra_party=[("caterpie", 6)])
+        assert "获得经验" in out, out
+        assert t.data["party"][1]["species"] == "metapod"
+
+
+def test_catch_card_does_not_swallow_the_evolution_card():
+    """捕获成功也会结算经验:进化不能被捕获卡吃掉(旧实现直接 return)。"""
+    import asyncio
+
+    from pw import battle as B
+    from pw.engine import create_pokemon
+    from pw.player import mon_to_dict
+
+    with tempfile.TemporaryDirectory() as tmp:
+        p = _Cmd(tmp)
+        p.config = {"ui_image": True}
+        run_cmd(p, _Event("/开始 小智 杰尼龟"), p.cmd_start)
+        t = p._load(_Event())
+        # 模拟"打赢的这一球让队伍第一只进化":
+        t.data["party"][0] = mon_to_dict(create_pokemon("metapod", 7))
+        p._save(t)
+        calls, restore = _spy_growth(p)
+        ev = _Event("")
+        res = B.TurnResult(
+            finished=True, outcome="caught", item_key="poke-ball",
+            rewards=["🎉 捕获成功!"], caught=mon_to_dict(create_pokemon("magikarp", 4)),
+            growth_detail=[{
+                "index": 0, "name": "铁甲蛹", "levels": 1,
+                "from_level": 6, "to_level": 7, "learned": [], "pending": [],
+                "evolved_from": "caterpie", "evolved_to": "metapod",
+            }],
+        )
+        t = p._load(_Event())
+
+        async def go():
+            return [r async for r in p._emit_result_cards(ev, t, {}, res)]
+
+        try:
+            asyncio.run(go())
+        finally:
+            restore()
+        chains = [o for o in ev.outputs if o.startswith("<chain")]
+        assert len(chains) == 2, f"捕获卡 + 进化卡都要发:{ev.outputs}"
+        assert any(c.get("evolved_to_zh") == "铁甲蛹" for c in calls), calls
+
+
+def test_growth_cards_are_capped_and_evolution_wins_a_slot():
+    """升级的太多时最多发 3 张,但**进化一定占一个名额**,其余走文字。"""
+    import asyncio
+
+    from pw import battle as B
+
+    with tempfile.TemporaryDirectory() as tmp:
+        p = _Cmd(tmp)
+        p.config = {"ui_image": True}
+        run_cmd(p, _Event("/开始 小智 杰尼龟"), p.cmd_start)
+        t = p._load(_Event())
+        details = [
+            {"index": 0, "name": f"测试{i}", "levels": 1, "from_level": 5,
+             "to_level": 6, "learned": [], "pending": [], "evolved_from": "",
+             "evolved_to": ""}
+            for i in range(3)
+        ]
+        # 第 4 只(排在最后)进化 —— 按顺序截断的话它会被丢掉
+        details.append({"index": 0, "name": "绿毛虫", "levels": 1, "from_level": 6,
+                        "to_level": 7, "learned": [], "pending": [],
+                        "evolved_from": "caterpie", "evolved_to": "metapod"})
+        res = B.TurnResult(finished=True, outcome="win", rewards=["+10 EXP"],
+                           growth=["…"], growth_detail=details)
+        calls, restore = _spy_growth(p)
+        ev = _Event("")
+
+        async def go():
+            return [r async for r in p._emit_result_cards(ev, t, {}, res)]
+
+        try:
+            asyncio.run(go())
+        finally:
+            restore()
+        assert len(calls) == 3, f"最多 3 张成长卡:{len(calls)}"
+        assert any(c.get("evolved_to_zh") == "铁甲蛹" for c in calls), \
+            f"进化被截掉了:{calls}"
+        assert any("其余成长" in o for o in ev.outputs), ev.outputs
+
+
+def test_rare_candy_evolution_has_a_picture():
+    """非战斗路径(神奇糖果)升级进化同样要出画面。"""
+    from pw import battle as B
+
+    with tempfile.TemporaryDirectory() as tmp:
+        p = _Cmd(tmp)
+        p.config = {"ui_image": True}
+        run_cmd(p, _Event("/开始 小智 杰尼龟"), p.cmd_start)
+        t = p._load(_Event())
+        md = B.create_pokemon("caterpie", 6).to_dict()
+        md["id"] = "m2"
+        t.data["party"].append(md)
+        t.add_item("rare-candy", 1)
+        p._save(t)
+        calls, restore = _spy_growth(p)
+        ev = _Event("/使用 神奇糖果 2")
+        try:
+            run_cmd(p, ev, p.cmd_use)
+        finally:
+            restore()
+        t = p._load(_Event())
+        assert t.data["party"][1]["species"] == "metapod"
+        assert [c.get("evolved_to_zh") for c in calls] == ["铁甲蛹"], calls
+        assert any(o.startswith("<chain") for o in ev.outputs), ev.outputs

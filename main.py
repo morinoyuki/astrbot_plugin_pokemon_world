@@ -155,6 +155,7 @@ ADOPT_TRIOS: dict[str, list[str]] = {
 ADOPT_BASE = 2000          # 领养基础花费
 ADOPT_PER_BADGE = 800      # 每枚徽章加价
 REVIVE_LEVEL = 20          # 化石复活的等级(与初代一致)
+GROWTH_CARD_LIMIT = 3      # 一场战斗最多发几张成长卡(进化的优先,多出来的用文字带过)
 
 
 def _adopt_entries() -> dict[str, tuple[str, str]]:
@@ -1855,10 +1856,20 @@ class PokemonWorldPlugin(Star):
                 keep = await self._narrate(
                     "对战结束", res.lines + res.rewards + res.growth, after,
                 )
+                # 成长卡/捕获卡会**顶替**结果卡(奖励栏在结果卡上)——那种时候
+                # 自己把奖励行补进 keep;`ui_image` 关掉时根本没卡可看,同样要补。
+                # 不补的话"升级的那一场"永远看不到经验和赏金(图片路径不发 text)。
+                card_covers = (bool(res.outcome == "caught" and res.rewards)
+                               or bool(_growth_cards(res)))
+                reward_text = ""
+                if not (self._cfg_bool("ui_image", True) and not card_covers):
+                    reward_text = "\n".join(f"· {x}" for x in res.rewards)
                 async for r in self._emit_battle(
                     event, t, meta, res.lines,
                     text=text,
-                    keep="\n".join(f"· {x}" for x in res.lines) + "\n" + keep,
+                    keep="\n".join(f"· {x}" for x in res.lines)
+                         + ("\n" + reward_text if reward_text else "")
+                         + "\n" + keep,
                 ):
                     yield r
                 async for r in self._emit_result_cards(event, t, meta, res):
@@ -3223,6 +3234,7 @@ class PokemonWorldPlugin(Star):
                 return
             rate = dex.growth_of(mon.species)
             need = max(1, dex.exp_for_level(rate, mon.level + 1) - mon.exp)
+            _lv_before = int(mon.level)
             res = growth.gain_exp(mon, need, daytime=B.daytime_of())
             t.take_item(key, 1)
             # 待决定要**真的写进存档**:以前只提示"用 /学招 替换",却没记录,
@@ -3247,9 +3259,21 @@ class PokemonWorldPlugin(Star):
                 for mv in res.pending
             )
             if res.evolved_to:
-                lines.append(
-                    f"　└ ✨ {mon.display} 进化成了 {growth.species_zh(res.evolved_to)}!"
-                )
+                # 进化必须有画面(用户反馈:只有一行文字,看不到进化)。
+                # 卡片渲染失败时 `_growth_fallback_text` 会把这一行补回来,
+                # 所以这里不再重复写文字。
+                async for r in self._emit_growth_card(event, t, {
+                    "index": num - 1,
+                    "name": mon.display,
+                    "levels": int(res.levels_gained or 0),
+                    "from_level": _lv_before,
+                    "to_level": int(mon.level),
+                    "learned": list(res.learned),
+                    "pending": list(res.pending),
+                    "evolved_from": str(res.evolved_from or ""),
+                    "evolved_to": str(res.evolved_to or ""),
+                }):
+                    yield r
             # 别的宝可梦也可能在等决定 —— 一起列出来,别让玩家漏掉
             rest = self._pending_notice(t, skip=num)
             if rest:
@@ -4366,6 +4390,7 @@ class PokemonWorldPlugin(Star):
         _box_before = {str(m.get("id") or "") for m in (t.data.get("box") or [])}
         view = B.view(t)
         mon = view.get("my") or {}
+        caught_card = False
         if res.outcome == "caught" and res.rewards:
             _ball_key = str(res.item_key or "poke-ball")
             # 用结算时记下的捕获物(`res.caught`),不要再用 party[-1]/box 增量去猜 ——
@@ -4388,35 +4413,27 @@ class PokemonWorldPlugin(Star):
                     hint="推进:`/主线 挑战` 击退敌方组织、`/主线` 查看剧情",
                 ):
                     yield r
-            return
-        # 成长卡只讲**升级的那一只**,而且**没人升级就不出这张卡**:
-        # 以前只要涨了经验就出卡,这时没有明细可选,等级两处都退化成当前等级,
-        # 于是画出一张"Lv5 → Lv5"的荒唐卡(实测反馈);
-        # 只涨经验的情况交给结果卡的"── 成长 ──"文字行。
-        # 另外以前是从 res.growth 的所有文字行里刮 `「…」` 拼 learned/pending,
-        # 全队的"学会/待学"都会堆到当前出战的那只头上(杰尼龟的招式出现在波波卡上)。
-        detail = next((d for d in res.growth_detail if d.get("levels")), None)
-        if detail is not None:
-            idx = int(detail.get("index") or 0)
-            md = t.party[idx] if 0 <= idx < len(t.party) else None
-            view_g = B._mon_view(B.dict_to_mon(md)) if md else mon
-            learned = list(detail.get("learned") or [])
-            pending = list(detail.get("pending") or [])
-            evo_from = growth.species_zh(str(detail.get("evolved_from") or ""))
-            evo_to = growth.species_zh(str(detail.get("evolved_to") or ""))
-            before_level = int(detail.get("from_level") or 0)
-            after_level = int(detail.get("to_level") or 0)
-            async for r in self._emit_ui(
-                event, "growth",
-                lambda: UII.render_growth(
-                    view_g, before_level=before_level,
-                    after_level=after_level, learned=learned,
-                    pending=pending, evolved_from_zh=evo_from, evolved_to_zh=evo_to,
-                    scale=self._img_scale(),
-                ),
-                text="",
-            ):
+                caught_card = True
+        # ── 成长卡:每只升级/进化的宝可梦各出一张 ──
+        # 以前只给"第一只升级的"出卡,于是"甲升级、乙进化"时进化**完全没有画面**,
+        # 只有一行文字(实测反馈:队伍里一只进化了,只看到另一只的升级卡);
+        # 现在按"进化优先"排序后逐只出卡,保证进化永远有画面。
+        # 只涨经验(没人升级/进化)仍然不出卡,交给结果卡的"── 成长 ──"文字行;
+        # 也没人升级时画出的"Lv5 → Lv5"荒唐卡同样不会再出现。
+        grown = _growth_cards(res)
+        for detail in grown[:GROWTH_CARD_LIMIT]:
+            async for r in self._emit_growth_card(event, t, detail):
                 yield r
+        if len(grown) > GROWTH_CARD_LIMIT:
+            rest = grown[GROWTH_CARD_LIMIT:]
+            yield event.plain_result("其余成长:" + "、".join(
+                f"{d.get('name')} Lv{coerce_int(d.get('from_level'), 0)}→"
+                f"{coerce_int(d.get('to_level'), 0)}" for d in rest))
+        if grown or caught_card:
+            # 成长卡(或捕获卡)已经当结果卡用了 —— 不再发重复的战报卡
+            notice = self._pending_notice(t)
+            if notice:
+                yield event.plain_result(notice)
             return
         if res.outcome in ("win", "loss", "forfeit", "escaped", "stalled"):
             async for r in self._emit_ui(
@@ -4437,6 +4454,55 @@ class PokemonWorldPlugin(Star):
         notice = self._pending_notice(t)
         if notice:
             yield event.plain_result(notice)
+
+    async def _emit_growth_card(self, event: AstrMessageEvent, t: Trainer,
+                                detail: dict):
+        """一只宝可梦的成长卡:升级箭头 + 学到的招式,发生进化则画进化瞬间。
+
+        `detail` 就是 `TurnResult.growth_detail` 里的一项(见 pw/battle.py)。
+        画面渲染失败时回退 `_growth_fallback_text` —— 不能让"进化了"只剩图片
+        路径里那句空文本。
+        """
+        idx = coerce_int(detail.get("index"), 0)
+        md = t.party[idx] if 0 <= idx < len(t.party) else None
+        view_g = B._mon_view(B.dict_to_mon(md)) if md else (B.view(t).get("my") or {})
+        learned = list(detail.get("learned") or [])
+        pending = list(detail.get("pending") or [])
+        evo_from = growth.species_zh(str(detail.get("evolved_from") or ""))
+        evo_to = growth.species_zh(str(detail.get("evolved_to") or ""))
+        before_level = coerce_int(detail.get("from_level"), 0)
+        after_level = coerce_int(detail.get("to_level"), 0)
+        async for r in self._emit_ui(
+            event, "growth",
+            # 默认参数把本圈的值绑死:渲染层以后改成惰性调用时不会画错人
+            lambda vg=view_g, b=before_level, a=after_level, lr=learned,
+                   pd=pending, ef=evo_from, et=evo_to: UII.render_growth(
+                vg, before_level=b, after_level=a, learned=lr, pending=pd,
+                evolved_from_zh=ef, evolved_to_zh=et,
+                scale=self._img_scale()
+            ),
+            text=self._growth_fallback_text(detail),
+        ):
+            yield r
+
+    def _growth_fallback_text(self, detail: dict) -> str:
+        """成长卡渲染失败时的文本回退(图片路径平时只发提示,信息不能丢)。"""
+        name = str(detail.get("name") or "宝可梦")
+        lines: list[str] = []
+        if detail.get("evolved_to"):
+            lines.append(
+                f"✨ {name} 进化了!"
+                f"{growth.species_zh(str(detail.get('evolved_from') or ''))} → "
+                f"{growth.species_zh(str(detail.get('evolved_to') or ''))}"
+            )
+        if detail.get("levels"):
+            lines.append(f"⬆ {name} 升到了 Lv{coerce_int(detail.get('to_level'), 0)}。")
+        lines += [f"　└ {name} 学会了「{growth.move_brief(mv)}」!"
+                  for mv in (detail.get("learned") or [])]
+        lines += [f"　└ {name} 想学「{growth.move_brief(mv)}」"
+                  "(招式已满,用 `/学招` 替换)"
+                  for mv in (detail.get("pending") or [])]
+        return "\n".join(lines)
 
     def _temp_image(self, data: bytes, prefix: str) -> str:
         """把渲染好的图片落盘到临时文件并返回路径。
@@ -6652,6 +6718,18 @@ def _adopt_keys() -> set[str]:
 
 def _fossil_keys() -> set[str]:
     return fossil_revivable()
+
+
+def _growth_cards(res) -> list[dict]:
+    """本场战斗要出成长卡的明细:**每只升级/进化**的都算,进化排前面。
+
+    旧实现只取"第一只升级的"(甲升级、乙进化时进化只剩文字 —— 实测反馈);
+    排序把进化提前,是为了卡片数量封顶时进化一定占得到名额。
+    """
+    grown = [d for d in (getattr(res, "growth_detail", None) or [])
+             if d.get("levels") or d.get("evolved_to")]
+    grown.sort(key=lambda d: (not d.get("evolved_to"), coerce_int(d.get("index"), 0)))
+    return grown
 
 
 def _pending_footer(t) -> str:

@@ -189,6 +189,15 @@ def test_battle_and_ui_images_use_shiny_sprite():
     assert UI.render_mon_summary(
         {**shiny, "types": ["Electric"], "moves": []}, scale=2
     ).startswith(b"\x89PNG")
+    # 成长卡:进化瞬间与升级小图也都得用异色立绘
+    evo_a = UII.render_growth(shiny, before_level=6, after_level=7,
+                              evolved_from_zh="皮卡丘", evolved_to_zh="雷丘", scale=2)
+    evo_b = UII.render_growth(plain, before_level=6, after_level=7,
+                              evolved_from_zh="皮卡丘", evolved_to_zh="雷丘", scale=2)
+    assert evo_a.startswith(b"\x89PNG") and evo_a != evo_b, "进化画面没换异色立绘"
+    up_a = UII.render_growth(shiny, before_level=9, after_level=10, scale=2)
+    up_b = UII.render_growth(plain, before_level=9, after_level=10, scale=2)
+    assert up_a.startswith(b"\x89PNG") and up_a != up_b, "升级画面没换异色立绘"
 
 
 # ══════════════════════════════════════════════════════════════════
