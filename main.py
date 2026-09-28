@@ -40,6 +40,7 @@ from .prompts import (
 )
 from .pw import battle as B
 from .pw import battle_render as BR
+from .pw import coop as COOP
 from .pw import daily as D
 from .pw import events as EV
 from .pw import growth, legendary, npc, story
@@ -5080,6 +5081,298 @@ class PokemonWorldPlugin(Star):
     # 战报在双方下一次操作时补发。
     # ════════════════════════════════════════════════════════════
 
+    # ── 合作双打(两位玩家组队打 2v2)──────────────────────────
+    @filter.command("组队", alias={"搭档", "coop"})
+    async def cmd_coop_team(self, event: AstrMessageEvent):
+        """/组队 <@某人|接受|拒绝|离开> —— 找搭档一起打双打"""
+        t, err = self._require(event, in_battle_ok=True)
+        if err:
+            yield event.plain_result(err)
+            return
+        arg = self._args(event, ("组队", "搭档", "team")).strip()
+        state = self._state(t.scope)
+        if arg in ("接受", "同意", "accept"):
+            rows = COOP.incoming(state, t.uid)
+            if not rows:
+                yield event.plain_result("❌ 没有待处理的组队邀请。")
+                return
+            row = rows[-1]
+            COOP.accept(state, row)
+            self._save_state(state)
+            other = COOP.partner_of(row, t.uid)
+            nm = (row.get("names") or {}).get(other) or "搭档"
+            yield event.plain_result(
+                f"🤝 你和 {nm} 组成了搭档!\n· 和 TA 站在**同一地点**,由邀请方发 `/双打` 开始\n"
+                "· 双打里各打各的:轮到你就用 `/双打 <招式序号>` 出招"
+            )
+            return
+        if arg in ("拒绝", "decline"):
+            rows = COOP.incoming(state, t.uid)
+            if rows:
+                COOP.decline(state, rows[-1])
+                self._save_state(state)
+            yield event.plain_result("👋 已忽略组队邀请。")
+            return
+        if arg in ("离开", "解散", "leave"):
+            ok = COOP.leave(state, t.uid)
+            self._save_state(state)
+            yield event.plain_result("👋 已解散搭档。" if ok else "❌ 对战中不能解散,先打完。")
+            return
+        targets = _at_users(event)
+        if targets and str(targets[0][0]) != t.uid:
+            uid, name = str(targets[0][0]), (targets[0][1] or "玩家")
+            if self.trainers.load(t.scope, uid) is None:
+                yield event.plain_result("❌ 对方还没有开始旅程(`/开始` 一下)。")
+                return
+            COOP.offer(state, t.uid, uid, t.name, name)
+            self._save_state(state)
+            yield event.plain_result(
+                f"🤝 已邀请 {name} 组队(5 分钟内有效)。\n对方发 `/组队 接受` 即可。"
+            )
+            return
+        row = COOP.pair_for(state, t.uid)
+        if row is None:
+            yield event.plain_result("用法:`/组队 @某人` 邀请搭档,对方 `/组队 接受`。")
+            return
+        other = COOP.partner_of(row, t.uid)
+        nm = (row.get("names") or {}).get(other) or "搭档"
+        if COOP.battle_of(row):
+            yield event.plain_result(
+                f"⚔️ 你和 {nm} 正在合作双打中 —— 用 `/双打 <招式序号> [2/队友]` 出招。"
+            )
+            return
+        yield event.plain_result(f"🤝 搭档:{nm}(等对方接受,或由邀请方发 `/双打` 开打)")
+
+    @filter.command("双打", alias={"合作双打", "doubles"})
+    async def cmd_coop(self, event: AstrMessageEvent):
+        """/双打 [行动] —— 和搭档一起打双打(2v2)"""
+        t, err = self._require(event, in_battle_ok=True)
+        if err:
+            yield event.plain_result(err)
+            return
+        arg = self._args(event, ("双打", "合作双打", "coop")).strip()
+        state = self._state(t.scope)
+        row = next(
+            (r for r in COOP.box(state).values()
+             if COOP.battle_of(r) and t.uid in (r.get("a"), r.get("b"))),
+            None,
+        )
+        if row is not None:
+            async for r in self._coop_turn(event, t, state, row, arg):
+                yield r
+            return
+        if arg:
+            yield event.plain_result("❌ 现在没有进行中的合作双打。")
+            return
+        pair = COOP.pair_for(state, t.uid)
+        if pair is None or str(pair.get("a")) != t.uid:
+            yield event.plain_result(
+                "❌ 先 `/组队 @某人` 找到搭档,再由**邀请方**发 `/双打` 开打。"
+            )
+            return
+        other = COOP.partner_of(pair, t.uid)
+        ally_data = self.trainers.load(t.scope, other)
+        if ally_data is None:
+            yield event.plain_result("❌ 搭档还没有开始旅程。")
+            return
+        ally = Trainer(ally_data, uid=other, scope=t.scope)
+        if B.in_battle(t) or B.in_battle(ally):
+            yield event.plain_result("❌ 有一方正在别的对战里,先打完再说。")
+            return
+        if str(ally.data.get("location") or "") != str(t.location or ""):
+            yield event.plain_result("❌ 你们不在同一地点 —— 先 `/前往` 会合再开双打。")
+            return
+        npcs = npc.route_trainers(t, t.location, day=state.day)
+        specs: list[dict] = []
+        names: list[str] = []
+        for n in npcs[:2]:
+            team = list((npc.build_route_battle(t, n, day=state.day) or {}).get("team") or [])
+            if team:
+                specs.append(team[0])
+                names.append(str(n.get("name") or "训练家"))
+        if len(specs) < 2 and npcs:
+            team = list((npc.build_route_battle(t, npcs[0], day=state.day) or {}).get("team") or [])
+            specs = team[:2]
+            names = [str(npcs[0].get("name") or "训练家")] * len(specs)
+        _wild = False
+        if len(specs) < 2:
+            # 没有训练家就改成**野生双打**(正作里也有):现抽两只当地的野生宝可梦
+            specs, names = [], []
+            dex = get_dex()
+            for i in range(2):
+                hit = B.roll_wild(t, rng=stable_rng("coop-wild", t.scope, t.uid, state.day, i),
+                                  shiny_rate=self._shiny_rate())
+                if not hit:
+                    specs = []
+                    break
+                specs.append({"species": str(hit.get("species")),
+                              "level": int(hit.get("level") or 5),
+                              "shiny": bool(hit.get("shiny"))})
+                names.append(dex.species_zh(str(hit.get("species"))))
+            _wild = bool(specs)
+        if len(specs) < 2:
+            yield event.plain_result("❌ 这附近找不到愿意和你们俩对战的对手。")
+            return
+        who = " 与 ".join(dict.fromkeys(names)) or "训练家"
+        kind = "wild" if _wild else "trainer"
+        meta = {
+            "kind": kind,
+            "title": (f"野生的 {' 与 '.join(names)} 出现了!(双打)" if _wild
+                      else f"双打:{who} 的挑战"),
+            "coop": {"host": t.uid, "ally": other},
+        }
+        try:
+            B.start_doubles(t, specs, kind=kind, meta=meta, day=state.day,
+                            ally_party=list(ally.party))
+        except B.BattleError as e:
+            yield event.plain_result(str(e))
+            return
+        COOP.start_battle(state, pair, kind=kind, title=meta["title"],
+                          host_len=len(t.party), host=t.uid, ally=other)
+        self._save(t)
+        self._save_state(state)
+        view = B.view(t)
+        async for r in self._coop_emit(
+            event, t, view, [],
+            hint="各打各的:`/双打 <招式序号>`(对第二只用 `/双打 <序号> 2`,对队友用 "
+                 "`/双打 <序号> 队友`)、`/双打 switch <你队伍序号>`、`/双打 run`",
+            text=f"⚔️ 合作双打开始!{meta['title']}\n双方都交出行动后就会推进一回合。",
+        ):
+            yield r
+
+    async def _coop_emit(self, event, t: Trainer, view: dict, lines: list[str], *,
+                         hint: str = "", text: str = ""):
+        """双打画面(图片失败回退文本)。"""
+        meta = ((t.data.get("battle") or {}).get("meta") or {})
+        title = str(meta.get("title") or "合作双打")
+        try:
+            location = WorldMap().node_zh(str(t.location or ""))
+        except Exception:
+            location = str(t.location or "")
+        turn = int(view.get("turn") or 0)
+        names = [str(event.get_sender_name() or "")] if hasattr(event, "get_sender_name") else []
+        async for r in self._emit_ui(
+            event, "coop-battle",
+            lambda: BR.render_battle_doubles(
+                list(view.get("mine") or []), list(view.get("foes") or []),
+                list(lines or [])[-DBL_LOG_LINES:], title=title, location=location,
+                turn=turn, my_names=names, scale=self._img_scale(),
+            ),
+            text=text or "\n".join(lines or []),
+            hint=hint,
+        ):
+            yield r
+
+    async def _coop_turn(self, event, t: Trainer, state, row: dict, arg: str):
+        """交自己的行动;两边都交齐(或搭档超时)就推进一回合。"""
+        bmeta = COOP.battle_of(row) or {}
+        host_uid = str(bmeta.get("host") or "")
+        ally_uid = str(bmeta.get("ally") or "")
+        host_data = self.trainers.load(t.scope, host_uid)
+        ally_data = self.trainers.load(t.scope, ally_uid)
+        if host_data is None or ally_data is None:
+            COOP.clear(state, row)
+            self._save_state(state)
+            yield event.plain_result("❌ 这场双打的存档找不到了,已结束。")
+            return
+        host = Trainer(host_data, uid=host_uid, scope=t.scope)
+        ally = Trainer(ally_data, uid=ally_uid, scope=t.scope)
+        snap = ((host.data.get("battle") or {}).get("battle") or {}).get("player") or {}
+        owners = list(snap.get("owners") or [])
+        want = "host" if t.uid == host_uid else "ally"
+        slot, merged_idx = "main", 0
+        for i, key in enumerate(("active", "ally_active")):
+            idx = int(snap.get(key, 0) or 0)
+            if 0 <= idx < len(owners) and owners[idx] == want:
+                slot = "main" if i == 0 else "ally"
+                merged_idx = idx
+                break
+        base = 0 if want == "host" else int(bmeta.get("host_len") or 0)
+        me = t.party[int(merged_idx) - base] if 0 <= int(merged_idx) - base < len(t.party) else {}
+        moves = list(me.get("moves") or [])
+        partner_uid = COOP.partner_of(row, t.uid)
+        partner_name = (row.get("names") or {}).get(partner_uid) or "搭档"
+
+        action = None
+        parts = arg.replace("，", " ").split()
+        head = parts[0] if parts else ""
+        if not head:
+            yield event.plain_result(
+                f"你的 {me.get('name') or me.get('species') or '宝可梦'}:"
+                + ("、".join(f"{i + 1}.{self._move_zh(m)}" for i, m in enumerate(moves)) or "没有招式")
+                + "\n行动:`/双打 <序号> [2/队友]`、`/双打 switch <序号>`、`/双打 run`"
+            )
+            return
+        if head in ("run", "flee", "逃跑", "认输", "forfeit"):
+            action = {"type": "forfeit", "slot": slot}
+        elif head in ("switch", "换人"):
+            if len(parts) < 2 or not parts[1].isdigit():
+                yield event.plain_result("用法:`/双打 switch <你队伍里的序号>`")
+                return
+            n = int(parts[1])
+            if not 1 <= n <= len(t.party):
+                yield event.plain_result("❌ 你的队伍没有这个序号。")
+                return
+            if int(t.party[n - 1].get("cur_hp") or 0) <= 0:
+                yield event.plain_result("❌ 这只已经倒下了。")
+                return
+            action = {"type": "switch", "index": base + n - 1, "slot": slot}
+        elif head.isdigit():
+            i = int(head)
+            if not 1 <= i <= len(moves):
+                yield event.plain_result("❌ 没有这个招式序号,发 `/双打` 看招式表。")
+                return
+            target = "foe_main"
+            if len(parts) > 1:
+                extra = parts[1]
+                if extra in ("2", "二", "第二只", "右"):
+                    target = "foe_ally"
+                elif extra in ("队友", "同伴", "ally", "左"):
+                    target = "ally_main"
+            action = {"type": "move", "move": moves[i - 1], "slot": slot, "target": target}
+        else:
+            yield event.plain_result("❌ 不认识这个行动。发 `/双打` 看你的招式表。")
+            return
+
+        ready = COOP.set_action(row, t.uid, action)
+        if not ready and COOP.timed_out(row, partner_uid):
+            other_slot = "ally" if slot == "main" else "main"
+            other_idx = int(snap.get("ally_active" if other_slot == "ally" else "active", 0) or 0)
+            party_snap = list(snap.get("party") or [])
+            other_mon = party_snap[other_idx] if 0 <= other_idx < len(party_snap) else {}
+            other_moves = list((other_mon or {}).get("moves") or [])
+            auto = {"type": "move", "move": other_moves[0] if other_moves else "",
+                    "slot": other_slot, "target": "foe_main"}
+            COOP.set_action(row, partner_uid, auto)
+            ready = True
+            yield event.plain_result(f"⌛ {partner_name} 没赶上,替他自动出招了。")
+        self._save_state(state)
+        if not ready:
+            self._save(t)
+            yield event.plain_result(
+                f"✅ 行动已记录,等 {partner_name} 出招……(TA 用 `/双打 <招式序号>` 出招)"
+            )
+            return
+
+        actions = [row.get("actions", {}).get(host_uid), row.get("actions", {}).get(ally_uid)]
+        res = B.take_turn_doubles(host, actions, day=state.day, ally_trainer=ally)
+        row["actions"] = {}
+        row["acted_at"] = {}
+        self.trainers.save(t.scope, host_uid, host.data)
+        self.trainers.save(t.scope, ally_uid, ally.data)
+        if res.finished:
+            COOP.clear(state, row)
+        self._save_state(state)
+        lines = list(res.lines or [])
+        text = "\n".join(lines + list(res.rewards or []))
+        if res.error:
+            text = res.error
+        view = B.view(host)
+        hint = ("行动:`/双打 <招式序号> [2/队友]`、`/双打 switch <序号>`、`/双打 run`"
+                if not res.finished else "这场双打结束了 —— 想再来一次就 `/双打`。")
+        async for r in self._coop_emit(event, host, view, lines, hint=hint, text=text):
+            yield r
+
     async def _pvp_challenge(self, event, t: Trainer, target_uid: str,
                              target_name: str, arg: str):
         """`/对战 @某人 [赌注 N]` —— 发起挑战。"""
@@ -6030,6 +6323,7 @@ class PokemonWorldPlugin(Star):
 # 对战中其他行动的一律锁定文案。写成**模块级常量**而不是类属性:
 # 类上非 callable 的属性在测试宿主对象 `_Cmd` 上不会被拷贝(它只拷 callable),
 # 一旦引用 self.XXX 测试里就会 AttributeError。
+DBL_LOG_LINES = 6           # 双打战报最多显示几行(多了画布会自动加高)
 _BATTLE_LOCKED_MSG = (
     "⚔️ 你正在对战中,其他行动已锁定!\n"
     "· `/对战 <招式序号>` 出招(序号见提示)\n"

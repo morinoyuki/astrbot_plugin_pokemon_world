@@ -565,15 +565,26 @@ def _finish_win(
     if not participants:
         participants = [0]
     share = max(1, int(total_exp / len(participants)))
+    # 合作双打:玩家一侧的队伍是“主办 + 搭档”拼起来的,经验要各写各的存档
+    _coop = meta.get("coop") or {}
+    _host_len = int(_coop.get("host_len") or 0)
+    _ally = _coop.get("ally")
+
+    def _owner_of(i: int):
+        if _ally is not None and i >= _host_len:
+            return _ally, i - _host_len
+        return trainer, i
+
     for i in participants:
-        cur = dict_to_mon(trainer.party[i])
+        _owner, _idx = _owner_of(i)
+        cur = dict_to_mon(_owner.party[_idx])
         _lv_before = int(cur.level)
         g = growth.gain_exp(
             cur, share, daytime=daytime,
-            party=[str(m.get("species") or "") for m in trainer.party],
+            party=[str(m.species) for m in battle.player.party],
         )
         cur.friendship = min(255, cur.friendship + 2)
-        trainer.party[i] = mon_to_dict(cur, trainer.party[i])
+        _owner.party[_idx] = mon_to_dict(cur, _owner.party[_idx])
         res.growth.append(
             f"{cur.display}: +{share} EXP"
             + (f" → Lv{cur.level}" if g.levels_gained else "")
@@ -590,7 +601,7 @@ def _finish_win(
         if g.pending:
             # 待决定只保留最新一条:旧的还没选就又来新的 → 旧的那条算放弃,
             # 并在战报里说明,免得玩家以为"我那条待定去哪了"
-            dropped = growth.set_pending(trainer.party[i], g.pending)
+            dropped = growth.set_pending(_owner.party[_idx], g.pending)
             for mv in dropped:
                 res.growth.append(
                     f"　└ 之前的「{growth.move_zh(mv)}」没来得及选择,已放弃。"
@@ -633,7 +644,17 @@ def _finish_win(
     money = int(money * float(money_mult or 1.0))
     if money:
         trainer.add_money(money)
-        res.rewards.append(f"💰 获得赏金 {money}₽(现有 {trainer.money}₽)。")
+        # 合作双打:赏金对半分(搭档也是一起打的)
+        _ally_t = (meta.get("coop") or {}).get("ally")
+        if _ally_t is not None and money >= 2:
+            _half = money // 2
+            trainer.add_money(-_half)
+            _ally_t.add_money(_half)
+            res.rewards.append(
+                f"💰 获得赏金 {money}₽,与搭档平分({_half}₽ / {_half}₽)。"
+            )
+        else:
+            res.rewards.append(f"💰 获得赏金 {money}₽(现有 {trainer.money}₽)。")
 
     # 徽章 / 旗标
     region = trainer.region
@@ -888,6 +909,9 @@ def view(trainer: Trainer) -> dict:
         "terrain": "",
         "title": "",
         "kind": "",
+        "doubles": False,
+        "mine": [],
+        "foes": [],
     }
     if not data:
         return out
@@ -895,6 +919,12 @@ def view(trainer: Trainer) -> dict:
     meta = data.get("meta") or {}
     out["my"] = _mon_view(battle.player.mon, exp_pct=exp_progress(battle.player.mon) if battle.player.mon else 0.0)
     out["foe"] = _mon_view(battle.enemy.mon)
+    out["doubles"] = bool(battle.doubles)
+    if battle.doubles:
+        out["mine"] = [
+            _mon_view(m, exp_pct=exp_progress(m)) for m in battle.player.mons
+        ]
+        out["foes"] = [_mon_view(m) for m in battle.enemy.mons]
     out["foe_party"] = [
         {"species": m.species, "cur_hp": int(m.cur_hp), "max_hp": int(max(1, m.max_hp))}
         for m in battle.enemy.party
@@ -934,3 +964,107 @@ def tm_for_gym(gym: dict | None) -> str:
         if mv:
             return tm_key(mv)
     return ""
+
+
+# ── 合作双打(两人各指挥自己场上的宝可梦)──────────────────────
+
+
+def start_doubles(
+    trainer: Trainer,
+    enemy_specs,
+    *,
+    kind: str = "trainer",
+    meta: dict | None = None,
+    weather: str = "",
+    seed: int = 0,
+    day: int = 0,
+    ally_party: list[dict] | None = None,
+) -> list[str]:
+    """开一场双打(2v2):玩家一侧 = 自己队伍 + 搭档队伍(拼接)。
+
+    搭档的宝可梦只在**战斗快照**里,不写进自己的存档;每回合结束由
+    `sync_coop_partner` 把那一半写回搭档自己的存档。
+    `meta["coop"]` 只放 uid 之类可 JSON 化的东西(结算时再注入 Trainer)。
+    """
+    log = start(trainer, enemy_specs, kind=kind, wild=False, meta=meta,
+                weather=weather, seed=seed, day=day)
+    data = trainer.data["battle"]
+    battle = battle_from_dict(data["battle"])
+    battle.doubles = True
+    host_len = len(battle.player.party)
+    for md in (ally_party or []):
+        battle.player.party.append(dict_to_mon(dict(md)))
+    battle.player.owners = ["host"] * host_len + ["ally"] * len(ally_party or [])
+    battle.enemy.owners = ["enemy"] * len(battle.enemy.party)
+    coop = dict((data.get("meta") or {}).get("coop") or {})
+    coop["host_len"] = host_len
+    data["meta"] = {**(data.get("meta") or {}), "coop": coop}
+    extra: list[str] = []
+    for side in (battle.enemy, battle.player):
+        nxt = [i for i, p in enumerate(side.party) if not p.fainted and i != side.active]
+        if nxt:
+            battle._send_out(side, nxt[0], slot="ally")
+            extra.append(battle.log[-1])
+    data["battle"] = battle.to_dict()
+    data["log"] = list(log + extra)[-12:]
+    trainer.data["battle"] = data
+    return list(log) + extra
+
+
+def sync_coop_partner(battle, meta: dict) -> None:
+    """把合并队伍里“搭档那一半”写回搭档自己的存档(HP/PP/等级/进化)。"""
+    coop = meta.get("coop") or {}
+    ally = coop.get("ally")
+    if ally is None:
+        return
+    host_len = int(coop.get("host_len") or 0)
+    for j in range(host_len, len(battle.player.party)):
+        k = j - host_len
+        if k < len(ally.party):
+            ally.party[k] = mon_to_dict(battle.player.party[j], ally.party[k])
+    ally.data["bag"] = {k: v for k, v in (battle.bag or {}).items() if int(v) > 0}
+
+
+def take_turn_doubles(
+    trainer: Trainer, actions: list[dict], *, day: int = 0,
+    ally_trainer: Trainer | None = None,
+) -> TurnResult:
+    """推进合作双打的一回合:`actions` 是玩家一侧的行动(主位/副位各一条)。
+
+    `meta["coop"]` 里只存 uid(要进存档,不能塞对象);结算前把真正的搭档
+    `Trainer` 注入进来,经验/赏金才能各写各的存档。
+    """
+    data = trainer.data.get("battle")
+    if not data:
+        return TurnResult(error="❌ 当前没有进行中的对战。")
+    battle = battle_from_dict(data["battle"])
+    meta = dict(data.get("meta") or {})
+    if ally_trainer is not None and meta.get("coop"):
+        meta["coop"] = {**meta["coop"], "ally": ally_trainer}
+    res = TurnResult()
+    try:
+        log = battle.step_doubles(list(actions or []))
+    except Exception as e:  # 引擎异常不能让两位玩家卡死
+        res.error = f"❌ 双打结算出错:{e}"
+        return res
+    res.lines = list(log)
+    if battle.finished:
+        res.finished = True
+        res.outcome = (
+            "win" if battle.winner == "player"
+            else "loss" if battle.winner == "enemy" else "draw"
+        )
+        if res.outcome == "win":
+            _finish_win(trainer, battle, meta, res, daytime=daytime_of(),
+                        money_mult=1.0, day=day)
+        elif res.outcome == "loss":
+            res.rewards.append("❌ 你们输掉了对战……宝可梦都倒下了,回去休息吧。")
+        data["battle"] = battle.to_dict()
+        data["finished"] = True
+    else:
+        _sync(trainer, battle)
+        data["battle"] = battle.to_dict()
+    sync_coop_partner(battle, meta)
+    data["log"] = list(log)[-12:]
+    trainer.data["battle"] = data
+    return res

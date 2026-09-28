@@ -232,40 +232,34 @@ def test_sanitize_keeps_emoji_now_that_fallback_fonts_exist():
 
 
 def test_battle_message_box_grows_with_lines():
-    """对战对话框高度必须自适应:长文本不能顶破边框。
-
-    曾经的 bug:框固定 112~158(内高 38px),却按 4 行 × 10px = 40px 画,
-    第 4 行会溢出到底部边框之外。
-    """
+    """战报窗口放不下就把**画布往下长**(用户要求),绝不裁掉台词。"""
     from pw import battle_render as BR
 
-    long_log = [
-        "暴鲤龙 使用了 龙之舞!暴鲤龙的攻击大幅提升了!",
-        "对手 喵喵 使用了 抓!效果不太好……",
-        "暴鲤龙 使用了 水流喷射!效果绝佳!喵喵 倒下了!",
-        "暴鲤龙 获得了 384 点经验值!",
+    my = {"species": "snorlax", "name": "卡比兽", "level": 50, "cur_hp": 120,
+          "max_hp": 220}
+    foe = {"species": "charizard", "name": "喷火龙", "level": 48, "cur_hp": 90,
+           "max_hp": 160}
+    log = [
+        "· 卡比兽 使用了 地震!",
+        "· 击中 喷火龙! 造成 110 点伤害。",
+        "· 效果拔群!",
+        "· 喷火龙 使用了 喷射火焰!",
+        "· 击中 卡比兽! 造成 60 点伤害。",
+        "· 卡比兽 使用了 泰山压顶!",
+        "· 击中 喷火龙! 造成 88 点伤害。",
     ]
-    my = {"species": "gyarados", "name": "暴鲤龙", "level": 105, "cur_hp": 300,
-          "max_hp": 353, "exp_pct": 40}
-    foe = {"species": "meowth", "name": "喵喵", "level": 20, "cur_hp": 30, "max_hp": 52}
-    data = BR.render_battle(my, foe, long_log,
-                            title="世界大赛 · 决赛 —— 地区冠军 科拿 的冰之军团",
-                            scale=SCALE)
+    data = BR.render_battle(my, foe, log, title="野生的宝可梦出现了!", scale=3)
+    assert data, "渲染返回空字节"
     im = _img(data)
-    w, h = im.size
-    # 对话框底边之上、之下各留的边距里不能出现文字色(白字/描边)
-    assert BR.MSG_BOTTOM <= BR.LOGICAL_H - 1
-    bottom_band = im.crop((0, (BR.MSG_BOTTOM + 1) * SCALE, w, h))
-    ink = {
-        px
-        for _c, px in (bottom_band.getcolors(maxcolors=1 << 20) or [])
-        if abs(px[0] - 250) < 20 and abs(px[1] - 250) < 20 and abs(px[2] - 248) < 20
-    }
-    assert not ink, "对话框下方出现了文字像素(说明文字溢出了边框)"
-    # 行数上限必须与框高自洽
-    assert BR.MSG_MAX_LINES >= 3
-    assert (BR.MSG_BOTTOM - 4 - BR.MSG_TOP_MAX) // BR.MSG_LINE_H >= 3
-
+    assert im.width == BR.LOGICAL_W * 3
+    assert im.height > BR.LOGICAL_H * 3, "台词多时画布应该加高"
+    assert BR.MSG_SHOW_LINES >= BR.MSG_MAX_LINES >= 3
+    # 最后一行文字不能压到最外圈的边框上
+    band = im.crop((0, im.height - 9, im.width, im.height))
+    assert not [px for px in band.getdata() if px == BR.MSG_TEXT], "文字溢出了下边框"
+    # 短日志不该无谓地加高
+    short = BR.render_battle(my, foe, ["· 卡比兽 使用了 地震!"], scale=3)
+    assert _img(short).height == BR.LOGICAL_H * 3
 
 def test_map_last_row_does_not_overflow_panel():
     """地图最后一行的节点名不能越过下面的"地点"框。"""

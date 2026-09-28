@@ -132,6 +132,8 @@ MSG_BOTTOM = 158
 MSG_TOP_MAX = MY_BOX[3] + 2       # = 112
 MSG_LINE_H = 9.6          # 逻辑行高
 MSG_MAX_LINES = max(1, int((MSG_BOTTOM - 4 - MSG_TOP_MAX) // MSG_LINE_H))
+# 对话框最多显示几行 —— 超过就把**画布往下加高**,绝不裁掉台词
+MSG_SHOW_LINES = 7
 
 
 def _font(size: int):
@@ -501,14 +503,45 @@ def render_battle(
         foe = dict(foe or {})
         log = [str(x) for x in (log or [])]
         foe_party = list(foe_party or [])
-        W, H = LOGICAL_W * scale, LOGICAL_H * scale
         S = scale
 
-        small = Image.new("RGB", (LOGICAL_W, LOGICAL_H), BG_TOP)
+        # ── 先算对话框内容(高度自适应:行数多了就把画布加高)──
+        f_name = _font(int(9.5 * S))
+        f_small = _font(int(8.5 * S))
+        f_ball = _font(int(6.5 * S))
+        f_msg = _font(int(9 * S))
+        mx0, mx1 = MSG_EDGE_X
+        # 对话框正文从固定位置开始 —— 原来为了避开左边的队伍球会右移,
+        # 现在对话框里不放球了(冗余),正文位置不再随队伍数量变化
+        tx_pad = 28
+        tx_right = 6
+        maxw = (mx1 - mx0 - tx_pad - tx_right) * S
+        head_lines: list[str] = []
+        if title:
+            head_lines.append("◆ " + str(title))
+        head_wrapped: list[str] = []
+        for line in head_lines:
+            head_wrapped.extend(_wrap(f_msg, line, maxw, limit=MSG_MAX_LINES))
+        tail_wrapped: list[str] = []
+        for line in log:
+            tail_wrapped.extend(_wrap(f_msg, line, maxw, limit=MSG_MAX_LINES))
+        room = max(1, MSG_SHOW_LINES - len(head_wrapped))
+        shown_lines = (head_wrapped + tail_wrapped[-room:]) or [""]
+        box_h = 7 + len(shown_lines) * MSG_LINE_H + 2
+        my1 = int(MSG_BOTTOM)
+        my0 = int(my1 - box_h)
+        if my0 < MSG_TOP_MAX - 2:
+            # 老布局真的放不下了(5 行以上):画布往下长,战报窗口跟着加高
+            my0 = int(MSG_TOP_MAX)
+            my1 = int(my0 + box_h)
+        logical_h = max(LOGICAL_H, int(my1 + 2))
+        W, H = LOGICAL_W * S, logical_h * S
+
+        small = Image.new("RGB", (LOGICAL_W, logical_h), BG_TOP)
         d = ImageDraw.Draw(small)
 
         # ── 背景:天气配色 + 地平线 + 竞技场椭圆 + 两个站台 ──
-        _draw_scene(d, weather)
+        _draw_scene(d, weather, platforms=DBL_PLATFORMS)
 
         # ── 信息框与血条(逻辑层)──
         _draw_box(d, FOE_BOX)
@@ -519,31 +552,6 @@ def render_battle(
         _draw_exp_bar(d, EXP_BAR, float(my.get("exp_pct") or 0.0))
         _status_chip(d, FOE_BOX[2] - 18, FOE_BOX[1] + 4, foe.get("status") or "")
         _status_chip(d, MY_BOX[2] - 18, MY_BOX[1] + 4, my.get("status") or "")
-
-        # ── 先算对话框内容(高度自适应)──
-        f_name = _font(int(9.5 * S))
-        f_small = _font(int(8.5 * S))
-        f_ball = _font(int(6.5 * S))
-        f_msg = _font(int(9 * S))
-
-        mx0, mx1 = MSG_EDGE_X
-        # 对话框正文从固定位置开始 —— 原来为了避开左边的队伍球会右移,
-        # 现在对话框里不放球了(冗余),正文位置不再随队伍数量变化
-        tx_pad = 28
-        tx_right = 6
-        maxw = (mx1 - mx0 - tx_pad - tx_right) * S
-        src_lines: list[str] = []
-        if title:
-            src_lines.append("◆ " + str(title))
-        src_lines.extend(log[-3:])
-        wrapped: list[str] = []
-        for line in src_lines:
-            wrapped.extend(_wrap(f_msg, line, maxw, limit=MSG_MAX_LINES))
-        shown_lines = wrapped[-MSG_MAX_LINES:] or [""]
-        box_h = 7 + len(shown_lines) * MSG_LINE_H + 2
-        my1 = MSG_BOTTOM
-        # 双保险:即使行数算多了也不许长到我方信息框上面
-        my0 = max(int(my1 - box_h), MSG_TOP_MAX)
 
         # ── 对话框(暗红框 + 青绿底)──
         d.rounded_rectangle([mx0, my0, mx1, my1], radius=4, fill=MSG_FRAME)
@@ -759,3 +767,185 @@ def _box_text(big, d2, mon, box, hp_bar, f_name, f_small, f_ball, S, *,
         )
     else:
         _ = f_ball
+
+
+# ── 双打(2v2 / 合作双打)────────────────────────────────────────
+# 版式仿正作:敌方两块信息框叠在**左上**,我方两块叠在**右下**;
+# 精灵则在对角:敌方在右上、我方在左下;最底下一整条对话框。
+DBL_FOE_BOXES = ((2, 3, 118, 24), (2, 26, 118, 47))
+DBL_MY_BOXES = ((122, 82, 238, 103), (122, 105, 238, 126))
+DBL_FOE_GROUND = ((164, 82), (194, 82))
+DBL_MY_GROUND = ((60, 126), (90, 128))
+# 地面只有敌我两个大椭圆(用户要求),其余背景/对话框全用单打那一套
+DBL_PLATFORMS = ((114, 56, 240, 84), (16, 98, 128, 136))
+DBL_MSG_BOTTOM = 158
+DBL_MSG_TOP = 130
+DBL_MSG_LINES = 6          # 双打战报同样“放不下就把画布加高”
+
+
+def _dbl_panel_shape(d, mon, box) -> None:
+    """信息框的“框 + 血条”画在逻辑画布上(必须在放大之前画)。
+
+    双打要同时显示四只,信息窗比单打**矮一截**:名字一行 + 血条一行。
+    """
+    x0, y0, x1, _y1 = box
+    _draw_box(d, box)
+    if not mon:
+        return
+    _draw_hp_row(d, None, (x0 + 3, y0 + 10, x0 + 13, y0 + 16),
+                 (x0 + 14, y0 + 11, (x1 - x0) - 44, 4), _ratio(mon))
+    _status_chip(d, x1 - 17, y0 + 1, mon.get("status") or "")
+
+
+def _dbl_panel_text(big, mon, box, *, mine: bool, f_name, f_ball, S) -> None:
+    """信息框里的文字(名字/性别/等级/HP)画在放大画布上,避免糊。"""
+    if not mon:
+        return
+    x0, y0, x1, _y1 = box
+    bar = (x0 + 14, y0 + 11, (x1 - x0) - 44, 4)
+    name = str(mon.get("name") or mon.get("species") or "?")[:8]
+    gender = str(mon.get("gender") or "")
+    fonts.draw_text(big, ((x0 + 4) * S, (y0 + 1) * S), name, f_name.size, TEXT)
+    if gender in ("M", "F", "\u2642", "\u2640"):
+        glyph = "\u2642" if gender in ("M", "\u2642") else "\u2640"
+        color = MALE if glyph == "\u2642" else FEMALE
+        fonts.draw_text(big, ((x0 + 5) * S + f_name.getlength(name), (y0 + 1) * S),
+                        glyph, f_name.size, color)
+    lv = f"Lv{int(mon.get('level') or 0)}"
+    fonts.draw_text(big, ((x1 - 3) * S - f_name.getlength(lv), (y0 + 1) * S),
+                    lv, f_name.size, TEXT)
+    fonts.draw_text(big, ((x0 + 4) * S, (y0 + 9.5) * S), "HP", f_ball.size,
+                    (250, 250, 240))
+    if mine:
+        hp_txt = f"{int(mon.get('cur_hp') or 0)}/{int(mon.get('max_hp') or 0)}"
+        fonts.draw_text(big, ((bar[0] + bar[2] + 3) * S, (y0 + 9.5) * S),
+                        hp_txt, f_ball.size, TEXT)
+
+
+def render_battle_doubles(
+    mine: list[dict],
+    foes: list[dict],
+    log: list[str],
+    *,
+    title: str = "",
+    weather: str = "",
+    terrain: str = "",
+    location: str = "",
+    turn: int = 0,
+    my_names: list[str] | None = None,
+    foe_names: list[str] | None = None,
+    out_path: str = "",
+    scale: int = SCALE_DEFAULT,
+) -> bytes:
+    """双打画面(仿正作斜对角版式);失败返回 b""。
+
+    `mine` / `foes` 各最多两只(主位在前),缺位时对应格子留空。
+    """
+    try:
+        from PIL import Image, ImageDraw
+
+        scale = max(1, int(scale or SCALE_DEFAULT))
+        mine = [dict(m or {}) for m in list(mine or [])[:2]]
+        foes = [dict(f or {}) for f in list(foes or [])[:2]]
+        log = [str(x) for x in (log or [])]
+        my_names = list(my_names or [])
+        _ = foe_names  # 训练家名已放进标题行,面板不再挂标签
+        S = scale
+
+        # 先算对话框(高度自适应:放不下就把画布加高,不裁台词)
+        f_name = _font(int(8.5 * S))
+        f_ball = _font(int(6 * S))
+        f_msg = _font(int(8.5 * S))
+        mx0, mx1 = MSG_EDGE_X
+        maxw = (mx1 - mx0 - 14) * S
+        head = [str(location) if location else "", WEATHER_STYLE.get(weather, ""),
+                TERRAIN_STYLE.get(terrain, "")]
+        head = [x for x in head if x]
+        head_src: list[str] = []
+        if turn:
+            head_src.append(f"◆ 第 {int(turn)} 回合" + (" · " + " · ".join(head) if head else ""))
+        elif head:
+            head_src.append("◆ " + " · ".join(head))
+        if title:
+            head_src.append("◆ " + str(title))
+        if my_names:
+            head_src.append("◆ 搭档:" + " & ".join(x for x in my_names if x))
+        head_wrapped: list[str] = []
+        for line in head_src:
+            head_wrapped.extend(_wrap(f_msg, line, maxw, limit=2))
+        tail_wrapped: list[str] = []
+        for line in log:
+            tail_wrapped.extend(_wrap(f_msg, line, maxw, limit=2))
+        room = max(1, DBL_MSG_LINES - len(head_wrapped))
+        shown = (head_wrapped + tail_wrapped[-room:]) or [""]
+        box_h = 5 + len(shown) * 9.2 + 2
+        my1 = int(DBL_MSG_BOTTOM)
+        my0 = int(my1 - box_h)
+        if my0 < DBL_MSG_TOP - 2:
+            my0 = int(DBL_MSG_TOP)
+            my1 = int(my0 + box_h)
+        logical_h = max(LOGICAL_H, int(my1 + 2))
+        W, H = LOGICAL_W * S, logical_h * S
+
+        small = Image.new("RGB", (LOGICAL_W, logical_h), BG_TOP)
+        d = ImageDraw.Draw(small)
+        _draw_scene(d, weather, platforms=DBL_PLATFORMS)
+
+        # 对话框(先画,精灵图层更高)
+        d.rounded_rectangle([mx0, my0, mx1, my1], radius=4, fill=MSG_FRAME)
+        d.rounded_rectangle([mx0 + 2, my0 + 2, mx1 - 2, my1 - 2], radius=3,
+                            outline=MSG_FRAME_HI)
+        d.rounded_rectangle([mx0 + 4, my0 + 4, mx1 - 4, my1 - 4], radius=3, fill=MSG_FILL)
+
+        # 信息框的框与血条必须在放大之前画到逻辑画布上
+        for i in range(2):
+            _dbl_panel_shape(d, foes[i] if i < len(foes) else {}, DBL_FOE_BOXES[i])
+        for i in range(2):
+            _dbl_panel_shape(d, mine[i] if i < len(mine) else {}, DBL_MY_BOXES[i])
+
+        big = small.resize((W, H), Image.NEAREST)
+        dlg = big.crop((mx0 * S, my0 * S, mx1 * S, my1 * S))
+
+        # 敌方精灵(右上,面朝我方)、我方精灵(左下,背面)
+        for i, mon in enumerate(foes):
+            if not mon:
+                continue
+            # 与单打同尺寸(FOE_SCALE),只挪位置;右边那只后画 → 压在上面
+            _paste_small(big, mon, DBL_FOE_GROUND[i], factor=FOE_SCALE, bounds=(64, 58),
+                         back=False, dim=not _alive(mon), S=scale)
+        for i, mon in enumerate(mine):
+            if not mon:
+                continue
+            _paste_small(big, mon, DBL_MY_GROUND[i], factor=MY_SCALE, bounds=(92, 96),
+                         back=True, dim=not _alive(mon), S=scale)
+
+        big.paste(dlg, (mx0 * S, my0 * S))
+
+        # 四块信息框的文字(左上两块敌方 / 右下两块我方)
+        for i in range(2):
+            mon = foes[i] if i < len(foes) else {}
+            _dbl_panel_text(big, mon, DBL_FOE_BOXES[i], mine=False,
+                            f_name=f_name, f_ball=f_ball, S=S)
+        for i in range(2):
+            mon = mine[i] if i < len(mine) else {}
+            _dbl_panel_text(big, mon, DBL_MY_BOXES[i], mine=True,
+                            f_name=f_name, f_ball=f_ball, S=S)
+
+        # 对话框文字
+        for i, line in enumerate(shown):
+            fonts.draw_text(
+                big, (mx0 * S + 12 * S, (my0 + 3.2 + i * 9.2) * S), line,
+                f_msg.size, MSG_TEXT,
+                stroke_width=max(1, S // 2), stroke_fill=MSG_SHADOW,
+            )
+
+        buf = BytesIO()
+        big.save(buf, format="PNG")
+        data = buf.getvalue()
+        if out_path:
+            with open(out_path, "wb") as f:
+                f.write(data)
+        return data
+    except Exception as e:  # 渲染失败必须回退文本
+        logger.debug("宝可梦世界: 双打画面渲染失败: %s", e)
+        return b""

@@ -563,6 +563,10 @@ class Side:
     name: str
     party: list[Pokemon] = field(default_factory=list)
     active: int = 0
+    # 双打:同一侧的第二只在场上(-1 = 单打/无副位)
+    ally_active: int = -1
+    # 合作双打:队伍里每只宝可梦的“主人”(多人共用一队友方时补位用)
+    owners: list = field(default_factory=list)
     hazards: dict = field(default_factory=dict)
     screens: dict = field(default_factory=dict)
     tera_used: bool = False
@@ -573,6 +577,27 @@ class Side:
         if 0 <= self.active < len(self.party):
             return self.party[self.active]
         return None
+
+    @property
+    def ally(self) -> Pokemon | None:
+        """双打里的副位宝可梦(单打恒为 None)。"""
+        if 0 <= self.ally_active < len(self.party):
+            return self.party[self.ally_active]
+        return None
+
+    @property
+    def mons(self) -> list[Pokemon]:
+        """场上所有宝可梦(主位在前)。单打就一只 —— 旧代码可以照旧用 `mon`。"""
+        out = []
+        if self.mon is not None:
+            out.append(self.mon)
+        if self.ally is not None and self.ally is not self.mon:
+            out.append(self.ally)
+        return out
+
+    def slot_mon(self, slot: str) -> Pokemon | None:
+        """按槽位取场上宝可梦:"main"/"ally"。"""
+        return self.ally if str(slot) == "ally" else self.mon
 
     def healthy(self) -> list[int]:
         return [i for i, p in enumerate(self.party) if not p.fainted]
@@ -585,6 +610,8 @@ class Side:
             "name": self.name,
             "party": [p.to_dict() for p in self.party],
             "active": self.active,
+            "ally_active": self.ally_active,
+            "owners": list(self.owners),
             "hazards": dict(self.hazards),
             "screens": dict(self.screens),
             "tera_used": self.tera_used,
@@ -596,6 +623,8 @@ class Side:
         s = cls(name=d.get("name", ""))
         s.party = [Pokemon.from_dict(p) for p in (d.get("party") or [])]
         s.active = int(d.get("active", 0) or 0)
+        s.ally_active = int(d.get("ally_active", -1) if d.get("ally_active") is not None else -1)
+        s.owners = list(d.get("owners") or [])
         s.hazards = dict(d.get("hazards") or {})
         s.screens = dict(d.get("screens") or {})
         s.tera_used = bool(d.get("tera_used", False))
@@ -630,12 +659,31 @@ class Battle:
     captured: dict | None = None
     run_attempts: int = 0
     escaped: bool = False
+    # 双打:每侧最多 2 只同时上场(单打恒为 False,一切旧流程不变)
+    doubles: bool = False
+    # 当前招式命中的目标数 >1(范围招式),伤害按正作乘 0.75
+    _spread_multi: bool = False
     # 每回合重置的随机数调用计数(避免同 salt 的随机数完全相关)
     _rng_calls: int = 0
     # 本场战斗里最后被使用的招式(仿效/鹦鹉学舌要拿它来借)
     _last_move_any: str = ""
     # 接棒:换人时要接力过去的能力变化(按 player/enemy 分)
     _baton: dict = field(default_factory=lambda: {"player": {}, "enemy": {}})
+    # 当前招式指向的目标(双打里可以是自己人;单打保持 None)
+    _target: Pokemon | None = None
+
+    # ── 位置工具 ──
+    def _side_of(self, mon: Pokemon | None) -> Side:
+        """这只宝可梦属于哪一侧(双打里用身份判断,不再假设“有别的那只就是对方”)。"""
+        if mon is not None and any(p is mon for p in self.enemy.party):
+            return self.enemy
+        return self.player
+
+    def _foe_of(self, side: Side) -> Side:
+        return self.enemy if side is self.player else self.player
+
+    def _side_key_of(self, mon: Pokemon | None) -> str:
+        return "enemy" if self._side_of(mon) is self.enemy else "player"
 
     # ── 序列化 ──
     def to_dict(self) -> dict:
@@ -660,6 +708,7 @@ class Battle:
             "escaped": self.escaped,
             "stall_turns": self.stall_turns,
             "stalled": self.stalled,
+            "doubles": self.doubles,
             "_last_move_any": self._last_move_any,
         }
 
@@ -687,6 +736,7 @@ class Battle:
         b.escaped = bool(d.get("escaped", False))
         b.stall_turns = int(d.get("stall_turns", 0) or 0)
         b.stalled = bool(d.get("stalled", False))
+        b.doubles = bool(d.get("doubles", False))
         return b
 
     # ── 展示 ──
@@ -924,7 +974,7 @@ class Battle:
         "run": 6,
     }
 
-    def _action_priority(self, action: dict, side: Side) -> int:
+    def _action_priority(self, action: dict, side: Side, slot: str = "main") -> int:
         atype = action.get("type")
         if atype in self._NON_MOVE_PRIORITY:
             return self._NON_MOVE_PRIORITY[atype]
@@ -932,7 +982,7 @@ class Battle:
             return 0
         mv = get_dex().moves.get(action.get("move", ""), {})
         pri = int(mv.get("priority", 0) or 0)
-        mon = side.mon
+        mon = side.slot_mon(slot)
         if mon and mv.get("category") == "Status" and mon.has_ability("prankster"):
             pri += 1
         return pri
@@ -972,13 +1022,18 @@ class Battle:
         return order
 
     # ── 出场 / 换人 ──
-    def _send_out(self, side: Side, index: int, initial: bool = False) -> None:
-        side.active = index
-        mon = side.mon
+    def _send_out(self, side: Side, index: int, initial: bool = False,
+                  slot: str = "main") -> None:
+        if str(slot) == "ally":
+            side.ally_active = index
+        else:
+            side.active = index
+        mon = side.slot_mon(slot)
         if mon is None:
             return
         mon.turns_active = 0
-        self.log.append(f"{'我方' if side is self.player else '对方'}派出了 {mon.display}!")
+        tag = "我方" if side is self.player else "对方"
+        self.log.append(f"{tag}派出了 {mon.display}!")
         self._apply_hazards(side, mon)
         self._on_switch_in(side, mon, initial)
         self._try_imposter(side)
@@ -989,15 +1044,20 @@ class Battle:
             self._baton[side.name] = {}
             self.log.append(f"{mon.display} 接下了接力棒,继承了能力变化!")
 
-    def _do_switch(self, side: Side, index: int) -> bool:
+    def _do_switch(self, side: Side, index: int, slot: str = "main") -> bool:
         """换人;返回是否真的换成功(失败时调用方不能清 awaiting_switch)。"""
         if index < 0 or index >= len(side.party):
             self.log.append("没有这个序号的宝可梦。")
             return False
-        if index == side.active:
+        cur_idx = side.ally_active if str(slot) == "ally" else side.active
+        if index == cur_idx:
             self.log.append("它已经在场上了。")
             return False
-        mon_now = side.mon
+        other = side.ally_active if str(slot) == "main" else side.active
+        if index == other and not side.party[index].fainted:
+            self.log.append("它已经在场上了。")
+            return False
+        mon_now = side.slot_mon(slot)
         if mon_now is not None and not mon_now.fainted and (
             mon_now.volatiles.get("trapped") or mon_now.volatiles.get("ingrain")
             or mon_now.volatiles.get("noretreat")
@@ -1007,13 +1067,13 @@ class Battle:
         if side.party[index].fainted:
             self.log.append(f"{side.party[index].display} 已倒下,无法上场。")
             return False
-        old = side.mon
+        old = side.slot_mon(slot)
         if old and not old.fainted:
             self._on_switch_out(side, old)
         tag = "我方" if side is self.player else "对方"
         if old and not old.fainted:
             self.log.append(f"{tag}收回了 {old.display}。")
-        self._send_out(side, index)
+        self._send_out(side, index, slot=slot)
         return True
 
     def _after_switch(self, action: dict) -> None:
@@ -1157,11 +1217,31 @@ class Battle:
 
     # ── 出招 ──
     def _execute_move(self, side: Side, foe_side: Side, action: dict, *,
-                      called: bool = False) -> None:
-        mon = side.mon
-        foe = foe_side.mon
+                      called: bool = False, extra: bool = False,
+                      mon: Pokemon | None = None, foe: Pokemon | None = None,
+                      spread_multi: bool = False) -> None:
+        """执行一个招式。
+
+        单打照旧(`mon`/`foe` 缺省取双方主位);双打时由 `step_doubles` 显式传入
+        行动的宝可梦与目标 —— `extra=True` 表示“范围招式的第 2/3 个目标”,
+        不再重复报“使用了 X”也不再扣 PP。
+        """
+        mon = mon or side.mon
+        foe = foe or foe_side.mon
         if mon is None or foe is None or mon.fainted or foe.fainted:
             return
+        self._target = foe
+        self._spread_multi = bool(spread_multi)
+        try:
+            self._execute_move_inner(side, foe_side, action, mon, foe,
+                                     called=called, extra=extra)
+        finally:
+            self._target = None
+            self._spread_multi = False
+
+    def _execute_move_inner(self, side: Side, foe_side: Side, action: dict,
+                            mon: Pokemon, foe: Pokemon, *, called: bool = False,
+                            extra: bool = False) -> None:
         if mon.volatiles.get("flinch"):
             self.log.append(f"{mon.display} 畏缩了,无法行动!")
             return
@@ -1177,22 +1257,22 @@ class Battle:
         if entry is None:
             self.log.append(f"{mon.display} 想使出的招式不存在。")
             return
-        if move_key not in mon.moves and not called:
+        if move_key not in mon.moves and not called and not extra:
             self.log.append(f"{mon.display} 不会使用「{self._move_zh(move_key)}」!")
             return
-        if not called and foe.volatiles.get("imprison") and move_key in foe.moves:
+        if not called and not extra and foe.volatiles.get("imprison") and move_key in foe.moves:
             self.log.append(f"{foe.display} 的封印封住了 {self._move_zh(move_key)}!")
             return
-        if not called and mon.volatiles.get("taunt") and entry.get("category") == "Status":
+        if not called and not extra and mon.volatiles.get("taunt") and entry.get("category") == "Status":
             self.log.append(f"{mon.display} 被挑衅了,无法使用变化招式!")
             return
-        if not called and mon.volatiles.get("disable") and mon.volatiles.get("disable_move") == move_key:
+        if not extra and mon.volatiles.get("disable") and mon.volatiles.get("disable_move") == move_key:
             self.log.append(f"{mon.display} 的 {self._move_zh(move_key)} 被定身了,无法使用!")
             return
-        if not called and mon.volatiles.get("torment") and mon.last_move == move_key:
+        if not extra and mon.volatiles.get("torment") and mon.last_move == move_key:
             self.log.append(f"{mon.display} 被无理取闹,不能连续使用同一招!")
             return
-        if not called and mon.volatiles.get("encore"):
+        if not extra and mon.volatiles.get("encore"):
             encored = str(mon.volatiles.get("encore_move") or "")
             if encored and move_key != encored:
                 self.log.append(f"{mon.display} 被再来一次逼着使用 {self._move_zh(encored)}!")
@@ -1239,15 +1319,30 @@ class Battle:
             self.log.append(f"{mon.display} 虽然混乱,但还是使出了招式!")
             self._dec_volatile(mon, "confusion")
 
-        if not called:
+        if not called and not extra:
             self.log.append(f"{mon.display} 使用了 {self._move_zh(move_key)}!")
 
-        # PP(借来的招式不扣 PP,但仍记为“最后使用的招式”)
+        # PP(借来的/范围招式的后续目标不扣 PP,但仍记为“最后使用的招式”)
         if called:
             mon.last_move = move_key
+        elif extra:
+            pass
         else:
             self._spend_pp(mon, move_key)
-        self._last_move_any = move_key
+        if not extra:
+            self._last_move_any = move_key
+
+        # 广域防守 / 快速防守:守住整个场地
+        tgt_side = self._side_of(foe)
+        if not extra and entry.get("target") not in ("self", "allySide", "allyTeam"):
+            if "wideguard" in tgt_side.screens and str(entry.get("target") or "") in (
+                "allAdjacent", "allAdjacentFoes", "all"
+            ):
+                self.log.append(f"{foe.display} 一侧被广域防守保护,范围招式被挡下了!")
+                return
+            if "quickguard" in tgt_side.screens and int(entry.get("priority", 0) or 0) > 0:
+                self.log.append(f"{foe.display} 一侧被快速防守保护,先制招式被挡下了!")
+                return
 
         # 保护(尖刺防守/碉堡/线阱……附带接触惩罚)
         if foe.volatiles.get("protect") and entry.get("target") not in ("self", "allySide", "allyTeam"):
@@ -1743,6 +1838,8 @@ class Battle:
         for _hit in range(hits):
             crit = self._is_crit(mon, entry)
             damage = self._calc_damage(mon, foe, move_key, entry, power, mtype, eff, crit)
+            if self._spread_multi and hits == 1:
+                damage = max(1, int(damage * 0.75))     # 范围招式打到多只:威力略降(正作)
             # 挺住 / 气息腰带 / 结实(只有被一击打倒时才触发)
             if damage >= foe.cur_hp and foe.volatiles.get("endure"):
                 foe.volatiles.pop("endure", None)
@@ -1965,12 +2062,44 @@ class Battle:
 
         return max(1, math.floor(base * mods))
 
+    def _eat_berry(self, mon: Pokemon) -> None:
+        """茶会/大快朵颐/回收利用共用:吃掉手上的树果。"""
+        item = mon.item
+        if not item or "berry" not in item:
+            return
+        eff = (ITEMS.get(item) or {}).get("effect") or {}
+        mon.volatiles["_eaten_berry"] = item
+        mon.item = ""
+        heal_hp = int(eff.get("heal_hp", 0) or 0)
+        heal_frac = eff.get("heal")
+        if heal_frac is None:
+            frac = (eff.get("on_low_hp") or {}).get("heal")
+            heal_frac = frac if mon.hp_frac() <= 0.5 else None
+        cured = eff.get("cure_status")
+        if heal_hp:
+            healed = mon.heal(heal_hp)
+            self.log.append(f"{mon.display} 吃掉了 {self._item_zh(item)},回复了 {healed} HP!")
+        elif heal_frac:
+            healed = mon.heal(max(1, int(mon.max_hp * float(heal_frac))))
+            self.log.append(f"{mon.display} 吃掉了 {self._item_zh(item)},回复了 {healed} HP!")
+        elif cured and mon.status:
+            mon.status = ""
+            mon.status_turns = 0
+            self.log.append(f"{mon.display} 吃掉了 {self._item_zh(item)},异常状态被治愈了!")
+        else:
+            self.log.append(f"{mon.display} 吃掉了 {self._item_zh(item)}!")
+
     def _effective_power(self, mon, foe, move_key: str, entry: dict) -> float:
         power = float(entry.get("basePower", 0) or 0)
+        # 帮助:队友鼓劲,这一招威力 ×1.5(用完即消)
+        if mon.volatiles.get("helpinghand"):
+            mon.volatiles.pop("helpinghand", None)
+            self.log.append(f"{mon.display} 受到队友的帮助,威力提升了!")
+            power *= 1.5
         # ── 数据里 basePower=0、需要按状态计算的招式 ──
         # 这几类旧实现直接算成 0 威力:命中但 0 伤害,玩家白丢回合。
         if move_key in ("counter", "mirrorcoat", "metalburst"):
-            mine = "player" if self.player.mon is mon else "enemy"
+            mine = self._side_key_of(mon)
             taken = int(self._taken.get(mine, 0) or 0)
             mult = 1.5 if move_key == "metalburst" else 2.0
             return max(1.0, taken * mult)
@@ -2049,17 +2178,17 @@ class Battle:
                 power *= 2
         elif move_key in ("avalanche", "revenge"):
             # 这两招的语义确实是"本回合内自己被打过"
-            hurt = self.player_damaged if self.player.mon is mon else self.enemy_damaged
+            hurt = self.player_damaged if self._side_key_of(mon) == "player" else self.enemy_damaged
             if hurt:
                 power *= 2
         elif move_key == "payback":
             # 报复:本回合**后手**使出时威力翻倍(不是"自己被打过")
-            mine = "player" if self.player.mon is mon else "enemy"
+            mine = self._side_key_of(mon)
             if mine == getattr(self, "_second_mover_side", ""):
                 power *= 2
         elif move_key == "assurance":
             # 保证:目标在本回合已经受过伤害才翻倍
-            hurt = self.enemy_damaged if self.player.mon is mon else self.player_damaged
+            hurt = self.enemy_damaged if self._side_key_of(mon) == "player" else self.player_damaged
             if hurt:
                 power *= 2
         elif (move_key == "weatherball" and self.weather) or (move_key == "terrainpulse" and self.terrain) or (move_key == "risingvoltage" and self.terrain == "electricterrain"):
@@ -2087,7 +2216,7 @@ class Battle:
         if move_key == "psywave":
             return max(1, int(mon.level * self._rng(11).uniform(0.5, 1.5)))
         if move_key == "comeuppance":
-            mine = "player" if self.player.mon is mon else "enemy"
+            mine = self._side_key_of(mon)
             return max(1, int(int(self._taken.get(mine, 0) or 0) * 1.5))
         return None
 
@@ -2111,11 +2240,15 @@ class Battle:
             else:
                 self.log.append(f"{mon.display} 的 HP 已经全满了!")
         if move_key == "lifedew":
-            healed = mon.heal(max(1, mon.max_hp // 4))
-            self.log.append(
-                f"{mon.display} 回复了 {healed} HP!" if healed
-                else f"{mon.display} 的 HP 已经全满了!"
-            )
+            targets = [mon, *( [self._ally_of(side, mon)] if self.doubles else [] )]
+            for p in targets:
+                if p is None:
+                    continue
+                healed = p.heal(max(1, p.max_hp // 4))
+                self.log.append(
+                    f"{p.display} 回复了 {healed} HP!" if healed
+                    else f"{p.display} 的 HP 已经全满了!"
+                )
             return
         if move_key == "rest" and mon.cur_hp >= mon.max_hp:
             self.log.append(f"{mon.display} 的 HP 已经全满了,睡不着!")
@@ -2214,12 +2347,83 @@ class Battle:
             else:
                 self.log.append("但是没有能回收的道具。")
             return
-        # 队友向的招式:单打里没有合法目标(正作里也大多会失败)
+        # 队友向的招式:双打里真的有用(帮助/治愈波动/看我嘛/位置交换……),单打才没对象
         if move_key in ("healpulse", "floralhealing", "junglehealing", "helpinghand",
                         "followme", "ragepowder", "allyswitch", "magneticflux",
-                        "teatime", "instruct", "purify", "sketch",
-                        "quickguard", "wideguard"):
-            self.log.append(f"{self._move_zh(move_key)} 是队友向招式,单打里没有效果。")
+                        "teatime", "instruct", "purify", "quickguard", "wideguard",
+                        "sketch"):
+            if move_key in ("quickguard", "wideguard"):
+                side.screens[move_key] = 1
+                self.log.append(
+                    "我方展开了广域防守,范围招式打不进来!" if move_key == "wideguard"
+                    else "我方展开了快速防守,先制招式打不进来!"
+                )
+                return
+            if move_key == "followme":
+                mon.volatiles["followme"] = 1
+                self.log.append(f"{mon.display} 跳了出来,吸引了对手的注意力!")
+                return
+            if move_key == "ragepowder":
+                mon.volatiles["followme"] = 1
+                self.log.append(f"{mon.display} 撒出愤怒粉,对手只能打它!")
+                return
+            if move_key == "sketch":
+                self.log.append("写生:本引擎里不能永久复制对手的招式。")
+                return
+            partner = self._ally_of(side, mon) if self.doubles else None
+            if partner is None:
+                self.log.append(
+                    "没有能配合的队友,招式没有效果。" if self.doubles
+                    else f"{self._move_zh(move_key)} 是队友向招式,单打里没有效果。"
+                )
+                return
+            if move_key == "helpinghand":
+                partner.volatiles["helpinghand"] = 1
+                self.log.append(f"{mon.display} 为 {partner.display} 鼓劲,下一招威力提升!")
+            elif move_key == "healpulse":
+                healed = partner.heal(max(1, partner.max_hp // 2))
+                self.log.append(f"{partner.display} 回复了 {healed} HP!")
+            elif move_key == "floralhealing":
+                frac = 2 / 3 if self.terrain == "grassyterrain" else 0.5
+                healed = partner.heal(max(1, int(partner.max_hp * frac)))
+                self.log.append(f"{partner.display} 回复了 {healed} HP!")
+            elif move_key == "junglehealing":
+                healed = partner.heal(max(1, partner.max_hp // 4))
+                if partner.status:
+                    partner.status = ""
+                    partner.status_turns = 0
+                self.log.append(f"{partner.display} 回复了 {healed} HP,异常状态也消除了!")
+            elif move_key == "magneticflux":
+                for p in (mon, partner):
+                    for st in ("def", "spd"):
+                        msg = p.boost(st, 1)
+                        if msg:
+                            self.log.append(msg)
+                self.log.append("磁场操控:我方防御与特防提升了!")
+            elif move_key == "purify":
+                if partner.status:
+                    partner.status = ""
+                    partner.status_turns = 0
+                    self.log.append(f"{partner.display} 的异常状态被净化了!")
+                healed = mon.heal(max(1, mon.max_hp // 2))
+                self.log.append(f"{mon.display} 回复了 {healed} HP!")
+            elif move_key == "instruct":
+                last = str(partner.last_move or "")
+                if last and last in partner.moves:
+                    self.log.append(f"{mon.display} 指挥 {partner.display} 再来一次!")
+                    self._execute_move(side, foe_side, {"type": "move", "move": last},
+                                       called=True, mon=partner,
+                                       foe=self._target if self._target is not foe else foe)
+                else:
+                    self.log.append("但是没有能指挥的招式。")
+            elif move_key == "teatime":
+                self.log.append("茶会开始了,大家吃起了携带的树果!")
+                for side_x in (self.player, self.enemy):
+                    for p in side_x.mons:
+                        self._eat_berry(p)
+            elif move_key == "allyswitch":
+                side.active, side.ally_active = side.ally_active, side.active
+                self.log.append(f"{mon.display} 与 {partner.display} 交换了位置!")
             return
         # 本来就是“什么都不发生”的趣味招式
         if move_key in ("splash", "celebrate", "happyhour", "holdhands"):
@@ -2379,8 +2583,12 @@ class Battle:
             self.log.append(f"{foe.display} 被沥青粘住,变得怕火了!")
             return
         if move_key == "dragoncheer":
-            mon.volatiles["focusenergy"] = 1     # 单打里就是给自己加会心
-            mon.volatiles["dragoncheer"] = 1
+            cheer = [mon] + ([self._ally_of(side, mon)] if self.doubles else [])
+            for p in cheer:
+                if p is None:
+                    continue
+                p.volatiles["focusenergy"] = 1
+                p.volatiles["dragoncheer"] = 1
             self.log.append(f"{mon.display} 受到龙声鼓舞,容易命中要害了!")
             return
         if move_key == "stockpile":
@@ -2951,10 +3159,10 @@ class Battle:
                     side.screens[k] -= 1
                 if side.screens[k] <= 0:
                     del side.screens[k]
-            mon = side.mon
-            if mon is None or mon.fainted:
-                continue
-            self._end_turn_mon(side, mon)
+            for mon in side.mons:
+                if mon is None or mon.fainted:
+                    continue
+                self._end_turn_mon(side, mon)
 
     def _end_turn_mon(self, side: Side, mon: Pokemon) -> None:
         if mon.fainted:
@@ -3084,27 +3292,32 @@ class Battle:
         for _ in range(12):
             round_faint = False
             for side, tag in ((self.player, "我方"), (self.enemy, "对方")):
-                mon = side.mon
-                if mon and mon.fainted and not mon.faint_logged:
-                    mon.faint_logged = True
-                    round_faint = True
-                    any_faint = True
-                    self.log.append(f"{tag} {mon.display} 倒下了!")
+                for mon in side.mons:
+                    if mon.fainted and not mon.faint_logged:
+                        mon.faint_logged = True
+                        round_faint = True
+                        any_faint = True
+                        self.log.append(f"{tag} {mon.display} 倒下了!")
             if not round_faint:
                 break
             # 双方最后一只同时倒下时判**玩家胜**(正作规则):所以先检查对手,
             # 旧顺序先处理玩家 → 反作用力同归于尽会被判失败。
             for side in (self.enemy, self.player):
+                if not side.alive():
+                    if not self.finished:
+                        if side is self.enemy and not self.player.alive():
+                            # 同归于尽:算玩家赢
+                            self._finish(self.enemy)
+                        else:
+                            self._finish(side)
+                    continue
+                if self.doubles:
+                    # 双打:倒下的位置自动补后备(没后备就空着,另一边继续打)
+                    self._refill_side(side)
+                    continue
                 mon = side.mon
                 if mon and mon.fainted:
-                    if not side.alive():
-                        if not self.finished:
-                            if side is self.enemy and not self.player.alive():
-                                # 同归于尽:算玩家赢
-                                self._finish(self.enemy)
-                            else:
-                                self._finish(side)
-                    elif side is self.player:
+                    if side is self.player:
                         self.awaiting_switch = True
                     else:
                         nxt = side.healthy()
@@ -3113,6 +3326,30 @@ class Battle:
             if self.finished:
                 break
         return any_faint
+
+    def _refill_side(self, side: Side) -> None:
+        """双打:给倒下的槽位补上后备宝可梦(原地留着已倒下的那只就不动)。
+
+        合作双打里优先补**同一主人**的宝可梦 —— 否则队友的倒下会把你的后排
+        拽上场(玩家会觉得“我的宝可梦怎么自己出来了”)。
+        """
+        busy = {side.active, side.ally_active}
+        for slot in ("main", "ally"):
+            mon = side.slot_mon(slot)
+            if mon is None or not mon.fainted:
+                continue
+            idx_now = side.ally_active if slot == "ally" else side.active
+            owner = side.owners[idx_now] if 0 <= idx_now < len(side.owners) else ""
+
+            def same_owner(i: int, _owner: str = owner) -> bool:
+                return bool(_owner) and 0 <= i < len(side.owners) and side.owners[i] == _owner
+
+            pool = [i for i in side.healthy() if i not in busy]
+            nxt = [i for i in pool if same_owner(i)] or pool
+            if not nxt:
+                continue
+            busy.add(nxt[0])
+            self._send_out(side, nxt[0], slot=slot)
 
     def _finish(self, loser: Side) -> None:
         self.finished = True
@@ -3186,6 +3423,277 @@ class Battle:
 
     def _ignores_ability(self, attacker: Pokemon) -> bool:
         return attacker.has_ability("mold-breaker", "teravolt", "turboblaze")
+
+    # ── 双打(2v2)───────────────────────────────────────────────
+    def _legal_moves(self, mon: Pokemon, foe: Pokemon) -> list[str]:
+        """AI 可用招式(受定身法/再来一次/无理取闹/封印/PP 限制)。"""
+        dex = get_dex()
+        encored = str(mon.volatiles.get("encore_move") or "") if mon.volatiles.get("encore") else ""
+        out = []
+        for mk in mon.moves:
+            entry = dex.moves.get(mk)
+            if entry is None:
+                continue
+            if encored and mk != encored:
+                continue
+            if mon.volatiles.get("disable") and mon.volatiles.get("disable_move") == mk:
+                continue
+            if mon.volatiles.get("torment") and mon.last_move == mk:
+                continue
+            if foe.volatiles.get("imprison") and mk in foe.moves:
+                continue
+            if int(mon.pp.get(mk, (entry.get("pp", 10) or 10)) or 0) <= 0:
+                continue
+            out.append(mk)
+        return out
+
+    def _doubles_followme(self, side: Side) -> Pokemon | None:
+        """对手一侧有没有“看我嘛/愤怒粉”在拉仇恨。"""
+        for mon in self._foe_of(side).mons:
+            if not mon.fainted and mon.volatiles.get("followme"):
+                return mon
+        return None
+
+    def ai_action_doubles(self, slot: str = "main") -> dict:
+        """双打 AI:在“招式 × 目标”里挑分最高的一组。"""
+        side, foe_side = self.enemy, self.player
+        mon = side.slot_mon(slot)
+        foes = [m for m in foe_side.mons if not m.fainted]
+        if mon is None or mon.fainted or not foes:
+            return {"type": "move", "move": (mon.moves[0] if mon and mon.moves else ""), "slot": slot}
+        dex = get_dex()
+        best: tuple[float, str, str] = (-1.0, "", "")
+        for mk in self._legal_moves(mon, foes[0]):
+            entry = dex.moves.get(mk) or {}
+            data_t = str(entry.get("target") or "")
+            spread = data_t in ("allAdjacentFoes", "allAdjacent", "all")
+            for foe in foes:
+                if entry.get("category") == "Status":
+                    score = 40.0 if (mk not in ("protect",) or self.turn <= 1) else 10.0
+                else:
+                    power = float(entry.get("basePower", 0) or 0) or 60
+                    mtype = self._move_type(mon, entry, mk)
+                    eff = dex.type_multiplier(mtype, foe.types)
+                    stab = 1.5 if mtype in mon.original_types else 1.0
+                    score = power * eff * stab * (1 + 0.1 * int(entry.get("priority", 0) or 0))
+                    if eff > 1 and foe.hp_frac() < 0.35:
+                        score *= 1.5
+                    if spread:
+                        score *= 1.2          # 能扫到两只,稍微偏心一点
+                if score > best[0]:
+                    best = (score, mk, "foe_main" if foe is foe_side.mon else "foe_ally")
+        move_key = best[1] or (mon.moves[0] if mon.moves else "")
+        target = best[2] or "foe_main"
+        data_t = str((dex.moves.get(move_key) or {}).get("target") or "")
+        decoy = self._doubles_followme(side)
+        if decoy is not None and data_t not in ("allAdjacent", "allAdjacentFoes", "all", "self", "ally", "allySide", "allyTeam"):
+            target = "foe_main" if decoy is foe_side.mon else "foe_ally"
+        action: dict = {"type": "move", "move": move_key, "slot": slot, "target": target}
+        if (
+            not side.tera_used
+            and mon.tera_type
+            and self.turn >= 2
+            and mon.tera_type in mon.original_types
+            and foes[0].hp_frac() < 0.5
+        ):
+            action["tera"] = True
+        if not side.mega_used and mega_target_for(mon.species, mon.item, mon.moves):
+            action["mega"] = True
+        return action
+
+    def _ai_actions(self) -> list[dict]:
+        """对手侧两只的行动(单打时只有主位)。"""
+        slots = ("main", "ally") if self.doubles else ("main",)
+        out = []
+        for slot in slots:
+            mon = self.enemy.slot_mon(slot)
+            if mon is None or mon.fainted:
+                continue
+            if self.doubles:
+                out.append(self.ai_action_doubles(slot))
+            else:
+                act = self.ai_action()
+                act["slot"] = slot
+                out.append(act)
+        return out
+
+    def _ally_of(self, side: Side, mon: Pokemon | None) -> Pokemon | None:
+        """该侧另一只场上宝可梦(单打/没有队友时为 None)。
+
+        优先用本回合指定的目标(`self._target`)—— 治愈波动/帮助这类得能指向队友。
+        """
+        tgt = self._target
+        if tgt is not None and tgt is not mon and not tgt.fainted and self._side_of(tgt) is side:
+            return tgt
+        if not self.doubles:
+            return None
+        for other in side.mons:
+            if other is not mon and not other.fainted:
+                return other
+        return None
+
+    def _doubles_targets(self, side: Side, mon: Pokemon, act: dict) -> list[tuple[Side, Pokemon]]:
+        """算出这个招式到底会打到谁。
+
+        关键:正作的“allAdjacent”(地震/冲浪/放电……)在双打里**连队友一起打**,
+        “allAdjacentFoes”(热风/岩崩)只打对手 —— 友伤也会真的结算伤害/免疫/特性。
+        """
+        foe_side = self._foe_of(side)
+        entry = get_dex().moves.get(str(act.get("move") or "")) or {}
+        data_t = str(entry.get("target") or "")
+        foes = [m for m in foe_side.mons if not m.fainted]
+        own = [m for m in side.mons if m is not mon and not m.fainted]
+        if data_t in ("allAdjacent", "all"):
+            pool = foes + own                     # ← 友伤
+        elif data_t == "allAdjacentFoes":
+            pool = list(foes)
+        elif data_t in ("allySide", "allyTeam", "ally"):
+            pool = list(own) if own else ([mon] if data_t == "ally" else [])
+        elif data_t == "self":
+            pool = [mon]
+        else:
+            want = str(act.get("target") or "")
+            pick: Pokemon | None = None
+            if want == "foe_ally":
+                pick = foe_side.ally
+            elif want == "foe_main":
+                pick = foe_side.mon
+            elif want == "ally_main":
+                pick = next((m for m in own), None)
+            elif want == "self":
+                pick = mon
+            if pick is None or pick.fainted or pick is mon:
+                decoy = self._doubles_followme(side) if self.doubles else None
+                pick = decoy or next((m for m in foes if not m.fainted), None)
+            pool = [pick] if pick is not None and not pick.fainted else []
+        # 看我嘛 / 愤怒粉:把对手的单体招式拽到自己身上(双打才有效)
+        if self.doubles and data_t not in ("allAdjacent", "allAdjacentFoes", "all", "self",
+                                           "allySide", "allyTeam", "ally"):
+            decoy = self._doubles_followme(side)
+            if decoy is not None:
+                pool = [decoy]
+        return [(self._side_of(t), t) for t in pool]
+
+    def step_doubles(self, player_actions: list[dict],
+                     enemy_actions: list[dict] | str | None = None) -> list[str]:
+        """推进一回合,双方各有最多两只宝可梦同时行动。
+
+        `player_actions` 每项:
+            {"type": "move", "move": "surf", "slot": "main"|"ally",
+             "target": "foe_main"|"foe_ally"|"ally_main"|"self"}
+            {"type": "switch", "index": 3, "slot": "ally"}
+            {"type": "forfeit"}
+        合作双打里 `player_actions` 可以来自两位玩家(各交自己的那只)。
+        """
+        if self.finished:
+            return ["战斗已经结束。"]
+        self.log = []
+        if enemy_actions is None or enemy_actions == "auto":
+            enemy_actions = self._ai_actions()
+        acts: list[tuple[Side, Side, dict]] = []
+        for raw_side, raw in ((self.player, player_actions), (self.enemy, enemy_actions)):
+            for act in (raw or []):
+                act = dict(act or {})
+                act["slot"] = "ally" if str(act.get("slot")) == "ally" else "main"
+                actor = raw_side.slot_mon(act["slot"])
+                if actor is None or actor.fainted:
+                    continue
+                acts.append((raw_side, self._foe_of(raw_side), act))
+        if not acts:
+            return ["双方都没有能行动的宝可梦。"]
+
+        self.turn += 1
+        self._taken = {"player": 0, "enemy": 0}
+        self._rng_calls = 0
+        self.player_damaged = False
+        self.enemy_damaged = False
+        for side in (self.player, self.enemy):
+            for mon in side.mons:
+                mon.volatiles.pop("protect", None)
+                mon.volatiles.pop("flinch", None)
+                mon.volatiles.pop("endure", None)
+                mon.volatiles.pop("followme", None)
+
+        # Mega / 太晶:出招前(不占出手权)
+        for side, _foe_side, act in acts:
+            if act.get("type") != "move":
+                continue
+            if act.get("tera"):
+                self._terastallize(side)
+            if act.get("mega"):
+                self.mega_evolve(side)
+
+        # 换人先行;认输直接结束
+        moves: list[tuple[Side, Side, dict]] = []
+        for side, _foe_side, act in acts:
+            kind = act.get("type")
+            if kind == "switch":
+                self._do_switch(side, int(act.get("index", 0)), slot=act["slot"])
+            elif kind == "forfeit":
+                self.finished = True
+                self.winner = "enemy" if side is self.player else "player"
+                self.log.append("我方主动认输,战斗结束。" if side is self.player else "对方认输了!")
+                return list(self.log)
+            elif kind == "move":
+                moves.append((side, _foe_side, act))
+        self._check_faints()
+        if self.finished:
+            return list(self.log)
+
+        # 出手顺序:优先度 > 速度(戏法空间反转);您先请/延后 ±10
+        def _key(item: tuple[Side, Side, dict]) -> tuple[int, int]:
+            side, _foe, act = item
+            mon = side.slot_mon(act["slot"])
+            prio = self._action_priority(act, side, act["slot"])
+            if mon is not None:
+                if mon.volatiles.get("move_next"):
+                    prio += 10
+                if mon.volatiles.get("move_last"):
+                    prio -= 10
+            spe = self._doubles_speed(mon)
+            return (-prio, -spe)
+
+        for side, _foe_side, act in sorted(moves, key=_key):
+            if self.finished:
+                break
+            actor = side.slot_mon(act["slot"])
+            if actor is None or actor.fainted:
+                continue          # 已经在这一回合里被打倒 → 动不了
+            targets = self._doubles_targets(side, actor, act)
+            if not targets:
+                # 没有合法目标(比如单体招式对面空场):照样报一句,不白吞回合
+                self.log.append(f"{actor.display} 使用了 {self._move_zh(str(act.get('move') or ''))}!")
+                self.log.append("但是没有目标,招式放空了。")
+                continue
+            for i, (tgt_side, tgt) in enumerate(targets):
+                if self.finished:
+                    break
+                actor = side.slot_mon(act["slot"])
+                if actor is None or actor.fainted:
+                    break
+                if tgt.fainted:
+                    continue
+                self._execute_move(side, tgt_side, act, mon=actor, foe=tgt,
+                                   extra=i > 0, spread_multi=len(targets) > 1)
+                self._check_faints()
+                if self.finished:
+                    break
+            if self.finished:
+                break
+
+        if not self.finished:
+            self._tick_end_of_turn()
+            self._check_faints()
+            self._check_stall()
+        return list(self.log)
+
+    def _doubles_speed(self, mon: Pokemon | None) -> int:
+        if mon is None:
+            return 0
+        spe = int(mon.battle_stat("spe", self))
+        if "trickroom" in self.field_effects:
+            spe = -spe
+        return spe
 
 
 # ──────────────────────────── 辅助函数 ────────────────────────────
