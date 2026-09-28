@@ -141,3 +141,56 @@ def test_events_with_effects_are_registered_and_trigger():
         hit2 = p._maybe_rare(t, state, {"kind": "rare"}, _Always(),
                              {"species": "tentacool", "zh": "玛瑙水母", "level": 22})
         assert hit2.get("species"), hit2
+
+
+def test_rocket_event_blocks_the_road_and_can_be_fought():
+    """「可疑的黑衣人」不只是文字:探索时会真的拦路开打。"""
+    tmp, p = _battle()
+    with tmp:
+        t = p._load(_Event())
+        t.data["battle"] = None
+        t.data["location"] = "kanto-vermilion-city"
+        p._save(t)
+        state = p._state(t.scope)
+        state.data.setdefault("events", []).append({
+            "id": "rk1", "kind": "rocket", "region": t.region,
+            "location": "kanto-vermilion-city", "trainer": "火箭队手下",
+            "team": [{"species": "koffing", "level": 12},
+                     {"species": "zubat", "level": 12}],
+            "until_day": state.day + 1, "created_day": state.day,
+        })
+        p.worlds.save(state.scope, state.data)
+
+        class _Rng:
+            def random(self):
+                return 0.0
+
+        got = p._maybe_rocket_event(p._load(_Event()), p._state(t.scope),
+                                    "kanto-vermilion-city", _Rng())
+        assert got is not None, "有黑衣人却没给出拦路队伍"
+        specs, meta = got
+        assert [s["species"] for s in specs] == ["koffing", "zubat"]
+        assert meta["kind"] == "rocket" and "火箭队手下" in meta["title"]
+        # 别的地点不该被拦
+        assert p._maybe_rocket_event(p._load(_Event()), p._state(t.scope),
+                                     "kanto-route-1", _Rng()) is None
+        # 没有 rocket 事件时也不会凭空冒出来
+        state2 = p._state(t.scope)
+        state2.data["events"] = []
+        p.worlds.save(state2.scope, state2.data)
+        assert p._maybe_rocket_event(p._load(_Event()), p._state(t.scope),
+                                     "kanto-vermilion-city", _Rng()) is None
+
+
+def test_blockade_really_stops_travel():
+    """「封锁中:枯叶市」必须真的走不过去(不是只显示一行字)。"""
+    from pw.world import WorldMap
+
+    tmp, p = _battle()
+    with tmp:
+        t = p._load(_Event())
+        world = WorldMap()
+        state = p._state(t.scope)
+        locked = {"vermilion-city": state.day + 1}
+        ok, msg = world.travel_check(t, "vermilion-city", locked_until=locked)
+        assert not ok and "封锁" in msg, (ok, msg)

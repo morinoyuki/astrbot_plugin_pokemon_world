@@ -76,6 +76,18 @@ ORGS = {
         "「实力……确实是我们输了。」对方摘下了头巾。",
     ),
 }
+ORG_GRUNT = {
+    "rocket": "火箭队手下", "aqua": "水舰队手下", "magma": "火岩队手下",
+    "galactic": "银河队手下", "plasma": "等离子队手下", "flare": "闪焰队手下",
+    "skull": "骷髅队手下", "yell": "呐喊队手下", "star": "天星队手下",
+}
+
+
+def grunt_for(region: str) -> str:
+    """这个地区的反派杂兵称呼(没有记录就退回火箭队手下)。"""
+    org = REGION_ORG.get(str(region or "kanto"), "rocket")
+    return ORG_GRUNT.get(org, "火箭队手下")
+
 REGION_ORG = {
     "kanto": "rocket", "johto": "rocket", "hoenn": "aqua", "sinnoh": "galactic",
     "unova": "plasma", "kalos": "flare", "alola": "skull", "galar": "yell",

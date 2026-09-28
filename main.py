@@ -1585,6 +1585,17 @@ class PokemonWorldPlugin(Star):
 
             # ── 普通探索掷骰 ──
             roll = rng.random()
+            # 「可疑的黑衣人」拦路:rocket 事件真的会开打(约 35%)
+            _rocket = self._maybe_rocket_event(t, state, loc, rng)
+            if _rocket is not None and rng.random() < 0.35:
+                _specs, _rmeta = _rocket
+                _lines = B.start(t, _specs, kind="rocket", meta=_rmeta, day=state.day)
+                self._save(t)
+                _body = "\n".join(_lines[-4:])
+                async for r in self._emit_battle(event, t, _rmeta, _lines,
+                                                 text=_body, keep=_body):
+                    yield r
+                return
             wild_p = 0.55 * float(mods.get("encounter_mult", 1.0))
             npc_p = 0.15
             if ev and ev.get("kind") == "swarm":
@@ -5490,6 +5501,38 @@ class PokemonWorldPlugin(Star):
                 B.clear_finished(t)
                 self._save(t)
 
+    def _maybe_rocket_event(self, t: Trainer, state, loc: str, rng):
+        """「可疑的黑衣人」这类 rocket 事件:拦路开打的队伍(没有就 None)。
+
+        事件里本来就带好了 `trainer` 名字与 `team` 队伍,以前只当文字显示 ——
+        现在探索时会真的被他拦住。
+        """
+        ev = {}
+        try:
+            ev = state.event_at(loc) or {}
+        except Exception:
+            return None
+        if ev.get("kind") != "rocket":
+            return None
+        team = [x for x in (ev.get("team") or [])
+                if isinstance(x, dict) and x.get("species")]
+        if not team:
+            return None
+        lead = 5
+        if t.party:
+            try:
+                lead = int(t.party[0].get("level") or 5)
+            except Exception:
+                lead = 5
+        specs = [{"species": str(x["species"]),
+                  "level": max(2, min(100, int(x.get("level") or lead - 1)))}
+                 for x in team[:4]]
+        # 不写成泛泛的"黑衣人":按地区叫出真正的反派(火箭队/水舰队…)
+        name = str(ev.get("trainer") or banter.grunt_for(t.region))
+        meta = {"kind": "rocket", "title": f"{name} 挡住了去路!",
+                "trainer": name, "location": loc, "region": t.region,
+                "event": str(ev.get("id") or "")}
+        return specs, meta
     def _swarm_species(self, state, loc: str) -> str:
         """今天在这个地点“大量出现”(swarm)的物种;没有就返回空串。"""
         if not loc:
