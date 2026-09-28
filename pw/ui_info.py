@@ -625,8 +625,10 @@ def render_gotcha(mon: dict, *, ball_zh: str = "精灵球", ball_key: str = "",
     try:
         sc = Screen(scale=scale)
         mon = mon if isinstance(mon, dict) else {}
-        name = _str(mon.get("name"), "宝可梦")
+        # 名字里可能已经带了 ✨(复用 _mon_view);这里有自己的闪光标识,去掉避免叠两个
+        name = _str(mon.get("name"), "宝可梦").lstrip("✨ ") or "宝可梦"
         sp = _str(mon.get("species"))
+        shiny = bool(mon.get("shiny"))
 
         # ── 聚光灯 + 光芒(先画背景,再让标题条盖住上缘)──
         d = sc.d
@@ -640,15 +642,24 @@ def render_gotcha(mon: dict, *, ball_zh: str = "精灵球", ball_key: str = "",
                         int(cy + 92 * math.sin(a + 0.26)))], fill=RAY)
         d.ellipse([cx - 52, cy - 52, cx + 52, cy + 52], fill=SPOT_2, outline=BOX_EDGE)
         d.ellipse([cx - 44, cy - 44, cx + 44, cy + 44], fill=SPOT_1)
-        sc.sprite(sp, ground=(cx, cy + 32), factor=1.05, bounds=(80, 78))
+        sc.sprite(sp, ground=(cx, cy + 32), factor=1.05, bounds=(80, 78),
+                  shiny=shiny)
 
-        sc.title_bar("捕获成功!", right=_str(ball_zh, "精灵球"))
+        if shiny:
+            # 闪光捕获:聚光灯再加一圈金色,标题也好一眼看出与众不同
+            d.ellipse([cx - 46, cy - 46, cx + 46, cy + 46], outline=(246, 206, 84),
+                      width=2)
+        title = "✨ 闪光·捕获成功!" if shiny else "捕获成功!"
+        sc.title_bar(title, right=_str(ball_zh, "精灵球"))
 
         # ── 右侧资料卡 ──
         panel = (124, 19, 235, 120)
         sc.window(panel, radius=3)
-        sc.text(130, 22.5, f"获得了 {name}!", size=8.6, fill=TEXT)
-        sc.text(130, 34, _fit(sc, name, 100, 13), size=13, fill=(40, 88, 44))
+        sc.text(130, 22.5,
+                f"✨ 获得了闪光(异色){name}!" if shiny else f"获得了 {name}!",
+                size=8.6, fill=(196, 156, 24) if shiny else TEXT)
+        sc.text(130, 34, _fit(sc, name, 100, 13), size=13,
+                fill=(196, 156, 24) if shiny else (40, 88, 44))
         gender, gcolor = gender_symbol(_str(mon.get("gender")))
         gw = sc.tw(_fit(sc, name, 100, 13), 13)
         if gender:
@@ -672,7 +683,8 @@ def render_gotcha(mon: dict, *, ball_zh: str = "精灵球", ball_key: str = "",
         sc.text_center(189, 127, "收服", size=10, fill=STAMP_RED, stroke=0.4,
                        sfill=(250, 238, 226))
 
-        sc.footer("◆ 图鉴又厚了一点,继续收集吧!")
+        sc.footer("◆ 闪光个体稀有度极高,好好珍惜!" if shiny
+                  else "◆ 图鉴又厚了一点,继续收集吧!")
         return sc.finish()
     except Exception as e:  # 渲染失败回退文本
         logger.debug("宝可梦世界: 捕获界面渲染失败: %s", e)

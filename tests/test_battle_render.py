@@ -142,7 +142,8 @@ def test_back_sprite_actually_drawn_for_player(monkeypatch):
     foe = {"species": "blastoise", "name": "水箭龟", "level": 60,
            "cur_hp": 150, "max_hp": 150}
     with_back = br.render_battle(my, foe, ["测试"], scale=SCALE)
-    monkeypatch.setattr(br, "back_sprite_path", lambda key, base="": sprites.sprite_path(key))
+    monkeypatch.setattr(br, "back_sprite_path",
+                        lambda key, base="", **kw: sprites.sprite_path(key))
     with_front = br.render_battle(my, foe, ["测试"], scale=SCALE)
     assert with_back.startswith(b"\x89PNG") and with_front.startswith(b"\x89PNG")
     assert with_back != with_front, "我方精灵图没有随背面/正面切换而变化"

@@ -111,6 +111,25 @@ def _state_glyph(done: bool, current: bool) -> tuple[str, tuple[int, int, int]]:
     return "○", STATUS_OFF
 
 
+def _chain_window(order: list[str], current: str, limit: int) -> tuple[int, list[str]]:
+    """地图一次只画得下 limit 个节点:以当前位置为锚取窗口。
+
+    之前固定取 `order[:15]`,再把当前位置硬塞进最后一格 —— 于是**无论玩家走到哪,
+    地图永远只画地区开头那一段**。关都走到 7 号道路时,8 号道路之后的节点全被
+    裁掉,看起来像“关都就这么大、道馆只有两个”(用户实测反馈)。
+    现在左边只留 4 个刚走过的节点,其余空位全部给前方,地图随进度向前滚动。
+    """
+    total = len(order)
+    if limit <= 0 or total <= limit:
+        return 0, list(order)
+    try:
+        idx = order.index(current)
+    except ValueError:
+        idx = 0  # 查看其它地区 / 位置不在链上:从开头画
+    start = max(0, min(idx - 4, total - limit))
+    return start, order[start:start + limit]
+
+
 def _chain_keys(nodes: list[dict]) -> tuple[list[str], dict[str, list[str]]]:
     """布局顺序:优先用数据自带的 `order`(即真实的地区推进序)。
 
@@ -161,6 +180,56 @@ MAP_BOX = (5, 19, 150, 102)
 TOWN_TOP = 105
 
 
+def render_world_map(entries: list[dict], *, scale: int = SCALE_DEFAULT) -> bytes:
+    """世界地图:8 个地区一屏看完 —— 开放/通关状态、徽章进度、下一站。
+
+    `entries` 每项(由 main.py 组装):
+        {zh, order, unlocked, champion, badges, gyms, current, next_zh, prev_zh}
+    """
+    try:
+        sc = Screen(scale=scale)
+        rows = [dict(e) for e in (entries or []) if isinstance(e, dict)]
+        done = sum(1 for e in rows if e.get("champion"))
+        sc.title_bar("世界地图", right=f"通关 {done}/{len(rows)} 地区")
+        y0 = 19.0
+        row_h = 14.6
+        for i, e in enumerate(rows):
+            top = y0 + i * row_h
+            bot = top + row_h - 1.6
+            current = bool(e.get("current"))
+            unlocked = bool(e.get("unlocked"))
+            champion = bool(e.get("champion"))
+            sc.window((5, top, 235, bot), radius=2,
+                      edge=PIN_RED if current else BOX_EDGE,
+                      shadow=(i == 0), hi=False)
+            order = _to_int(e.get("order"), i + 1)
+            sc.text(10, top + 4.2, f"第{order}地区", size=6.4, fill=TEXT_DIM)
+            if current:
+                sc.d.ellipse([40, top + 4.2, 45, top + 9.2], fill=PIN_RED)
+            sc.text(47, top + 2.4, str(e.get("zh") or e.get("key") or "?"),
+                    size=8.4, fill=PIN_RED if current else (TEXT if unlocked else STATUS_OFF))
+            if champion:
+                status, color = f"已通关 {_to_int(e.get('gyms'), 8)}/{_to_int(e.get('gyms'), 8)}", GOLD
+            elif unlocked:
+                badges = _to_int(e.get("badges"))
+                gyms = _to_int(e.get("gyms"), 8)
+                nxt = str(e.get("next_zh") or "联盟")
+                status, color = f"徽章 {badges}/{gyms} · 下一站 {nxt}", DONE_GREEN
+            else:
+                status, color = f"未开放 · 需{_str_prev(e)}冠军", STATUS_OFF
+            sc.text_right(230, top + 4.4, _fit(sc, status, 110, 6.8), size=6.8,
+                          fill=color)
+        sc.footer("◆ 红框 = 你在这里 · 通关一个地区解锁下一个")
+        return sc.finish()
+    except Exception as e:  # 渲染永远不能把游戏搞崩
+        logger.debug("宝可梦世界: 世界地图渲染失败: %s", e)
+        return b""
+
+
+def _str_prev(entry: dict) -> str:
+    return str(entry.get("prev_zh") or "上一地区")
+
+
 def render_map(
     region_zh: str,
     nodes: list[dict],
@@ -170,9 +239,14 @@ def render_map(
     gyms: list[dict] | None = None,
     next_goal: str = "",
     region_order: int = 0,
+    badge_count: int = -1,
     scale: int = SCALE_DEFAULT,
 ) -> bytes:
-    """城镇地图:左上是节点地图(按 next 邻接排布),左下城镇列表,右侧资料栏。"""
+    """城镇地图:左上是节点地图窗口(随当前位置滚动),左下地点列表,右侧资料栏。
+
+    `badge_count` 是该地区的徽章数(本地区):标题栏会显示“徽章 2/8”,
+    避免只看得到一两个道馆城镇就以为地区只有这么多道馆。
+    """
     try:
         sc = Screen(scale=scale)
         nodes = [dict(n) for n in (nodes or []) if isinstance(n, dict)]
@@ -181,7 +255,10 @@ def render_map(
         region = str(region_zh or "?")
         cur_key = str(current or "")
 
-        sc.title_bar("镇地图", right=region)
+        gym_total = len(gym_locs) or 8
+        title_right = (f"{region} · 徽章 {int(badge_count)}/{gym_total}"
+                       if badge_count is not None and int(badge_count) >= 0 else region)
+        sc.title_bar("镇地图", right=title_right)
         # 宽度保持原样(左列到 150、右栏 153..235);溢出是**纵向**的:
         # 左下清单最后一行、右栏图例最后一行原本都贴着面板下边框。
         # 做法是把上面地图压矮 4px,把左下清单**加高** —— 而不是去动宽度。
@@ -203,9 +280,7 @@ def render_map(
         pos: dict[str, tuple[float, float]] = {}
         cols = 5
         # 3 行 × 5 列:第 4 行的节点名会压到下面的"地点"框上,所以只画 3 行
-        shown = list(order[: cols * 3])
-        if cur_key and cur_key not in shown and nodes:
-            shown[-1] = cur_key  # 当前位置必须可见,宁可不显示最后一个节点
+        shown_start, shown = _chain_window(order, cur_key, cols * 3)
         rows = max(1, (len(shown) + cols - 1) // cols)
         cw = (mx1 - mx0 - 8) / cols   # 左列收窄后 cw 自动跟着变
         # 每个节点占「标记 + 下方标签」两块,共 14 逻辑像素;ch 必须按"标记块"分配,
@@ -268,19 +343,28 @@ def render_map(
         if not nodes:
             sc.text(14, 42, "暂无地图数据。", size=8.5, fill=TEXT_DIM)
 
-        # 左下:城镇清单(最多 6 条,3 列 × 2 行)
+        # 左下:地点清单(最多 6 条,3 列 × 2 行)—— 也跟着玩家走,
+        # 显示“你在这里”前后几处,而不是地区最前面几个。
         sc.text(9, 107.5, "地点", size=7, fill=TEXT_DIM)
         if len(order) > len(shown):
-            sc.text_right(146, 107.5, f"图中前 {len(shown)}/{len(order)} 处", size=7,
+            end = shown_start + len(shown)
+            sc.text_right(146, 107.5, f"{shown_start + 1}-{end}/{len(order)} 处", size=7,
                           fill=TEXT_DIM)
+        try:
+            idx_cur = order.index(cur_key) if cur_key else 0
+        except ValueError:
+            idx_cur = 0
+        list_start = max(0, min(idx_cur - 2, max(0, len(order) - 6)))
+        slots = 5 if len(order) - list_start > 6 else 6
+        near = order[list_start:list_start + slots]
         disp: list[tuple[str, tuple[int, int, int]]] = []
-        for key in order[:6]:
+        for key in near:
             node = next((n for n in nodes if str(n.get("key")) == key), {})
             label = _fit(sc, str(node.get("zh") or key), 44, 7)
             color = PIN_RED if key == cur_key else (TEXT if key in visited_set else TEXT_DIM)
             disp.append((label, color))
-        if len(order) > 6:
-            disp = [*disp[:5], (f"+{len(order) - 5}", TEXT_DIM)]
+        if slots == 5:
+            disp.append((f"+{len(order) - (list_start + 5)}", TEXT_DIM))
         for i, (label, color) in enumerate(disp):
             col, row = i % 3, i // 3
             sc.text(9 + col * 46, 119 + row * 9.4, label, size=7, fill=color)

@@ -320,6 +320,7 @@ def fallback_player_event(trainer, day: int) -> dict:
         if not hit:
             return {"kind": "rumor", "title": "奇怪的梦", "desc": "", "day": day, "source": "fallback"}
         ev["species"] = hit["species"]
+        ev["shiny"] = bool(hit.get("shiny"))
         ev["level"] = int(hit["level"])
     return ev
 

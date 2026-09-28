@@ -144,9 +144,16 @@ def available() -> bool:
     return fonts.available()
 
 
-def sprite_for(species: str, *, back: bool = False, base: str = "") -> str:
-    """取本地精灵图;back=True 优先背面图。"""
-    return back_sprite_path(species, base) if back else sprite_path(species)
+# 这些目录里的图是「正面」(贴到我方时要水平镜像才像背面)
+_FRONT_DIRS = ("sprites", "sprites_shiny")
+
+
+def sprite_for(species: str, *, back: bool = False, base: str = "",
+               shiny: bool = False) -> str:
+    """取本地精灵图;back=True 优先背面图,shiny=True 优先闪光图。"""
+    if back:
+        return back_sprite_path(species, base, shiny=shiny)
+    return sprite_path(species, base, shiny=shiny)
 
 
 # ── 绘制辅助 ─────────────────────────────────────────────────────
@@ -700,13 +707,13 @@ def _paste_small(small, mon: dict, ground, *, factor: float, bounds, back: bool,
 
     cx, base_y = ground
     species = str(mon.get("species") or "")
-    path = sprite_for(species, back=back)
+    path = sprite_for(species, back=back, shiny=bool(mon.get("shiny")))
     img = _load_sprite(path, factor, bounds, final_scale=S)
     if img is None:
         img = _silhouette((max(1, round(bounds[0] * S)),
                            max(1, round(min(bounds[1], 48) * S))))
-    elif back and path and os.path.basename(os.path.dirname(path)) != "sprites_back":
-        # 退回正面图时镜像,近似"从背后看"的观感
+    elif back and path and os.path.basename(os.path.dirname(path)) in _FRONT_DIRS:
+        # 退回正面图(含闪光正面)时镜像,近似"从背后看"的观感
         img = ImageOps.mirror(img)
     if flip and not back:
         # 玩家对战:左侧用正面图水平翻转,好和右侧面对面

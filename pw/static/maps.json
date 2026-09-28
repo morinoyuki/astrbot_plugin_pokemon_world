@@ -27,8 +27,7 @@
      "tier": 1,
      "next": [
       "pallet-town",
-      "viridian-forest",
-      "viridian-city"
+      "viridian-forest"
      ],
      "hub": false
     },
@@ -39,6 +38,17 @@
      "tier": 1,
      "next": [
       "kanto-route-1",
+      "kanto-route-2"
+     ],
+     "hub": false
+    },
+    "kanto-route-2": {
+     "zh": "2号道路",
+     "kind": "route",
+     "order": 40,
+     "tier": 1,
+     "next": [
+      "viridian-forest",
       "viridian-city"
      ],
      "hub": false
@@ -46,25 +56,13 @@
     "viridian-city": {
      "zh": "常青市",
      "kind": "town",
-     "order": 40,
-     "tier": 1,
-     "next": [
-      "kanto-route-1",
-      "viridian-forest",
-      "kanto-route-2"
-     ],
-     "hub": true
-    },
-    "kanto-route-2": {
-     "zh": "2号道路",
-     "kind": "route",
      "order": 50,
      "tier": 1,
      "next": [
-      "viridian-city",
+      "kanto-route-2",
       "kanto-route-3"
      ],
-     "hub": false
+     "hub": true
     },
     "kanto-route-3": {
      "zh": "3号道路(关都)",
@@ -72,7 +70,7 @@
      "order": 60,
      "tier": 1,
      "next": [
-      "kanto-route-2",
+      "viridian-city",
       "kanto-route-4"
      ],
      "hub": false
@@ -95,51 +93,29 @@
      "tier": 1,
      "next": [
       "kanto-route-4",
-      "pattern-bush",
-      "pewter-city"
+      "kanto-route-6"
      ],
      "hub": false
     },
-    "pattern-bush": {
-     "zh": "标志之林",
-     "kind": "area",
+    "kanto-route-6": {
+     "zh": "6号道路(合众)",
+     "kind": "route",
      "order": 90,
      "tier": 1,
      "next": [
       "kanto-route-5",
-      "mt-moon"
-     ],
-     "hub": false
-    },
-    "mt-moon": {
-     "zh": "月见山",
-     "kind": "area",
-     "order": 100,
-     "tier": 1,
-     "next": [
-      "pattern-bush",
-      "rock-tunnel"
+      "rock-tunnel",
+      "pewter-city"
      ],
      "hub": false
     },
     "rock-tunnel": {
      "zh": "岩山隧道",
      "kind": "area",
-     "order": 110,
-     "tier": 2,
+     "order": 100,
+     "tier": 1,
      "next": [
-      "mt-moon",
-      "four-island"
-     ],
-     "hub": false
-    },
-    "four-island": {
-     "zh": "第四島",
-     "kind": "area",
-     "order": 120,
-     "tier": 2,
-     "next": [
-      "rock-tunnel",
+      "kanto-route-6",
       "pewter-city"
      ],
      "hub": false
@@ -147,33 +123,22 @@
     "pewter-city": {
      "zh": "深灰市",
      "kind": "town",
-     "order": 130,
+     "order": 110,
      "tier": 2,
      "next": [
-      "kanto-route-5",
-      "four-island",
-      "kanto-route-6"
-     ],
-     "hub": true
-    },
-    "kanto-route-6": {
-     "zh": "6号道路(合众)",
-     "kind": "route",
-     "order": 140,
-     "tier": 2,
-     "next": [
-      "pewter-city",
+      "kanto-route-6",
+      "rock-tunnel",
       "kanto-route-7"
      ],
-     "hub": false
+     "hub": true
     },
     "kanto-route-7": {
      "zh": "7号道路(合众)",
      "kind": "route",
-     "order": 150,
+     "order": 120,
      "tier": 2,
      "next": [
-      "kanto-route-6",
+      "pewter-city",
       "kanto-route-8"
      ],
      "hub": false
@@ -181,14 +146,44 @@
     "kanto-route-8": {
      "zh": "8號道路(阿羅拉)",
      "kind": "route",
-     "order": 160,
+     "order": 130,
      "tier": 2,
      "next": [
       "kanto-route-7",
-      "ss-anne",
-      "resort-gorgeous",
-      "kanto-safari-zone",
+      "kanto-route-9"
+     ],
+     "hub": false
+    },
+    "kanto-route-9": {
+     "zh": "9號道路(伽勒爾)",
+     "kind": "route",
+     "order": 140,
+     "tier": 2,
+     "next": [
+      "kanto-route-8",
       "cerulean-city"
+     ],
+     "hub": false
+    },
+    "cerulean-city": {
+     "zh": "华蓝市",
+     "kind": "town",
+     "order": 150,
+     "tier": 2,
+     "next": [
+      "kanto-route-9",
+      "kanto-route-10"
+     ],
+     "hub": true
+    },
+    "kanto-route-10": {
+     "zh": "10号道路(关都)",
+     "kind": "route",
+     "order": 160,
+     "tier": 2,
+     "next": [
+      "cerulean-city",
+      "ss-anne"
      ],
      "hub": false
     },
@@ -198,289 +193,7 @@
      "order": 170,
      "tier": 2,
      "next": [
-      "kanto-route-8",
-      "water-labyrinth"
-     ],
-     "hub": false
-    },
-    "water-labyrinth": {
-     "zh": "水之迷宫",
-     "kind": "area",
-     "order": 180,
-     "tier": 2,
-     "next": [
-      "ss-anne",
-      "kanto-altering-cave"
-     ],
-     "hub": false
-    },
-    "kanto-altering-cave": {
-     "zh": "变幻洞窟",
-     "kind": "area",
-     "order": 190,
-     "tier": 2,
-     "next": [
-      "water-labyrinth",
-      "memorial-pillar"
-     ],
-     "hub": false
-    },
-    "memorial-pillar": {
-     "zh": "回忆之塔",
-     "kind": "area",
-     "order": 200,
-     "tier": 2,
-     "next": [
-      "kanto-altering-cave",
-      "three-isle-port"
-     ],
-     "hub": false
-    },
-    "three-isle-port": {
-     "zh": "第三島碼頭",
-     "kind": "area",
-     "order": 210,
-     "tier": 2,
-     "next": [
-      "memorial-pillar",
-      "five-island"
-     ],
-     "hub": false
-    },
-    "five-island": {
-     "zh": "第五島",
-     "kind": "area",
-     "order": 220,
-     "tier": 3,
-     "next": [
-      "three-isle-port",
-      "resort-gorgeous"
-     ],
-     "hub": false
-    },
-    "resort-gorgeous": {
-     "zh": "豪华度假区",
-     "kind": "town",
-     "order": 230,
-     "tier": 3,
-     "next": [
-      "kanto-route-8",
-      "five-island",
-      "green-path",
-      "kanto-route-9"
-     ],
-     "hub": true
-    },
-    "green-path": {
-     "zh": "绿之步道",
-     "kind": "area",
-     "order": 240,
-     "tier": 3,
-     "next": [
-      "resort-gorgeous",
-      "one-island"
-     ],
-     "hub": false
-    },
-    "one-island": {
-     "zh": "第一島",
-     "kind": "area",
-     "order": 250,
-     "tier": 3,
-     "next": [
-      "green-path",
-      "outcast-island"
-     ],
-     "hub": false
-    },
-    "outcast-island": {
-     "zh": "外岛",
-     "kind": "area",
-     "order": 260,
-     "tier": 3,
-     "next": [
-      "one-island",
-      "digletts-cave"
-     ],
-     "hub": false
-    },
-    "digletts-cave": {
-     "zh": "地鼠洞穴",
-     "kind": "area",
-     "order": 270,
-     "tier": 3,
-     "next": [
-      "outcast-island",
-      "kanto-safari-zone"
-     ],
-     "hub": false
-    },
-    "kanto-safari-zone": {
-     "zh": "狩猎地带",
-     "kind": "town",
-     "order": 280,
-     "tier": 3,
-     "next": [
-      "kanto-route-8",
-      "digletts-cave",
-      "tanoby-ruins",
-      "kanto-route-9"
-     ],
-     "hub": true
-    },
-    "tanoby-ruins": {
-     "zh": "阿斯卡纳遗迹",
-     "kind": "area",
-     "order": 290,
-     "tier": 3,
-     "next": [
-      "kanto-safari-zone",
-      "trainer-tower"
-     ],
-     "hub": false
-    },
-    "trainer-tower": {
-     "zh": "训练家塔",
-     "kind": "area",
-     "order": 300,
-     "tier": 3,
-     "next": [
-      "tanoby-ruins",
-      "ruin-valley"
-     ],
-     "hub": false
-    },
-    "ruin-valley": {
-     "zh": "遗迹山谷",
-     "kind": "area",
-     "order": 310,
-     "tier": 3,
-     "next": [
-      "trainer-tower",
-      "pokemon-tower"
-     ],
-     "hub": false
-    },
-    "pokemon-tower": {
-     "zh": "宝可梦塔",
-     "kind": "area",
-     "order": 320,
-     "tier": 3,
-     "next": [
-      "ruin-valley",
-      "dilford-chamber"
-     ],
-     "hub": false
-    },
-    "dilford-chamber": {
-     "zh": "阿斯卡纳石室",
-     "kind": "area",
-     "order": 330,
-     "tier": 4,
-     "next": [
-      "pokemon-tower",
-      "liptoo-chamber"
-     ],
-     "hub": false
-    },
-    "liptoo-chamber": {
-     "zh": "阿斯卡纳石室",
-     "kind": "area",
-     "order": 340,
-     "tier": 4,
-     "next": [
-      "dilford-chamber",
-      "monean-chamber"
-     ],
-     "hub": false
-    },
-    "monean-chamber": {
-     "zh": "阿斯卡纳石室",
-     "kind": "area",
-     "order": 350,
-     "tier": 4,
-     "next": [
-      "liptoo-chamber",
-      "rixy-chamber"
-     ],
-     "hub": false
-    },
-    "rixy-chamber": {
-     "zh": "阿斯卡纳石室",
-     "kind": "area",
-     "order": 360,
-     "tier": 4,
-     "next": [
-      "monean-chamber",
-      "scufib-chamber"
-     ],
-     "hub": false
-    },
-    "scufib-chamber": {
-     "zh": "Scufib Chamber",
-     "kind": "area",
-     "order": 370,
-     "tier": 4,
-     "next": [
-      "rixy-chamber",
-      "viapos-chamber"
-     ],
-     "hub": false
-    },
-    "viapos-chamber": {
-     "zh": "Viapos Chamber",
-     "kind": "area",
-     "order": 380,
-     "tier": 4,
-     "next": [
-      "scufib-chamber",
-      "weepth-chamber"
-     ],
-     "hub": false
-    },
-    "weepth-chamber": {
-     "zh": "Weepth Chamber",
-     "kind": "area",
-     "order": 390,
-     "tier": 4,
-     "next": [
-      "viapos-chamber",
-      "cerulean-city"
-     ],
-     "hub": false
-    },
-    "cerulean-city": {
-     "zh": "华蓝市",
-     "kind": "town",
-     "order": 400,
-     "tier": 4,
-     "next": [
-      "kanto-route-8",
-      "weepth-chamber",
-      "kanto-route-9"
-     ],
-     "hub": true
-    },
-    "kanto-route-9": {
-     "zh": "9號道路(伽勒爾)",
-     "kind": "route",
-     "order": 410,
-     "tier": 4,
-     "next": [
-      "resort-gorgeous",
-      "kanto-safari-zone",
-      "cerulean-city",
-      "kanto-route-10"
-     ],
-     "hub": false
-    },
-    "kanto-route-10": {
-     "zh": "10号道路(关都)",
-     "kind": "route",
-     "order": 420,
-     "tier": 4,
-     "next": [
-      "kanto-route-9",
+      "kanto-route-10",
       "kanto-route-11"
      ],
      "hub": false
@@ -488,10 +201,10 @@
     "kanto-route-11": {
      "zh": "11号道路(合众)",
      "kind": "route",
-     "order": 430,
-     "tier": 4,
+     "order": 180,
+     "tier": 2,
      "next": [
-      "kanto-route-10",
+      "ss-anne",
       "kanto-route-12"
      ],
      "hub": false
@@ -499,121 +212,10 @@
     "kanto-route-12": {
      "zh": "12号道路(关都)",
      "kind": "route",
-     "order": 440,
-     "tier": 5,
+     "order": 190,
+     "tier": 2,
      "next": [
       "kanto-route-11",
-      "icefall-cave",
-      "vermilion-city"
-     ],
-     "hub": false
-    },
-    "icefall-cave": {
-     "zh": "冻瀑洞窟",
-     "kind": "area",
-     "order": 450,
-     "tier": 5,
-     "next": [
-      "kanto-route-12",
-      "treasure-beach"
-     ],
-     "hub": false
-    },
-    "treasure-beach": {
-     "zh": "宝物海滩",
-     "kind": "area",
-     "order": 460,
-     "tier": 5,
-     "next": [
-      "icefall-cave",
-      "five-isle-meadow"
-     ],
-     "hub": false
-    },
-    "five-isle-meadow": {
-     "zh": "第五島空地",
-     "kind": "area",
-     "order": 470,
-     "tier": 5,
-     "next": [
-      "treasure-beach",
-      "kindle-road"
-     ],
-     "hub": false
-    },
-    "kindle-road": {
-     "zh": "热气之路",
-     "kind": "area",
-     "order": 480,
-     "tier": 5,
-     "next": [
-      "five-isle-meadow",
-      "bond-bridge"
-     ],
-     "hub": false
-    },
-    "bond-bridge": {
-     "zh": "牵绊桥",
-     "kind": "area",
-     "order": 490,
-     "tier": 5,
-     "next": [
-      "kindle-road",
-      "cape-brink"
-     ],
-     "hub": false
-    },
-    "cape-brink": {
-     "zh": "边缘海岬",
-     "kind": "area",
-     "order": 500,
-     "tier": 5,
-     "next": [
-      "bond-bridge",
-      "berry-forest"
-     ],
-     "hub": false
-    },
-    "berry-forest": {
-     "zh": "樹果森林",
-     "kind": "area",
-     "order": 510,
-     "tier": 5,
-     "next": [
-      "cape-brink",
-      "seafoam-islands"
-     ],
-     "hub": false
-    },
-    "seafoam-islands": {
-     "zh": "双子岛",
-     "kind": "area",
-     "order": 520,
-     "tier": 5,
-     "next": [
-      "berry-forest",
-      "water-path"
-     ],
-     "hub": false
-    },
-    "water-path": {
-     "zh": "水之步道",
-     "kind": "area",
-     "order": 530,
-     "tier": 5,
-     "next": [
-      "seafoam-islands",
-      "birth-island"
-     ],
-     "hub": false
-    },
-    "birth-island": {
-     "zh": "诞生之岛",
-     "kind": "area",
-     "order": 540,
-     "tier": 5,
-     "next": [
-      "water-path",
       "vermilion-city"
      ],
      "hub": false
@@ -621,11 +223,10 @@
     "vermilion-city": {
      "zh": "枯叶市",
      "kind": "town",
-     "order": 550,
-     "tier": 6,
+     "order": 200,
+     "tier": 2,
      "next": [
       "kanto-route-12",
-      "birth-island",
       "kanto-route-13"
      ],
      "hub": true
@@ -633,8 +234,8 @@
     "kanto-route-13": {
      "zh": "13号道路(合众)",
      "kind": "route",
-     "order": 560,
-     "tier": 6,
+     "order": 210,
+     "tier": 2,
      "next": [
       "vermilion-city",
       "kanto-route-14"
@@ -644,8 +245,8 @@
     "kanto-route-14": {
      "zh": "14号道路(关都)",
      "kind": "route",
-     "order": 570,
-     "tier": 6,
+     "order": 220,
+     "tier": 3,
      "next": [
       "kanto-route-13",
       "kanto-route-15"
@@ -655,99 +256,21 @@
     "kanto-route-15": {
      "zh": "15號水路(阿羅拉)",
      "kind": "route",
-     "order": 580,
-     "tier": 6,
+     "order": 230,
+     "tier": 3,
      "next": [
       "kanto-route-14",
-      "lost-cave",
-      "celadon-city"
+      "kanto-route-16"
      ],
      "hub": false
     },
-    "lost-cave": {
-     "zh": "不归之穴",
-     "kind": "area",
-     "order": 590,
-     "tier": 6,
+    "kanto-route-16": {
+     "zh": "16號道路(阿羅拉)",
+     "kind": "route",
+     "order": 240,
+     "tier": 3,
      "next": [
       "kanto-route-15",
-      "mt-ember"
-     ],
-     "hub": false
-    },
-    "mt-ember": {
-     "zh": "灯火山",
-     "kind": "area",
-     "order": 600,
-     "tier": 6,
-     "next": [
-      "lost-cave",
-      "pokemon-mansion"
-     ],
-     "hub": false
-    },
-    "pokemon-mansion": {
-     "zh": "宝可梦屋",
-     "kind": "area",
-     "order": 610,
-     "tier": 6,
-     "next": [
-      "mt-ember",
-      "canyon-entrance"
-     ],
-     "hub": false
-    },
-    "canyon-entrance": {
-     "zh": "溪谷入口",
-     "kind": "area",
-     "order": 620,
-     "tier": 6,
-     "next": [
-      "pokemon-mansion",
-      "kanto-power-plant"
-     ],
-     "hub": false
-    },
-    "kanto-power-plant": {
-     "zh": "无人发电厂",
-     "kind": "area",
-     "order": 630,
-     "tier": 6,
-     "next": [
-      "canyon-entrance",
-      "sevault-canyon"
-     ],
-     "hub": false
-    },
-    "sevault-canyon": {
-     "zh": "七宝溪谷",
-     "kind": "area",
-     "order": 640,
-     "tier": 6,
-     "next": [
-      "kanto-power-plant",
-      "kanto-victory-road-1"
-     ],
-     "hub": false
-    },
-    "kanto-victory-road-1": {
-     "zh": "冠军之路",
-     "kind": "area",
-     "order": 650,
-     "tier": 6,
-     "next": [
-      "sevault-canyon",
-      "kanto-victory-road-2"
-     ],
-     "hub": false
-    },
-    "kanto-victory-road-2": {
-     "zh": "冠军之路",
-     "kind": "area",
-     "order": 660,
-     "tier": 7,
-     "next": [
-      "kanto-victory-road-1",
       "celadon-city"
      ],
      "hub": false
@@ -755,33 +278,32 @@
     "celadon-city": {
      "zh": "玉虹市",
      "kind": "town",
-     "order": 670,
-     "tier": 7,
+     "order": 250,
+     "tier": 3,
      "next": [
-      "kanto-route-15",
-      "kanto-victory-road-2",
-      "kanto-route-16"
-     ],
-     "hub": true
-    },
-    "kanto-route-16": {
-     "zh": "16號道路(阿羅拉)",
-     "kind": "route",
-     "order": 680,
-     "tier": 7,
-     "next": [
-      "celadon-city",
+      "kanto-route-16",
       "kanto-route-17"
      ],
-     "hub": false
+     "hub": true
     },
     "kanto-route-17": {
      "zh": "17号道路(关都)",
      "kind": "route",
-     "order": 690,
-     "tier": 7,
+     "order": 260,
+     "tier": 3,
      "next": [
-      "kanto-route-16",
+      "celadon-city",
+      "pokemon-tower"
+     ],
+     "hub": false
+    },
+    "pokemon-tower": {
+     "zh": "宝可梦塔",
+     "kind": "area",
+     "order": 270,
+     "tier": 3,
+     "next": [
+      "kanto-route-17",
       "kanto-route-18"
      ],
      "hub": false
@@ -789,10 +311,10 @@
     "kanto-route-18": {
      "zh": "18号道路(合众)",
      "kind": "route",
-     "order": 700,
-     "tier": 7,
+     "order": 280,
+     "tier": 3,
      "next": [
-      "kanto-route-17",
+      "pokemon-tower",
       "kanto-sea-route-19"
      ],
      "hub": false
@@ -800,22 +322,10 @@
     "kanto-sea-route-19": {
      "zh": "19号水路(关都)",
      "kind": "route",
-     "order": 710,
-     "tier": 7,
+     "order": 290,
+     "tier": 3,
      "next": [
       "kanto-route-18",
-      "cerulean-cave",
-      "saffron-city"
-     ],
-     "hub": false
-    },
-    "cerulean-cave": {
-     "zh": "华蓝洞窟",
-     "kind": "area",
-     "order": 720,
-     "tier": 7,
-     "next": [
-      "kanto-sea-route-19",
       "saffron-city"
      ],
      "hub": false
@@ -823,11 +333,10 @@
     "saffron-city": {
      "zh": "金黄市",
      "kind": "town",
-     "order": 730,
-     "tier": 7,
+     "order": 300,
+     "tier": 3,
      "next": [
       "kanto-sea-route-19",
-      "cerulean-cave",
       "kanto-sea-route-20"
      ],
      "hub": true
@@ -835,8 +344,8 @@
     "kanto-sea-route-20": {
      "zh": "20号水路(关都)",
      "kind": "route",
-     "order": 740,
-     "tier": 7,
+     "order": 310,
+     "tier": 3,
      "next": [
       "saffron-city",
       "kanto-sea-route-21"
@@ -846,10 +355,21 @@
     "kanto-sea-route-21": {
      "zh": "21号水路(关都)",
      "kind": "route",
-     "order": 750,
-     "tier": 7,
+     "order": 320,
+     "tier": 3,
      "next": [
       "kanto-sea-route-20",
+      "icefall-cave"
+     ],
+     "hub": false
+    },
+    "icefall-cave": {
+     "zh": "冻瀑洞窟",
+     "kind": "area",
+     "order": 330,
+     "tier": 4,
+     "next": [
+      "kanto-sea-route-21",
       "kanto-route-22"
      ],
      "hub": false
@@ -857,20 +377,20 @@
     "kanto-route-22": {
      "zh": "22号道路",
      "kind": "route",
-     "order": 760,
-     "tier": 7,
+     "order": 340,
+     "tier": 4,
      "next": [
-      "kanto-sea-route-21",
-      "kanto-underground-path",
+      "icefall-cave",
+      "mt-moon",
       "fuchsia-city"
      ],
      "hub": false
     },
-    "kanto-underground-path": {
-     "zh": "地下通道(5-6号道路)",
+    "mt-moon": {
+     "zh": "月见山",
      "kind": "area",
-     "order": 770,
-     "tier": 8,
+     "order": 350,
+     "tier": 4,
      "next": [
       "kanto-route-22",
       "fuchsia-city"
@@ -880,11 +400,11 @@
     "fuchsia-city": {
      "zh": "浅红市",
      "kind": "town",
-     "order": 780,
-     "tier": 8,
+     "order": 360,
+     "tier": 4,
      "next": [
       "kanto-route-22",
-      "kanto-underground-path",
+      "mt-moon",
       "kanto-route-23"
      ],
      "hub": true
@@ -892,8 +412,8 @@
     "kanto-route-23": {
      "zh": "23号道路(合众)",
      "kind": "route",
-     "order": 790,
-     "tier": 8,
+     "order": 370,
+     "tier": 4,
      "next": [
       "fuchsia-city",
       "kanto-route-24"
@@ -903,8 +423,8 @@
     "kanto-route-24": {
      "zh": "24号道路(关都)",
      "kind": "route",
-     "order": 800,
-     "tier": 8,
+     "order": 380,
+     "tier": 4,
      "next": [
       "kanto-route-23",
       "kanto-route-25"
@@ -914,8 +434,8 @@
     "kanto-route-25": {
      "zh": "25号道路(关都)",
      "kind": "route",
-     "order": 810,
-     "tier": 8,
+     "order": 390,
+     "tier": 4,
      "next": [
       "kanto-route-24",
       "kanto-route-26"
@@ -925,8 +445,8 @@
     "kanto-route-26": {
      "zh": "26号道路(关都)",
      "kind": "route",
-     "order": 820,
-     "tier": 8,
+     "order": 400,
+     "tier": 4,
      "next": [
       "kanto-route-25",
       "cinnabar-island"
@@ -936,33 +456,499 @@
     "cinnabar-island": {
      "zh": "红莲镇",
      "kind": "town",
-     "order": 830,
-     "tier": 8,
+     "order": 410,
+     "tier": 4,
      "next": [
       "kanto-route-26",
-      "kanto-route-27",
-      "kanto-pokemon-league"
+      "kanto-route-27"
      ],
      "hub": true
     },
     "kanto-route-27": {
      "zh": "27号道路(关都)",
      "kind": "route",
-     "order": 840,
-     "tier": 8,
+     "order": 420,
+     "tier": 4,
      "next": [
       "cinnabar-island",
-      "kanto-route-28"
+      "digletts-cave",
+      "kanto-safari-zone"
      ],
      "hub": false
+    },
+    "digletts-cave": {
+     "zh": "地鼠洞穴",
+     "kind": "area",
+     "order": 430,
+     "tier": 4,
+     "next": [
+      "kanto-route-27",
+      "kanto-safari-zone"
+     ],
+     "hub": false
+    },
+    "kanto-safari-zone": {
+     "zh": "狩猎地带",
+     "kind": "town",
+     "order": 440,
+     "tier": 5,
+     "next": [
+      "kanto-route-27",
+      "digletts-cave",
+      "kanto-route-28"
+     ],
+     "hub": true
     },
     "kanto-route-28": {
      "zh": "28号道路(关都)",
      "kind": "route",
+     "order": 450,
+     "tier": 5,
+     "next": [
+      "kanto-safari-zone",
+      "pokemon-mansion",
+      "resort-gorgeous"
+     ],
+     "hub": false
+    },
+    "pokemon-mansion": {
+     "zh": "宝可梦屋",
+     "kind": "area",
+     "order": 460,
+     "tier": 5,
+     "next": [
+      "kanto-route-28",
+      "canyon-entrance"
+     ],
+     "hub": false
+    },
+    "canyon-entrance": {
+     "zh": "溪谷入口",
+     "kind": "area",
+     "order": 470,
+     "tier": 5,
+     "next": [
+      "pokemon-mansion",
+      "kanto-victory-road-1"
+     ],
+     "hub": false
+    },
+    "kanto-victory-road-1": {
+     "zh": "冠军之路",
+     "kind": "area",
+     "order": 480,
+     "tier": 5,
+     "next": [
+      "canyon-entrance",
+      "kanto-victory-road-2"
+     ],
+     "hub": false
+    },
+    "kanto-victory-road-2": {
+     "zh": "冠军之路",
+     "kind": "area",
+     "order": 490,
+     "tier": 5,
+     "next": [
+      "kanto-victory-road-1",
+      "kanto-underground-path"
+     ],
+     "hub": false
+    },
+    "kanto-underground-path": {
+     "zh": "地下通道(5-6号道路)",
+     "kind": "area",
+     "order": 500,
+     "tier": 5,
+     "next": [
+      "kanto-victory-road-2",
+      "pattern-bush"
+     ],
+     "hub": false
+    },
+    "pattern-bush": {
+     "zh": "标志之林",
+     "kind": "area",
+     "order": 510,
+     "tier": 5,
+     "next": [
+      "kanto-underground-path",
+      "four-island"
+     ],
+     "hub": false
+    },
+    "four-island": {
+     "zh": "第四島",
+     "kind": "area",
+     "order": 520,
+     "tier": 5,
+     "next": [
+      "pattern-bush",
+      "water-labyrinth"
+     ],
+     "hub": false
+    },
+    "water-labyrinth": {
+     "zh": "水之迷宫",
+     "kind": "area",
+     "order": 530,
+     "tier": 5,
+     "next": [
+      "four-island",
+      "kanto-altering-cave"
+     ],
+     "hub": false
+    },
+    "kanto-altering-cave": {
+     "zh": "变幻洞窟",
+     "kind": "area",
+     "order": 540,
+     "tier": 5,
+     "next": [
+      "water-labyrinth",
+      "memorial-pillar"
+     ],
+     "hub": false
+    },
+    "memorial-pillar": {
+     "zh": "回忆之塔",
+     "kind": "area",
+     "order": 550,
+     "tier": 6,
+     "next": [
+      "kanto-altering-cave",
+      "three-isle-port"
+     ],
+     "hub": false
+    },
+    "three-isle-port": {
+     "zh": "第三島碼頭",
+     "kind": "area",
+     "order": 560,
+     "tier": 6,
+     "next": [
+      "memorial-pillar",
+      "five-island"
+     ],
+     "hub": false
+    },
+    "five-island": {
+     "zh": "第五島",
+     "kind": "area",
+     "order": 570,
+     "tier": 6,
+     "next": [
+      "three-isle-port",
+      "resort-gorgeous"
+     ],
+     "hub": false
+    },
+    "resort-gorgeous": {
+     "zh": "豪华度假区",
+     "kind": "town",
+     "order": 580,
+     "tier": 6,
+     "next": [
+      "kanto-route-28",
+      "five-island",
+      "green-path",
+      "kanto-pokemon-league"
+     ],
+     "hub": true
+    },
+    "green-path": {
+     "zh": "绿之步道",
+     "kind": "area",
+     "order": 590,
+     "tier": 6,
+     "next": [
+      "resort-gorgeous",
+      "one-island"
+     ],
+     "hub": false
+    },
+    "one-island": {
+     "zh": "第一島",
+     "kind": "area",
+     "order": 600,
+     "tier": 6,
+     "next": [
+      "green-path",
+      "outcast-island"
+     ],
+     "hub": false
+    },
+    "outcast-island": {
+     "zh": "外岛",
+     "kind": "area",
+     "order": 610,
+     "tier": 6,
+     "next": [
+      "one-island",
+      "tanoby-ruins"
+     ],
+     "hub": false
+    },
+    "tanoby-ruins": {
+     "zh": "阿斯卡纳遗迹",
+     "kind": "area",
+     "order": 620,
+     "tier": 6,
+     "next": [
+      "outcast-island",
+      "trainer-tower"
+     ],
+     "hub": false
+    },
+    "trainer-tower": {
+     "zh": "训练家塔",
+     "kind": "area",
+     "order": 630,
+     "tier": 6,
+     "next": [
+      "tanoby-ruins",
+      "ruin-valley"
+     ],
+     "hub": false
+    },
+    "ruin-valley": {
+     "zh": "遗迹山谷",
+     "kind": "area",
+     "order": 640,
+     "tier": 6,
+     "next": [
+      "trainer-tower",
+      "dilford-chamber"
+     ],
+     "hub": false
+    },
+    "dilford-chamber": {
+     "zh": "阿斯卡纳石室",
+     "kind": "area",
+     "order": 650,
+     "tier": 6,
+     "next": [
+      "ruin-valley",
+      "liptoo-chamber"
+     ],
+     "hub": false
+    },
+    "liptoo-chamber": {
+     "zh": "阿斯卡纳石室",
+     "kind": "area",
+     "order": 660,
+     "tier": 7,
+     "next": [
+      "dilford-chamber",
+      "monean-chamber"
+     ],
+     "hub": false
+    },
+    "monean-chamber": {
+     "zh": "阿斯卡纳石室",
+     "kind": "area",
+     "order": 670,
+     "tier": 7,
+     "next": [
+      "liptoo-chamber",
+      "rixy-chamber"
+     ],
+     "hub": false
+    },
+    "rixy-chamber": {
+     "zh": "阿斯卡纳石室",
+     "kind": "area",
+     "order": 680,
+     "tier": 7,
+     "next": [
+      "monean-chamber",
+      "scufib-chamber"
+     ],
+     "hub": false
+    },
+    "scufib-chamber": {
+     "zh": "Scufib Chamber",
+     "kind": "area",
+     "order": 690,
+     "tier": 7,
+     "next": [
+      "rixy-chamber",
+      "viapos-chamber"
+     ],
+     "hub": false
+    },
+    "viapos-chamber": {
+     "zh": "Viapos Chamber",
+     "kind": "area",
+     "order": 700,
+     "tier": 7,
+     "next": [
+      "scufib-chamber",
+      "weepth-chamber"
+     ],
+     "hub": false
+    },
+    "weepth-chamber": {
+     "zh": "Weepth Chamber",
+     "kind": "area",
+     "order": 710,
+     "tier": 7,
+     "next": [
+      "viapos-chamber",
+      "treasure-beach"
+     ],
+     "hub": false
+    },
+    "treasure-beach": {
+     "zh": "宝物海滩",
+     "kind": "area",
+     "order": 720,
+     "tier": 7,
+     "next": [
+      "weepth-chamber",
+      "five-isle-meadow"
+     ],
+     "hub": false
+    },
+    "five-isle-meadow": {
+     "zh": "第五島空地",
+     "kind": "area",
+     "order": 730,
+     "tier": 7,
+     "next": [
+      "treasure-beach",
+      "kindle-road"
+     ],
+     "hub": false
+    },
+    "kindle-road": {
+     "zh": "热气之路",
+     "kind": "area",
+     "order": 740,
+     "tier": 7,
+     "next": [
+      "five-isle-meadow",
+      "bond-bridge"
+     ],
+     "hub": false
+    },
+    "bond-bridge": {
+     "zh": "牵绊桥",
+     "kind": "area",
+     "order": 750,
+     "tier": 7,
+     "next": [
+      "kindle-road",
+      "cape-brink"
+     ],
+     "hub": false
+    },
+    "cape-brink": {
+     "zh": "边缘海岬",
+     "kind": "area",
+     "order": 760,
+     "tier": 7,
+     "next": [
+      "bond-bridge",
+      "berry-forest"
+     ],
+     "hub": false
+    },
+    "berry-forest": {
+     "zh": "樹果森林",
+     "kind": "area",
+     "order": 770,
+     "tier": 8,
+     "next": [
+      "cape-brink",
+      "seafoam-islands"
+     ],
+     "hub": false
+    },
+    "seafoam-islands": {
+     "zh": "双子岛",
+     "kind": "area",
+     "order": 780,
+     "tier": 8,
+     "next": [
+      "berry-forest",
+      "water-path"
+     ],
+     "hub": false
+    },
+    "water-path": {
+     "zh": "水之步道",
+     "kind": "area",
+     "order": 790,
+     "tier": 8,
+     "next": [
+      "seafoam-islands",
+      "birth-island"
+     ],
+     "hub": false
+    },
+    "birth-island": {
+     "zh": "诞生之岛",
+     "kind": "area",
+     "order": 800,
+     "tier": 8,
+     "next": [
+      "water-path",
+      "lost-cave"
+     ],
+     "hub": false
+    },
+    "lost-cave": {
+     "zh": "不归之穴",
+     "kind": "area",
+     "order": 810,
+     "tier": 8,
+     "next": [
+      "birth-island",
+      "mt-ember"
+     ],
+     "hub": false
+    },
+    "mt-ember": {
+     "zh": "灯火山",
+     "kind": "area",
+     "order": 820,
+     "tier": 8,
+     "next": [
+      "lost-cave",
+      "kanto-power-plant"
+     ],
+     "hub": false
+    },
+    "kanto-power-plant": {
+     "zh": "无人发电厂",
+     "kind": "area",
+     "order": 830,
+     "tier": 8,
+     "next": [
+      "mt-ember",
+      "sevault-canyon"
+     ],
+     "hub": false
+    },
+    "sevault-canyon": {
+     "zh": "七宝溪谷",
+     "kind": "area",
+     "order": 840,
+     "tier": 8,
+     "next": [
+      "kanto-power-plant",
+      "cerulean-cave"
+     ],
+     "hub": false
+    },
+    "cerulean-cave": {
+     "zh": "华蓝洞窟",
+     "kind": "area",
      "order": 850,
      "tier": 8,
      "next": [
-      "kanto-route-27",
+      "sevault-canyon",
       "navel-rock"
      ],
      "hub": false
@@ -973,7 +959,7 @@
      "order": 860,
      "tier": 8,
      "next": [
-      "kanto-route-28",
+      "cerulean-cave",
       "kanto-pokemon-league"
      ],
      "hub": false
@@ -984,7 +970,7 @@
      "order": 870,
      "tier": 8,
      "next": [
-      "cinnabar-island",
+      "resort-gorgeous",
       "navel-rock"
      ],
      "hub": true
@@ -1003,18 +989,28 @@
      "order": 10,
      "tier": 1,
      "next": [
-      "sinjoh-ruins",
       "johto-route-29"
      ],
      "hub": true
     },
-    "sinjoh-ruins": {
-     "zh": "神都遗迹",
-     "kind": "area",
+    "johto-route-29": {
+     "zh": "29号道路(城都)",
+     "kind": "route",
      "order": 20,
      "tier": 1,
      "next": [
       "new-bark-town",
+      "johto-route-30"
+     ],
+     "hub": false
+    },
+    "johto-route-30": {
+     "zh": "30号道路(城都)",
+     "kind": "route",
+     "order": 30,
+     "tier": 1,
+     "next": [
+      "johto-route-29",
       "cherrygrove-city"
      ],
      "hub": false
@@ -1022,37 +1018,24 @@
     "cherrygrove-city": {
      "zh": "吉花市",
      "kind": "town",
-     "order": 30,
-     "tier": 1,
-     "next": [
-      "sinjoh-ruins",
-      "sprout-tower",
-      "johto-route-29"
-     ],
-     "hub": true
-    },
-    "sprout-tower": {
-     "zh": "喇叭芽之塔",
-     "kind": "area",
      "order": 40,
      "tier": 1,
      "next": [
-      "cherrygrove-city",
-      "violet-city"
+      "johto-route-30",
+      "johto-route-31"
      ],
-     "hub": false
+     "hub": true
     },
-    "violet-city": {
-     "zh": "桔梗市",
-     "kind": "town",
+    "johto-route-31": {
+     "zh": "31号道路(城都)",
+     "kind": "route",
      "order": 50,
      "tier": 1,
      "next": [
-      "sprout-tower",
-      "ilex-forest",
-      "johto-route-29"
+      "cherrygrove-city",
+      "ilex-forest"
      ],
-     "hub": true
+     "hub": false
     },
     "ilex-forest": {
      "zh": "栎树林",
@@ -1060,29 +1043,51 @@
      "order": 60,
      "tier": 1,
      "next": [
-      "violet-city",
-      "burned-tower"
+      "johto-route-31",
+      "johto-route-32"
      ],
      "hub": false
     },
-    "burned-tower": {
-     "zh": "烧焦塔",
-     "kind": "area",
+    "johto-route-32": {
+     "zh": "32号道路(城都)",
+     "kind": "route",
      "order": 70,
      "tier": 2,
      "next": [
       "ilex-forest",
-      "lake-of-rage"
+      "violet-city"
      ],
      "hub": false
     },
-    "lake-of-rage": {
-     "zh": "愤怒之湖",
-     "kind": "area",
+    "violet-city": {
+     "zh": "桔梗市",
+     "kind": "town",
      "order": 80,
      "tier": 2,
      "next": [
-      "burned-tower",
+      "johto-route-32",
+      "johto-route-33"
+     ],
+     "hub": true
+    },
+    "johto-route-33": {
+     "zh": "33号道路(城都)",
+     "kind": "route",
+     "order": 90,
+     "tier": 2,
+     "next": [
+      "violet-city",
+      "johto-route-34"
+     ],
+     "hub": false
+    },
+    "johto-route-34": {
+     "zh": "34号道路(城都)",
+     "kind": "route",
+     "order": 100,
+     "tier": 2,
+     "next": [
+      "johto-route-33",
       "azalea-town"
      ],
      "hub": false
@@ -1090,89 +1095,54 @@
     "azalea-town": {
      "zh": "桧皮镇",
      "kind": "town",
-     "order": 90,
-     "tier": 2,
-     "next": [
-      "lake-of-rage",
-      "safari-zone-gate",
-      "johto-route-29"
-     ],
-     "hub": true
-    },
-    "safari-zone-gate": {
-     "zh": "狩猎地带入口",
-     "kind": "town",
-     "order": 100,
-     "tier": 2,
-     "next": [
-      "azalea-town",
-      "national-park",
-      "johto-route-29"
-     ],
-     "hub": true
-    },
-    "national-park": {
-     "zh": "自然公园",
-     "kind": "area",
      "order": 110,
      "tier": 2,
      "next": [
-      "safari-zone-gate",
-      "dark-cave"
+      "johto-route-34",
+      "johto-route-35"
      ],
-     "hub": false
+     "hub": true
     },
-    "dark-cave": {
-     "zh": "黑暗洞穴",
-     "kind": "area",
+    "johto-route-35": {
+     "zh": "35号道路(城都)",
+     "kind": "route",
      "order": 120,
      "tier": 2,
      "next": [
-      "national-park",
-      "ruins-of-alph"
+      "azalea-town",
+      "burned-tower"
      ],
      "hub": false
     },
-    "ruins-of-alph": {
-     "zh": "阿露福遗迹",
+    "burned-tower": {
+     "zh": "烧焦塔",
      "kind": "area",
      "order": 130,
      "tier": 3,
      "next": [
-      "dark-cave",
-      "slowpoke-well"
+      "johto-route-35",
+      "johto-route-36"
      ],
      "hub": false
     },
-    "slowpoke-well": {
-     "zh": "呆呆兽之井",
-     "kind": "area",
+    "johto-route-36": {
+     "zh": "36号道路(城都)",
+     "kind": "route",
      "order": 140,
      "tier": 3,
      "next": [
-      "ruins-of-alph",
-      "union-cave"
+      "burned-tower",
+      "johto-route-37"
      ],
      "hub": false
     },
-    "union-cave": {
-     "zh": "互连洞",
-     "kind": "area",
+    "johto-route-37": {
+     "zh": "37号道路(城都)",
+     "kind": "route",
      "order": 150,
      "tier": 3,
      "next": [
-      "slowpoke-well",
-      "team-rocket-hq"
-     ],
-     "hub": false
-    },
-    "team-rocket-hq": {
-     "zh": "火箭隊基地(城都)",
-     "kind": "area",
-     "order": 160,
-     "tier": 3,
-     "next": [
-      "union-cave",
+      "johto-route-36",
       "goldenrod-city"
      ],
      "hub": false
@@ -1180,22 +1150,65 @@
     "goldenrod-city": {
      "zh": "满金市",
      "kind": "town",
+     "order": 160,
+     "tier": 3,
+     "next": [
+      "johto-route-37",
+      "johto-route-38"
+     ],
+     "hub": true
+    },
+    "johto-route-38": {
+     "zh": "38号道路(城都)",
+     "kind": "route",
      "order": 170,
      "tier": 3,
      "next": [
-      "team-rocket-hq",
-      "ice-path",
-      "johto-route-29"
+      "goldenrod-city",
+      "johto-route-39"
+     ],
+     "hub": false
+    },
+    "johto-route-39": {
+     "zh": "39号道路(城都)",
+     "kind": "route",
+     "order": 180,
+     "tier": 3,
+     "next": [
+      "johto-route-38",
+      "ecruteak-city"
+     ],
+     "hub": false
+    },
+    "ecruteak-city": {
+     "zh": "缘朱市",
+     "kind": "town",
+     "order": 190,
+     "tier": 3,
+     "next": [
+      "johto-route-39",
+      "johto-sea-route-40"
      ],
      "hub": true
+    },
+    "johto-sea-route-40": {
+     "zh": "40号水路(城都)",
+     "kind": "route",
+     "order": 200,
+     "tier": 4,
+     "next": [
+      "ecruteak-city",
+      "ice-path"
+     ],
+     "hub": false
     },
     "ice-path": {
      "zh": "冰雪小径",
      "kind": "area",
-     "order": 180,
-     "tier": 3,
+     "order": 210,
+     "tier": 4,
      "next": [
-      "goldenrod-city",
+      "johto-sea-route-40",
       "mt-mortar"
      ],
      "hub": false
@@ -1203,8 +1216,8 @@
     "mt-mortar": {
      "zh": "擂钵山",
      "kind": "area",
-     "order": 190,
-     "tier": 3,
+     "order": 220,
+     "tier": 4,
      "next": [
       "ice-path",
       "tohjo-falls"
@@ -1214,7 +1227,7 @@
     "tohjo-falls": {
      "zh": "都城瀑布",
      "kind": "area",
-     "order": 200,
+     "order": 230,
      "tier": 4,
      "next": [
       "mt-mortar",
@@ -1225,233 +1238,10 @@
     "dragons-den": {
      "zh": "龙穴",
      "kind": "area",
-     "order": 210,
-     "tier": 4,
-     "next": [
-      "tohjo-falls",
-      "whirl-islands"
-     ],
-     "hub": false
-    },
-    "whirl-islands": {
-     "zh": "漩涡岛",
-     "kind": "area",
-     "order": 220,
-     "tier": 4,
-     "next": [
-      "dragons-den",
-      "ecruteak-city"
-     ],
-     "hub": false
-    },
-    "ecruteak-city": {
-     "zh": "缘朱市",
-     "kind": "town",
-     "order": 230,
-     "tier": 4,
-     "next": [
-      "whirl-islands",
-      "johto-route-29"
-     ],
-     "hub": true
-    },
-    "johto-route-29": {
-     "zh": "29号道路(城都)",
-     "kind": "route",
      "order": 240,
      "tier": 4,
      "next": [
-      "new-bark-town",
-      "cherrygrove-city",
-      "violet-city",
-      "azalea-town",
-      "safari-zone-gate",
-      "goldenrod-city",
-      "ecruteak-city",
-      "johto-route-30"
-     ],
-     "hub": false
-    },
-    "johto-route-30": {
-     "zh": "30号道路(城都)",
-     "kind": "route",
-     "order": 250,
-     "tier": 4,
-     "next": [
-      "johto-route-29",
-      "johto-route-31"
-     ],
-     "hub": false
-    },
-    "johto-route-31": {
-     "zh": "31号道路(城都)",
-     "kind": "route",
-     "order": 260,
-     "tier": 5,
-     "next": [
-      "johto-route-30",
-      "johto-route-32"
-     ],
-     "hub": false
-    },
-    "johto-route-32": {
-     "zh": "32号道路(城都)",
-     "kind": "route",
-     "order": 270,
-     "tier": 5,
-     "next": [
-      "johto-route-31",
-      "bell-tower",
-      "johto-safari-zone",
-      "olivine-city"
-     ],
-     "hub": false
-    },
-    "bell-tower": {
-     "zh": "铃铛塔",
-     "kind": "area",
-     "order": 280,
-     "tier": 5,
-     "next": [
-      "johto-route-32",
-      "johto-safari-zone"
-     ],
-     "hub": false
-    },
-    "johto-safari-zone": {
-     "zh": "狩猎地带(城都)",
-     "kind": "town",
-     "order": 290,
-     "tier": 5,
-     "next": [
-      "johto-route-32",
-      "bell-tower",
-      "olivine-city",
-      "johto-route-33"
-     ],
-     "hub": true
-    },
-    "olivine-city": {
-     "zh": "浅葱市",
-     "kind": "town",
-     "order": 300,
-     "tier": 5,
-     "next": [
-      "johto-route-32",
-      "johto-safari-zone",
-      "johto-route-33"
-     ],
-     "hub": true
-    },
-    "johto-route-33": {
-     "zh": "33号道路(城都)",
-     "kind": "route",
-     "order": 310,
-     "tier": 5,
-     "next": [
-      "johto-safari-zone",
-      "olivine-city",
-      "johto-route-34"
-     ],
-     "hub": false
-    },
-    "johto-route-34": {
-     "zh": "34号道路(城都)",
-     "kind": "route",
-     "order": 320,
-     "tier": 6,
-     "next": [
-      "johto-route-33",
-      "johto-route-35"
-     ],
-     "hub": false
-    },
-    "johto-route-35": {
-     "zh": "35号道路(城都)",
-     "kind": "route",
-     "order": 330,
-     "tier": 6,
-     "next": [
-      "johto-route-34",
-      "johto-route-36"
-     ],
-     "hub": false
-    },
-    "johto-route-36": {
-     "zh": "36号道路(城都)",
-     "kind": "route",
-     "order": 340,
-     "tier": 6,
-     "next": [
-      "johto-route-35",
-      "johto-route-37"
-     ],
-     "hub": false
-    },
-    "johto-route-37": {
-     "zh": "37号道路(城都)",
-     "kind": "route",
-     "order": 350,
-     "tier": 6,
-     "next": [
-      "johto-route-36",
-      "johto-route-38"
-     ],
-     "hub": false
-    },
-    "johto-route-38": {
-     "zh": "38号道路(城都)",
-     "kind": "route",
-     "order": 360,
-     "tier": 6,
-     "next": [
-      "johto-route-37",
-      "johto-route-39"
-     ],
-     "hub": false
-    },
-    "johto-route-39": {
-     "zh": "39号道路(城都)",
-     "kind": "route",
-     "order": 370,
-     "tier": 6,
-     "next": [
-      "johto-route-38",
-      "mt-silver",
-      "cianwood-city"
-     ],
-     "hub": false
-    },
-    "mt-silver": {
-     "zh": "白银山",
-     "kind": "area",
-     "order": 380,
-     "tier": 6,
-     "next": [
-      "johto-route-39",
-      "cianwood-city"
-     ],
-     "hub": false
-    },
-    "cianwood-city": {
-     "zh": "湛蓝市",
-     "kind": "town",
-     "order": 390,
-     "tier": 7,
-     "next": [
-      "johto-route-39",
-      "mt-silver",
-      "johto-sea-route-40"
-     ],
-     "hub": true
-    },
-    "johto-sea-route-40": {
-     "zh": "40号水路(城都)",
-     "kind": "route",
-     "order": 400,
-     "tier": 7,
-     "next": [
-      "cianwood-city",
+      "tohjo-falls",
       "johto-sea-route-41"
      ],
      "hub": false
@@ -1459,10 +1249,10 @@
     "johto-sea-route-41": {
      "zh": "41号水路(城都)",
      "kind": "route",
-     "order": 410,
-     "tier": 7,
+     "order": 250,
+     "tier": 4,
      "next": [
-      "johto-sea-route-40",
+      "dragons-den",
       "johto-route-42"
      ],
      "hub": false
@@ -1470,55 +1260,135 @@
     "johto-route-42": {
      "zh": "42号道路(城都)",
      "kind": "route",
-     "order": 420,
-     "tier": 7,
+     "order": 260,
+     "tier": 5,
      "next": [
       "johto-sea-route-41",
-      "johto-route-43"
+      "national-park",
+      "olivine-city"
      ],
      "hub": false
+    },
+    "national-park": {
+     "zh": "自然公园",
+     "kind": "area",
+     "order": 270,
+     "tier": 5,
+     "next": [
+      "johto-route-42",
+      "olivine-city"
+     ],
+     "hub": false
+    },
+    "olivine-city": {
+     "zh": "浅葱市",
+     "kind": "town",
+     "order": 280,
+     "tier": 5,
+     "next": [
+      "johto-route-42",
+      "national-park",
+      "johto-route-43"
+     ],
+     "hub": true
     },
     "johto-route-43": {
      "zh": "43号道路(城都)",
      "kind": "route",
-     "order": 430,
-     "tier": 7,
+     "order": 290,
+     "tier": 5,
      "next": [
-      "johto-route-42",
-      "johto-route-44"
+      "olivine-city",
+      "lake-of-rage",
+      "safari-zone-gate"
      ],
      "hub": false
+    },
+    "lake-of-rage": {
+     "zh": "愤怒之湖",
+     "kind": "area",
+     "order": 300,
+     "tier": 5,
+     "next": [
+      "johto-route-43",
+      "safari-zone-gate"
+     ],
+     "hub": false
+    },
+    "safari-zone-gate": {
+     "zh": "狩猎地带入口",
+     "kind": "town",
+     "order": 310,
+     "tier": 5,
+     "next": [
+      "johto-route-43",
+      "lake-of-rage",
+      "johto-route-44"
+     ],
+     "hub": true
     },
     "johto-route-44": {
      "zh": "44号道路(城都)",
      "kind": "route",
-     "order": 440,
-     "tier": 7,
+     "order": 320,
+     "tier": 6,
      "next": [
-      "johto-route-43",
-      "blackthorn-city"
+      "safari-zone-gate",
+      "cianwood-city"
      ],
      "hub": false
     },
-    "blackthorn-city": {
-     "zh": "烟墨市",
+    "cianwood-city": {
+     "zh": "湛蓝市",
      "kind": "town",
-     "order": 450,
-     "tier": 8,
+     "order": 330,
+     "tier": 6,
      "next": [
       "johto-route-44",
-      "johto-route-45",
-      "johto-pokemon-league"
+      "johto-route-45"
      ],
      "hub": true
     },
     "johto-route-45": {
      "zh": "45号道路(城都)",
      "kind": "route",
-     "order": 460,
-     "tier": 8,
+     "order": 340,
+     "tier": 6,
      "next": [
-      "blackthorn-city",
+      "cianwood-city",
+      "slowpoke-well"
+     ],
+     "hub": false
+    },
+    "slowpoke-well": {
+     "zh": "呆呆兽之井",
+     "kind": "area",
+     "order": 350,
+     "tier": 6,
+     "next": [
+      "johto-route-45",
+      "union-cave"
+     ],
+     "hub": false
+    },
+    "union-cave": {
+     "zh": "互连洞",
+     "kind": "area",
+     "order": 360,
+     "tier": 6,
+     "next": [
+      "slowpoke-well",
+      "team-rocket-hq"
+     ],
+     "hub": false
+    },
+    "team-rocket-hq": {
+     "zh": "火箭隊基地(城都)",
+     "kind": "area",
+     "order": 370,
+     "tier": 6,
+     "next": [
+      "union-cave",
       "johto-route-46"
      ],
      "hub": false
@@ -1526,32 +1396,93 @@
     "johto-route-46": {
      "zh": "46号道路(城都)",
      "kind": "route",
-     "order": 470,
-     "tier": 8,
+     "order": 380,
+     "tier": 6,
      "next": [
-      "johto-route-45",
-      "johto-route-47"
+      "team-rocket-hq",
+      "sinjoh-ruins",
+      "blackthorn-city"
      ],
      "hub": false
+    },
+    "sinjoh-ruins": {
+     "zh": "神都遗迹",
+     "kind": "area",
+     "order": 390,
+     "tier": 7,
+     "next": [
+      "johto-route-46",
+      "sprout-tower"
+     ],
+     "hub": false
+    },
+    "sprout-tower": {
+     "zh": "喇叭芽之塔",
+     "kind": "area",
+     "order": 400,
+     "tier": 7,
+     "next": [
+      "sinjoh-ruins",
+      "blackthorn-city"
+     ],
+     "hub": false
+    },
+    "blackthorn-city": {
+     "zh": "烟墨市",
+     "kind": "town",
+     "order": 410,
+     "tier": 7,
+     "next": [
+      "johto-route-46",
+      "sprout-tower",
+      "johto-route-47"
+     ],
+     "hub": true
     },
     "johto-route-47": {
      "zh": "47号道路(城都)",
      "kind": "route",
-     "order": 480,
-     "tier": 8,
+     "order": 420,
+     "tier": 7,
      "next": [
-      "johto-route-46",
-      "johto-route-48"
+      "blackthorn-city",
+      "bell-tower",
+      "johto-safari-zone"
      ],
      "hub": false
     },
-    "johto-route-48": {
-     "zh": "48号道路(城都)",
-     "kind": "route",
-     "order": 490,
-     "tier": 8,
+    "bell-tower": {
+     "zh": "铃铛塔",
+     "kind": "area",
+     "order": 430,
+     "tier": 7,
      "next": [
       "johto-route-47",
+      "johto-safari-zone"
+     ],
+     "hub": false
+    },
+    "johto-safari-zone": {
+     "zh": "狩猎地带(城都)",
+     "kind": "town",
+     "order": 440,
+     "tier": 7,
+     "next": [
+      "johto-route-47",
+      "bell-tower",
+      "mt-silver",
+      "johto-route-48",
+      "johto-pokemon-league"
+     ],
+     "hub": true
+    },
+    "mt-silver": {
+     "zh": "白银山",
+     "kind": "area",
+     "order": 450,
+     "tier": 8,
+     "next": [
+      "johto-safari-zone",
       "embedded-tower"
      ],
      "hub": false
@@ -1559,10 +1490,55 @@
     "embedded-tower": {
      "zh": "埋藏之塔",
      "kind": "area",
-     "order": 500,
+     "order": 460,
+     "tier": 8,
+     "next": [
+      "mt-silver",
+      "johto-route-48"
+     ],
+     "hub": false
+    },
+    "johto-route-48": {
+     "zh": "48号道路(城都)",
+     "kind": "route",
+     "order": 470,
+     "tier": 8,
+     "next": [
+      "johto-safari-zone",
+      "embedded-tower",
+      "dark-cave"
+     ],
+     "hub": false
+    },
+    "dark-cave": {
+     "zh": "黑暗洞穴",
+     "kind": "area",
+     "order": 480,
      "tier": 8,
      "next": [
       "johto-route-48",
+      "ruins-of-alph"
+     ],
+     "hub": false
+    },
+    "ruins-of-alph": {
+     "zh": "阿露福遗迹",
+     "kind": "area",
+     "order": 490,
+     "tier": 8,
+     "next": [
+      "dark-cave",
+      "whirl-islands"
+     ],
+     "hub": false
+    },
+    "whirl-islands": {
+     "zh": "漩涡岛",
+     "kind": "area",
+     "order": 500,
+     "tier": 8,
+     "next": [
+      "ruins-of-alph",
       "johto-pokemon-league"
      ],
      "hub": false
@@ -1573,8 +1549,8 @@
      "order": 510,
      "tier": 8,
      "next": [
-      "blackthorn-city",
-      "embedded-tower"
+      "johto-safari-zone",
+      "whirl-islands"
      ],
      "hub": true
     }
@@ -1592,612 +1568,6 @@
      "order": 10,
      "tier": 1,
      "next": [
-      "petalburg-woods",
-      "hoenn-route-101"
-     ],
-     "hub": true
-    },
-    "petalburg-woods": {
-     "zh": "橙华森林",
-     "kind": "area",
-     "order": 20,
-     "tier": 1,
-     "next": [
-      "littleroot-town",
-      "rusturf-tunnel"
-     ],
-     "hub": false
-    },
-    "rusturf-tunnel": {
-     "zh": "卡绿隧道",
-     "kind": "area",
-     "order": 30,
-     "tier": 1,
-     "next": [
-      "petalburg-woods",
-      "petalburg-city"
-     ],
-     "hub": false
-    },
-    "petalburg-city": {
-     "zh": "橙华市",
-     "kind": "town",
-     "order": 40,
-     "tier": 1,
-     "next": [
-      "rusturf-tunnel",
-      "granite-cave",
-      "hoenn-route-101"
-     ],
-     "hub": true
-    },
-    "granite-cave": {
-     "zh": "石之洞窟",
-     "kind": "area",
-     "order": 50,
-     "tier": 1,
-     "next": [
-      "petalburg-city",
-      "hoenn-altering-cave"
-     ],
-     "hub": false
-    },
-    "hoenn-altering-cave": {
-     "zh": "变幻洞窟",
-     "kind": "area",
-     "order": 60,
-     "tier": 1,
-     "next": [
-      "granite-cave",
-      "rustboro-city"
-     ],
-     "hub": false
-    },
-    "rustboro-city": {
-     "zh": "卡那兹市",
-     "kind": "town",
-     "order": 70,
-     "tier": 1,
-     "next": [
-      "hoenn-altering-cave",
-      "fiery-path",
-      "hoenn-route-101"
-     ],
-     "hub": true
-    },
-    "fiery-path": {
-     "zh": "烈焰小径",
-     "kind": "area",
-     "order": 80,
-     "tier": 1,
-     "next": [
-      "rustboro-city",
-      "dewford-town"
-     ],
-     "hub": false
-    },
-    "dewford-town": {
-     "zh": "武斗镇",
-     "kind": "town",
-     "order": 90,
-     "tier": 1,
-     "next": [
-      "fiery-path",
-      "jagged-pass",
-      "hoenn-route-101"
-     ],
-     "hub": true
-    },
-    "jagged-pass": {
-     "zh": "凹凸山道",
-     "kind": "area",
-     "order": 100,
-     "tier": 1,
-     "next": [
-      "dewford-town",
-      "abandoned-ship"
-     ],
-     "hub": false
-    },
-    "abandoned-ship": {
-     "zh": "弃船",
-     "kind": "area",
-     "order": 110,
-     "tier": 1,
-     "next": [
-      "jagged-pass",
-      "slateport-city"
-     ],
-     "hub": false
-    },
-    "slateport-city": {
-     "zh": "凯那市",
-     "kind": "town",
-     "order": 120,
-     "tier": 2,
-     "next": [
-      "abandoned-ship",
-      "mirage-tower",
-      "hoenn-route-101"
-     ],
-     "hub": true
-    },
-    "mirage-tower": {
-     "zh": "幻影之塔",
-     "kind": "area",
-     "order": 130,
-     "tier": 2,
-     "next": [
-      "slateport-city",
-      "shoal-cave"
-     ],
-     "hub": false
-    },
-    "shoal-cave": {
-     "zh": "浅滩洞穴",
-     "kind": "area",
-     "order": 140,
-     "tier": 2,
-     "next": [
-      "mirage-tower",
-      "seafloor-cavern"
-     ],
-     "hub": false
-    },
-    "seafloor-cavern": {
-     "zh": "海底洞窟",
-     "kind": "area",
-     "order": 150,
-     "tier": 2,
-     "next": [
-      "shoal-cave",
-      "meteor-falls"
-     ],
-     "hub": false
-    },
-    "meteor-falls": {
-     "zh": "流星瀑布",
-     "kind": "area",
-     "order": 160,
-     "tier": 2,
-     "next": [
-      "seafloor-cavern",
-      "new-mauville"
-     ],
-     "hub": false
-    },
-    "new-mauville": {
-     "zh": "新紫堇",
-     "kind": "area",
-     "order": 170,
-     "tier": 2,
-     "next": [
-      "meteor-falls",
-      "mt-pyre"
-     ],
-     "hub": false
-    },
-    "mt-pyre": {
-     "zh": "送神山",
-     "kind": "area",
-     "order": 180,
-     "tier": 2,
-     "next": [
-      "new-mauville",
-      "verdanturf-town"
-     ],
-     "hub": false
-    },
-    "verdanturf-town": {
-     "zh": "绿茵镇",
-     "kind": "town",
-     "order": 190,
-     "tier": 2,
-     "next": [
-      "mt-pyre",
-      "mirage-island",
-      "hoenn-route-101"
-     ],
-     "hub": true
-    },
-    "mirage-island": {
-     "zh": "mirage-island",
-     "kind": "area",
-     "order": 200,
-     "tier": 2,
-     "next": [
-      "verdanturf-town",
-      "hoenn-safari-zone"
-     ],
-     "hub": false
-    },
-    "hoenn-safari-zone": {
-     "zh": "狩猎地带",
-     "kind": "town",
-     "order": 210,
-     "tier": 2,
-     "next": [
-      "mirage-island",
-      "magma-hideout",
-      "hoenn-route-101"
-     ],
-     "hub": true
-    },
-    "magma-hideout": {
-     "zh": "熔岩队本部",
-     "kind": "area",
-     "order": 220,
-     "tier": 2,
-     "next": [
-      "hoenn-safari-zone",
-      "faraway-island"
-     ],
-     "hub": false
-    },
-    "faraway-island": {
-     "zh": "边境的小岛",
-     "kind": "area",
-     "order": 230,
-     "tier": 2,
-     "next": [
-      "magma-hideout",
-      "hoenn-victory-road"
-     ],
-     "hub": false
-    },
-    "hoenn-victory-road": {
-     "zh": "冠军之路",
-     "kind": "area",
-     "order": 240,
-     "tier": 3,
-     "next": [
-      "faraway-island",
-      "scorched-slab"
-     ],
-     "hub": false
-    },
-    "scorched-slab": {
-     "zh": "天旱石窟",
-     "kind": "area",
-     "order": 250,
-     "tier": 3,
-     "next": [
-      "hoenn-victory-road",
-      "fallarbor-town"
-     ],
-     "hub": false
-    },
-    "fallarbor-town": {
-     "zh": "秋叶镇",
-     "kind": "town",
-     "order": 260,
-     "tier": 3,
-     "next": [
-      "scorched-slab",
-      "team-aqua-hideout",
-      "hoenn-route-101"
-     ],
-     "hub": true
-    },
-    "team-aqua-hideout": {
-     "zh": "海洋队基地",
-     "kind": "area",
-     "order": 270,
-     "tier": 3,
-     "next": [
-      "fallarbor-town",
-      "team-magma-hideout"
-     ],
-     "hub": false
-    },
-    "team-magma-hideout": {
-     "zh": "熔岩队本部",
-     "kind": "area",
-     "order": 280,
-     "tier": 3,
-     "next": [
-      "team-aqua-hideout",
-      "cave-of-origin"
-     ],
-     "hub": false
-    },
-    "cave-of-origin": {
-     "zh": "觉醒神殿",
-     "kind": "area",
-     "order": 290,
-     "tier": 3,
-     "next": [
-      "team-magma-hideout",
-      "mirage-spot-cave"
-     ],
-     "hub": false
-    },
-    "mirage-spot-cave": {
-     "zh": "幻之洞窟",
-     "kind": "area",
-     "order": 300,
-     "tier": 3,
-     "next": [
-      "cave-of-origin",
-      "mirage-spot-mountain"
-     ],
-     "hub": false
-    },
-    "mirage-spot-mountain": {
-     "zh": "幻之山脈",
-     "kind": "area",
-     "order": 310,
-     "tier": 3,
-     "next": [
-      "mirage-spot-cave",
-      "mirage-spot-forest"
-     ],
-     "hub": false
-    },
-    "mirage-spot-forest": {
-     "zh": "Mirage Forest",
-     "kind": "area",
-     "order": 320,
-     "tier": 3,
-     "next": [
-      "mirage-spot-mountain",
-      "mirage-spot-island"
-     ],
-     "hub": false
-    },
-    "mirage-spot-island": {
-     "zh": "幻之岛",
-     "kind": "area",
-     "order": 330,
-     "tier": 3,
-     "next": [
-      "mirage-spot-forest",
-      "lavaridge-town"
-     ],
-     "hub": false
-    },
-    "lavaridge-town": {
-     "zh": "釜炎镇",
-     "kind": "town",
-     "order": 340,
-     "tier": 3,
-     "next": [
-      "mirage-spot-island",
-      "desert-underpass",
-      "hoenn-route-101"
-     ],
-     "hub": true
-    },
-    "desert-underpass": {
-     "zh": "沙漠的地下道",
-     "kind": "area",
-     "order": 350,
-     "tier": 3,
-     "next": [
-      "lavaridge-town",
-      "ancient-tomb"
-     ],
-     "hub": false
-    },
-    "ancient-tomb": {
-     "zh": "古代坟墓",
-     "kind": "area",
-     "order": 360,
-     "tier": 4,
-     "next": [
-      "desert-underpass",
-      "battle-resort"
-     ],
-     "hub": false
-    },
-    "battle-resort": {
-     "zh": "对战度假地",
-     "kind": "town",
-     "order": 370,
-     "tier": 4,
-     "next": [
-      "ancient-tomb",
-      "desert-ruins",
-      "hoenn-route-101"
-     ],
-     "hub": true
-    },
-    "desert-ruins": {
-     "zh": "沙漠遗迹",
-     "kind": "area",
-     "order": 380,
-     "tier": 4,
-     "next": [
-      "battle-resort",
-      "southern-island"
-     ],
-     "hub": false
-    },
-    "southern-island": {
-     "zh": "南方孤岛",
-     "kind": "area",
-     "order": 390,
-     "tier": 4,
-     "next": [
-      "desert-ruins",
-      "fortree-city"
-     ],
-     "hub": false
-    },
-    "fortree-city": {
-     "zh": "茵郁市",
-     "kind": "town",
-     "order": 400,
-     "tier": 4,
-     "next": [
-      "southern-island",
-      "island-cave",
-      "hoenn-route-101"
-     ],
-     "hub": true
-    },
-    "island-cave": {
-     "zh": "小岛洞穴",
-     "kind": "area",
-     "order": 410,
-     "tier": 4,
-     "next": [
-      "fortree-city",
-      "artisan-cave"
-     ],
-     "hub": false
-    },
-    "artisan-cave": {
-     "zh": "工匠之穴",
-     "kind": "area",
-     "order": 420,
-     "tier": 4,
-     "next": [
-      "island-cave",
-      "mossdeep-space-center"
-     ],
-     "hub": false
-    },
-    "mossdeep-space-center": {
-     "zh": "绿岭宇宙中心",
-     "kind": "area",
-     "order": 430,
-     "tier": 4,
-     "next": [
-      "artisan-cave",
-      "hoenn-battle-frontier"
-     ],
-     "hub": false
-    },
-    "hoenn-battle-frontier": {
-     "zh": "对战开拓区(第三世代)",
-     "kind": "area",
-     "order": 440,
-     "tier": 4,
-     "next": [
-      "mossdeep-space-center",
-      "lilycove-city"
-     ],
-     "hub": false
-    },
-    "lilycove-city": {
-     "zh": "水静市",
-     "kind": "town",
-     "order": 450,
-     "tier": 4,
-     "next": [
-      "hoenn-battle-frontier",
-      "sky-pillar",
-      "hoenn-route-101"
-     ],
-     "hub": true
-    },
-    "sky-pillar": {
-     "zh": "天空之柱",
-     "kind": "area",
-     "order": 460,
-     "tier": 4,
-     "next": [
-      "lilycove-city",
-      "crescent-isle"
-     ],
-     "hub": false
-    },
-    "crescent-isle": {
-     "zh": "弓形島",
-     "kind": "area",
-     "order": 470,
-     "tier": 4,
-     "next": [
-      "sky-pillar",
-      "fabled-cave"
-     ],
-     "hub": false
-    },
-    "fabled-cave": {
-     "zh": "朦胧洞窟",
-     "kind": "area",
-     "order": 480,
-     "tier": 5,
-     "next": [
-      "crescent-isle",
-      "gnarled-den"
-     ],
-     "hub": false
-    },
-    "gnarled-den": {
-     "zh": "歪曲洞穴",
-     "kind": "area",
-     "order": 490,
-     "tier": 5,
-     "next": [
-      "fabled-cave",
-      "nameless-cavern"
-     ],
-     "hub": false
-    },
-    "nameless-cavern": {
-     "zh": "未知洞窟",
-     "kind": "area",
-     "order": 500,
-     "tier": 5,
-     "next": [
-      "gnarled-den",
-      "pathless-plain"
-     ],
-     "hub": false
-    },
-    "pathless-plain": {
-     "zh": "无名平原",
-     "kind": "area",
-     "order": 510,
-     "tier": 5,
-     "next": [
-      "nameless-cavern",
-      "sea-mauville"
-     ],
-     "hub": false
-    },
-    "sea-mauville": {
-     "zh": "海紫堇",
-     "kind": "area",
-     "order": 520,
-     "tier": 5,
-     "next": [
-      "pathless-plain",
-      "soaring-in-the-sky"
-     ],
-     "hub": false
-    },
-    "soaring-in-the-sky": {
-     "zh": "翱翔高空",
-     "kind": "area",
-     "order": 530,
-     "tier": 5,
-     "next": [
-      "sea-mauville",
-      "trackless-forest"
-     ],
-     "hub": false
-    },
-    "trackless-forest": {
-     "zh": "原始森林",
-     "kind": "area",
-     "order": 540,
-     "tier": 5,
-     "next": [
-      "soaring-in-the-sky",
-      "mossdeep-city"
-     ],
-     "hub": false
-    },
-    "mossdeep-city": {
-     "zh": "绿岭市",
-     "kind": "town",
-     "order": 550,
-     "tier": 5,
-     "next": [
-      "trackless-forest",
       "hoenn-route-101"
      ],
      "hub": true
@@ -2205,22 +1575,21 @@
     "hoenn-route-101": {
      "zh": "101号道路(丰缘)",
      "kind": "route",
-     "order": 560,
-     "tier": 5,
+     "order": 20,
+     "tier": 1,
      "next": [
       "littleroot-town",
-      "petalburg-city",
-      "rustboro-city",
-      "dewford-town",
-      "slateport-city",
-      "verdanturf-town",
-      "hoenn-safari-zone",
-      "fallarbor-town",
-      "lavaridge-town",
-      "battle-resort",
-      "fortree-city",
-      "lilycove-city",
-      "mossdeep-city",
+      "petalburg-woods"
+     ],
+     "hub": false
+    },
+    "petalburg-woods": {
+     "zh": "橙华森林",
+     "kind": "area",
+     "order": 30,
+     "tier": 1,
+     "next": [
+      "hoenn-route-101",
       "hoenn-route-102"
      ],
      "hub": false
@@ -2228,21 +1597,45 @@
     "hoenn-route-102": {
      "zh": "102号道路(丰缘)",
      "kind": "route",
-     "order": 570,
-     "tier": 5,
+     "order": 40,
+     "tier": 1,
      "next": [
-      "hoenn-route-101",
-      "hoenn-route-103"
+      "petalburg-woods",
+      "granite-cave",
+      "petalburg-city"
      ],
      "hub": false
+    },
+    "granite-cave": {
+     "zh": "石之洞窟",
+     "kind": "area",
+     "order": 50,
+     "tier": 1,
+     "next": [
+      "hoenn-route-102",
+      "petalburg-city"
+     ],
+     "hub": false
+    },
+    "petalburg-city": {
+     "zh": "橙华市",
+     "kind": "town",
+     "order": 60,
+     "tier": 1,
+     "next": [
+      "hoenn-route-102",
+      "granite-cave",
+      "hoenn-route-103"
+     ],
+     "hub": true
     },
     "hoenn-route-103": {
      "zh": "103号道路(丰缘)",
      "kind": "route",
-     "order": 580,
-     "tier": 5,
+     "order": 70,
+     "tier": 1,
      "next": [
-      "hoenn-route-102",
+      "petalburg-city",
       "hoenn-route-104"
      ],
      "hub": false
@@ -2250,21 +1643,32 @@
     "hoenn-route-104": {
      "zh": "104号道路(丰缘)",
      "kind": "route",
-     "order": 590,
-     "tier": 5,
+     "order": 80,
+     "tier": 1,
      "next": [
       "hoenn-route-103",
-      "hoenn-route-105"
+      "rustboro-city"
      ],
      "hub": false
+    },
+    "rustboro-city": {
+     "zh": "卡那兹市",
+     "kind": "town",
+     "order": 90,
+     "tier": 1,
+     "next": [
+      "hoenn-route-104",
+      "hoenn-route-105"
+     ],
+     "hub": true
     },
     "hoenn-route-105": {
      "zh": "105号水路(丰缘)",
      "kind": "route",
-     "order": 600,
-     "tier": 6,
+     "order": 100,
+     "tier": 1,
      "next": [
-      "hoenn-route-104",
+      "rustboro-city",
       "hoenn-route-106"
      ],
      "hub": false
@@ -2272,8 +1676,8 @@
     "hoenn-route-106": {
      "zh": "106号水路(丰缘)",
      "kind": "route",
-     "order": 610,
-     "tier": 6,
+     "order": 110,
+     "tier": 1,
      "next": [
       "hoenn-route-105",
       "hoenn-route-107"
@@ -2283,54 +1687,65 @@
     "hoenn-route-107": {
      "zh": "107号水路(丰缘)",
      "kind": "route",
-     "order": 620,
-     "tier": 6,
+     "order": 120,
+     "tier": 2,
      "next": [
       "hoenn-route-106",
-      "hoenn-route-108"
+      "dewford-town"
      ],
      "hub": false
+    },
+    "dewford-town": {
+     "zh": "武斗镇",
+     "kind": "town",
+     "order": 130,
+     "tier": 2,
+     "next": [
+      "hoenn-route-107",
+      "hoenn-route-108"
+     ],
+     "hub": true
     },
     "hoenn-route-108": {
      "zh": "108号水路(丰缘)",
      "kind": "route",
-     "order": 630,
-     "tier": 6,
+     "order": 140,
+     "tier": 2,
      "next": [
-      "hoenn-route-107",
-      "sootopolis-city"
-     ],
-     "hub": false
-    },
-    "sootopolis-city": {
-     "zh": "琉璃市",
-     "kind": "town",
-     "order": 640,
-     "tier": 6,
-     "next": [
-      "hoenn-route-108",
+      "dewford-town",
       "hoenn-route-109"
      ],
-     "hub": true
+     "hub": false
     },
     "hoenn-route-109": {
      "zh": "109号水路(丰缘)",
      "kind": "route",
-     "order": 650,
-     "tier": 6,
+     "order": 150,
+     "tier": 2,
      "next": [
-      "sootopolis-city",
-      "hoenn-route-110"
+      "hoenn-route-108",
+      "slateport-city"
      ],
      "hub": false
+    },
+    "slateport-city": {
+     "zh": "凯那市",
+     "kind": "town",
+     "order": 160,
+     "tier": 2,
+     "next": [
+      "hoenn-route-109",
+      "hoenn-route-110"
+     ],
+     "hub": true
     },
     "hoenn-route-110": {
      "zh": "110号道路(丰缘)",
      "kind": "route",
-     "order": 660,
-     "tier": 6,
+     "order": 170,
+     "tier": 2,
      "next": [
-      "hoenn-route-109",
+      "slateport-city",
       "hoenn-route-111"
      ],
      "hub": false
@@ -2338,10 +1753,21 @@
     "hoenn-route-111": {
      "zh": "111号道路(丰缘)",
      "kind": "route",
-     "order": 670,
-     "tier": 6,
+     "order": 180,
+     "tier": 2,
      "next": [
       "hoenn-route-110",
+      "jagged-pass"
+     ],
+     "hub": false
+    },
+    "jagged-pass": {
+     "zh": "凹凸山道",
+     "kind": "area",
+     "order": 190,
+     "tier": 2,
+     "next": [
+      "hoenn-route-111",
       "hoenn-route-112"
      ],
      "hub": false
@@ -2349,21 +1775,43 @@
     "hoenn-route-112": {
      "zh": "112号道路(丰缘)",
      "kind": "route",
-     "order": 680,
-     "tier": 6,
+     "order": 200,
+     "tier": 2,
      "next": [
-      "hoenn-route-111",
-      "hoenn-route-113"
+      "jagged-pass",
+      "verdanturf-town"
      ],
      "hub": false
+    },
+    "verdanturf-town": {
+     "zh": "绿茵镇",
+     "kind": "town",
+     "order": 210,
+     "tier": 2,
+     "next": [
+      "hoenn-route-112",
+      "hoenn-route-113"
+     ],
+     "hub": true
     },
     "hoenn-route-113": {
      "zh": "113号道路(丰缘)",
      "kind": "route",
-     "order": 690,
-     "tier": 6,
+     "order": 220,
+     "tier": 2,
      "next": [
-      "hoenn-route-112",
+      "verdanturf-town",
+      "fiery-path"
+     ],
+     "hub": false
+    },
+    "fiery-path": {
+     "zh": "烈焰小径",
+     "kind": "area",
+     "order": 230,
+     "tier": 2,
+     "next": [
+      "hoenn-route-113",
       "hoenn-route-114"
      ],
      "hub": false
@@ -2371,21 +1819,43 @@
     "hoenn-route-114": {
      "zh": "114号道路(丰缘)",
      "kind": "route",
-     "order": 700,
-     "tier": 6,
+     "order": 240,
+     "tier": 3,
      "next": [
-      "hoenn-route-113",
-      "hoenn-route-115"
+      "fiery-path",
+      "fallarbor-town"
      ],
      "hub": false
+    },
+    "fallarbor-town": {
+     "zh": "秋叶镇",
+     "kind": "town",
+     "order": 250,
+     "tier": 3,
+     "next": [
+      "hoenn-route-114",
+      "hoenn-route-115"
+     ],
+     "hub": true
     },
     "hoenn-route-115": {
      "zh": "115号道路(丰缘)",
      "kind": "route",
-     "order": 710,
-     "tier": 6,
+     "order": 260,
+     "tier": 3,
      "next": [
-      "hoenn-route-114",
+      "fallarbor-town",
+      "abandoned-ship"
+     ],
+     "hub": false
+    },
+    "abandoned-ship": {
+     "zh": "弃船",
+     "kind": "area",
+     "order": 270,
+     "tier": 3,
+     "next": [
+      "hoenn-route-115",
       "hoenn-route-116"
      ],
      "hub": false
@@ -2393,10 +1863,21 @@
     "hoenn-route-116": {
      "zh": "116号道路(丰缘)",
      "kind": "route",
-     "order": 720,
-     "tier": 7,
+     "order": 280,
+     "tier": 3,
      "next": [
-      "hoenn-route-115",
+      "abandoned-ship",
+      "rusturf-tunnel"
+     ],
+     "hub": false
+    },
+    "rusturf-tunnel": {
+     "zh": "卡绿隧道",
+     "kind": "area",
+     "order": 290,
+     "tier": 3,
+     "next": [
+      "hoenn-route-116",
       "hoenn-route-117"
      ],
      "hub": false
@@ -2404,43 +1885,43 @@
     "hoenn-route-117": {
      "zh": "117号道路(丰缘)",
      "kind": "route",
-     "order": 730,
-     "tier": 7,
+     "order": 300,
+     "tier": 3,
      "next": [
-      "hoenn-route-116",
-      "hoenn-route-118"
+      "rusturf-tunnel",
+      "lavaridge-town"
      ],
      "hub": false
+    },
+    "lavaridge-town": {
+     "zh": "釜炎镇",
+     "kind": "town",
+     "order": 310,
+     "tier": 3,
+     "next": [
+      "hoenn-route-117",
+      "hoenn-route-118"
+     ],
+     "hub": true
     },
     "hoenn-route-118": {
      "zh": "118号道路(丰缘)",
      "kind": "route",
-     "order": 740,
-     "tier": 7,
+     "order": 320,
+     "tier": 3,
      "next": [
-      "hoenn-route-117",
-      "ever-grande-city"
-     ],
-     "hub": false
-    },
-    "ever-grande-city": {
-     "zh": "彩悠市",
-     "kind": "town",
-     "order": 750,
-     "tier": 7,
-     "next": [
-      "hoenn-route-118",
+      "lavaridge-town",
       "hoenn-route-119"
      ],
-     "hub": true
+     "hub": false
     },
     "hoenn-route-119": {
      "zh": "119号道路(丰缘)",
      "kind": "route",
-     "order": 760,
-     "tier": 7,
+     "order": 330,
+     "tier": 3,
      "next": [
-      "ever-grande-city",
+      "hoenn-route-118",
       "hoenn-route-120"
      ],
      "hub": false
@@ -2448,21 +1929,54 @@
     "hoenn-route-120": {
      "zh": "120号道路(丰缘)",
      "kind": "route",
-     "order": 770,
-     "tier": 7,
+     "order": 340,
+     "tier": 3,
      "next": [
       "hoenn-route-119",
-      "hoenn-route-121"
+      "fortree-city"
      ],
      "hub": false
+    },
+    "fortree-city": {
+     "zh": "茵郁市",
+     "kind": "town",
+     "order": 350,
+     "tier": 3,
+     "next": [
+      "hoenn-route-120",
+      "hoenn-route-121"
+     ],
+     "hub": true
     },
     "hoenn-route-121": {
      "zh": "121号道路(丰缘)",
      "kind": "route",
-     "order": 780,
-     "tier": 7,
+     "order": 360,
+     "tier": 4,
      "next": [
-      "hoenn-route-120",
+      "fortree-city",
+      "shoal-cave"
+     ],
+     "hub": false
+    },
+    "shoal-cave": {
+     "zh": "浅滩洞穴",
+     "kind": "area",
+     "order": 370,
+     "tier": 4,
+     "next": [
+      "hoenn-route-121",
+      "seafloor-cavern"
+     ],
+     "hub": false
+    },
+    "seafloor-cavern": {
+     "zh": "海底洞窟",
+     "kind": "area",
+     "order": 380,
+     "tier": 4,
+     "next": [
+      "shoal-cave",
       "hoenn-route-122"
      ],
      "hub": false
@@ -2470,21 +1984,32 @@
     "hoenn-route-122": {
      "zh": "122号水路(丰缘)",
      "kind": "route",
-     "order": 790,
-     "tier": 7,
+     "order": 390,
+     "tier": 4,
      "next": [
-      "hoenn-route-121",
-      "hoenn-route-123"
+      "seafloor-cavern",
+      "lilycove-city"
      ],
      "hub": false
+    },
+    "lilycove-city": {
+     "zh": "水静市",
+     "kind": "town",
+     "order": 400,
+     "tier": 4,
+     "next": [
+      "hoenn-route-122",
+      "hoenn-route-123"
+     ],
+     "hub": true
     },
     "hoenn-route-123": {
      "zh": "123号道路(丰缘)",
      "kind": "route",
-     "order": 800,
-     "tier": 7,
+     "order": 410,
+     "tier": 4,
      "next": [
-      "hoenn-route-122",
+      "lilycove-city",
       "hoenn-route-124"
      ],
      "hub": false
@@ -2492,10 +2017,178 @@
     "hoenn-route-124": {
      "zh": "124号水路(丰缘)",
      "kind": "route",
-     "order": 810,
-     "tier": 7,
+     "order": 420,
+     "tier": 4,
      "next": [
       "hoenn-route-123",
+      "meteor-falls",
+      "hoenn-safari-zone"
+     ],
+     "hub": false
+    },
+    "meteor-falls": {
+     "zh": "流星瀑布",
+     "kind": "area",
+     "order": 430,
+     "tier": 4,
+     "next": [
+      "hoenn-route-124",
+      "new-mauville"
+     ],
+     "hub": false
+    },
+    "new-mauville": {
+     "zh": "新紫堇",
+     "kind": "area",
+     "order": 440,
+     "tier": 4,
+     "next": [
+      "meteor-falls",
+      "mt-pyre"
+     ],
+     "hub": false
+    },
+    "mt-pyre": {
+     "zh": "送神山",
+     "kind": "area",
+     "order": 450,
+     "tier": 4,
+     "next": [
+      "new-mauville",
+      "hoenn-safari-zone"
+     ],
+     "hub": false
+    },
+    "hoenn-safari-zone": {
+     "zh": "狩猎地带",
+     "kind": "town",
+     "order": 460,
+     "tier": 4,
+     "next": [
+      "hoenn-route-124",
+      "mt-pyre",
+      "magma-hideout",
+      "hoenn-route-125"
+     ],
+     "hub": true
+    },
+    "magma-hideout": {
+     "zh": "熔岩队本部",
+     "kind": "area",
+     "order": 470,
+     "tier": 4,
+     "next": [
+      "hoenn-safari-zone",
+      "hoenn-victory-road"
+     ],
+     "hub": false
+    },
+    "hoenn-victory-road": {
+     "zh": "冠军之路",
+     "kind": "area",
+     "order": 480,
+     "tier": 5,
+     "next": [
+      "magma-hideout",
+      "scorched-slab"
+     ],
+     "hub": false
+    },
+    "scorched-slab": {
+     "zh": "天旱石窟",
+     "kind": "area",
+     "order": 490,
+     "tier": 5,
+     "next": [
+      "hoenn-victory-road",
+      "team-aqua-hideout"
+     ],
+     "hub": false
+    },
+    "team-aqua-hideout": {
+     "zh": "海洋队基地",
+     "kind": "area",
+     "order": 500,
+     "tier": 5,
+     "next": [
+      "scorched-slab",
+      "team-magma-hideout"
+     ],
+     "hub": false
+    },
+    "team-magma-hideout": {
+     "zh": "熔岩队本部",
+     "kind": "area",
+     "order": 510,
+     "tier": 5,
+     "next": [
+      "team-aqua-hideout",
+      "cave-of-origin"
+     ],
+     "hub": false
+    },
+    "cave-of-origin": {
+     "zh": "觉醒神殿",
+     "kind": "area",
+     "order": 520,
+     "tier": 5,
+     "next": [
+      "team-magma-hideout",
+      "desert-underpass"
+     ],
+     "hub": false
+    },
+    "desert-underpass": {
+     "zh": "沙漠的地下道",
+     "kind": "area",
+     "order": 530,
+     "tier": 5,
+     "next": [
+      "cave-of-origin",
+      "island-cave"
+     ],
+     "hub": false
+    },
+    "island-cave": {
+     "zh": "小岛洞穴",
+     "kind": "area",
+     "order": 540,
+     "tier": 5,
+     "next": [
+      "desert-underpass",
+      "artisan-cave"
+     ],
+     "hub": false
+    },
+    "artisan-cave": {
+     "zh": "工匠之穴",
+     "kind": "area",
+     "order": 550,
+     "tier": 5,
+     "next": [
+      "island-cave",
+      "mossdeep-space-center"
+     ],
+     "hub": false
+    },
+    "mossdeep-space-center": {
+     "zh": "绿岭宇宙中心",
+     "kind": "area",
+     "order": 560,
+     "tier": 5,
+     "next": [
+      "artisan-cave",
+      "sea-mauville"
+     ],
+     "hub": false
+    },
+    "sea-mauville": {
+     "zh": "海紫堇",
+     "kind": "area",
+     "order": 570,
+     "tier": 5,
+     "next": [
+      "mossdeep-space-center",
       "hoenn-route-125"
      ],
      "hub": false
@@ -2503,21 +2196,33 @@
     "hoenn-route-125": {
      "zh": "125号水路(丰缘)",
      "kind": "route",
-     "order": 820,
-     "tier": 7,
+     "order": 580,
+     "tier": 5,
      "next": [
-      "hoenn-route-124",
-      "hoenn-route-126"
+      "hoenn-safari-zone",
+      "sea-mauville",
+      "mossdeep-city"
      ],
      "hub": false
+    },
+    "mossdeep-city": {
+     "zh": "绿岭市",
+     "kind": "town",
+     "order": 590,
+     "tier": 5,
+     "next": [
+      "hoenn-route-125",
+      "hoenn-route-126"
+     ],
+     "hub": true
     },
     "hoenn-route-126": {
      "zh": "126号水路(丰缘)",
      "kind": "route",
-     "order": 830,
-     "tier": 7,
+     "order": 600,
+     "tier": 6,
      "next": [
-      "hoenn-route-125",
+      "mossdeep-city",
       "hoenn-route-127"
      ],
      "hub": false
@@ -2525,44 +2230,43 @@
     "hoenn-route-127": {
      "zh": "127号水路(丰缘)",
      "kind": "route",
-     "order": 840,
-     "tier": 8,
+     "order": 610,
+     "tier": 6,
      "next": [
       "hoenn-route-126",
-      "hoenn-route-128"
+      "sootopolis-city"
      ],
      "hub": false
+    },
+    "sootopolis-city": {
+     "zh": "琉璃市",
+     "kind": "town",
+     "order": 620,
+     "tier": 6,
+     "next": [
+      "hoenn-route-127",
+      "hoenn-route-128"
+     ],
+     "hub": true
     },
     "hoenn-route-128": {
      "zh": "128号水路(丰缘)",
      "kind": "route",
-     "order": 850,
-     "tier": 8,
+     "order": 630,
+     "tier": 6,
      "next": [
-      "hoenn-route-127",
-      "pacifidlog-town"
+      "sootopolis-city",
+      "hoenn-route-129"
      ],
      "hub": false
-    },
-    "pacifidlog-town": {
-     "zh": "暮水镇",
-     "kind": "town",
-     "order": 860,
-     "tier": 8,
-     "next": [
-      "hoenn-route-128",
-      "hoenn-route-129",
-      "hoenn-pokemon-league"
-     ],
-     "hub": true
     },
     "hoenn-route-129": {
      "zh": "129号水路(丰缘)",
      "kind": "route",
-     "order": 870,
-     "tier": 8,
+     "order": 640,
+     "tier": 6,
      "next": [
-      "pacifidlog-town",
+      "hoenn-route-128",
       "hoenn-route-130"
      ],
      "hub": false
@@ -2570,21 +2274,32 @@
     "hoenn-route-130": {
      "zh": "130号水路(丰缘)",
      "kind": "route",
-     "order": 880,
-     "tier": 8,
+     "order": 650,
+     "tier": 6,
      "next": [
       "hoenn-route-129",
-      "hoenn-route-131"
+      "ever-grande-city"
      ],
      "hub": false
+    },
+    "ever-grande-city": {
+     "zh": "彩悠市",
+     "kind": "town",
+     "order": 660,
+     "tier": 6,
+     "next": [
+      "hoenn-route-130",
+      "hoenn-route-131"
+     ],
+     "hub": true
     },
     "hoenn-route-131": {
      "zh": "131号水路(丰缘)",
      "kind": "route",
-     "order": 890,
-     "tier": 8,
+     "order": 670,
+     "tier": 6,
      "next": [
-      "hoenn-route-130",
+      "ever-grande-city",
       "hoenn-route-132"
      ],
      "hub": false
@@ -2592,21 +2307,32 @@
     "hoenn-route-132": {
      "zh": "132号水路(丰缘)",
      "kind": "route",
-     "order": 900,
-     "tier": 8,
+     "order": 680,
+     "tier": 6,
      "next": [
       "hoenn-route-131",
-      "hoenn-route-133"
+      "pacifidlog-town"
      ],
      "hub": false
+    },
+    "pacifidlog-town": {
+     "zh": "暮水镇",
+     "kind": "town",
+     "order": 690,
+     "tier": 6,
+     "next": [
+      "hoenn-route-132",
+      "hoenn-route-133"
+     ],
+     "hub": true
     },
     "hoenn-route-133": {
      "zh": "133号水路(丰缘)",
      "kind": "route",
-     "order": 910,
-     "tier": 8,
+     "order": 700,
+     "tier": 6,
      "next": [
-      "hoenn-route-132",
+      "pacifidlog-town",
       "hoenn-route-134"
      ],
      "hub": false
@@ -2614,10 +2340,244 @@
     "hoenn-route-134": {
      "zh": "134号水路(丰缘)",
      "kind": "route",
+     "order": 710,
+     "tier": 6,
+     "next": [
+      "hoenn-route-133",
+      "hoenn-altering-cave",
+      "battle-resort"
+     ],
+     "hub": false
+    },
+    "hoenn-altering-cave": {
+     "zh": "变幻洞窟",
+     "kind": "area",
+     "order": 720,
+     "tier": 7,
+     "next": [
+      "hoenn-route-134",
+      "mirage-tower"
+     ],
+     "hub": false
+    },
+    "mirage-tower": {
+     "zh": "幻影之塔",
+     "kind": "area",
+     "order": 730,
+     "tier": 7,
+     "next": [
+      "hoenn-altering-cave",
+      "mirage-island"
+     ],
+     "hub": false
+    },
+    "mirage-island": {
+     "zh": "mirage-island",
+     "kind": "area",
+     "order": 740,
+     "tier": 7,
+     "next": [
+      "mirage-tower",
+      "faraway-island"
+     ],
+     "hub": false
+    },
+    "faraway-island": {
+     "zh": "边境的小岛",
+     "kind": "area",
+     "order": 750,
+     "tier": 7,
+     "next": [
+      "mirage-island",
+      "mirage-spot-cave"
+     ],
+     "hub": false
+    },
+    "mirage-spot-cave": {
+     "zh": "幻之洞窟",
+     "kind": "area",
+     "order": 760,
+     "tier": 7,
+     "next": [
+      "faraway-island",
+      "mirage-spot-mountain"
+     ],
+     "hub": false
+    },
+    "mirage-spot-mountain": {
+     "zh": "幻之山脈",
+     "kind": "area",
+     "order": 770,
+     "tier": 7,
+     "next": [
+      "mirage-spot-cave",
+      "mirage-spot-forest"
+     ],
+     "hub": false
+    },
+    "mirage-spot-forest": {
+     "zh": "Mirage Forest",
+     "kind": "area",
+     "order": 780,
+     "tier": 7,
+     "next": [
+      "mirage-spot-mountain",
+      "mirage-spot-island"
+     ],
+     "hub": false
+    },
+    "mirage-spot-island": {
+     "zh": "幻之岛",
+     "kind": "area",
+     "order": 790,
+     "tier": 7,
+     "next": [
+      "mirage-spot-forest",
+      "ancient-tomb"
+     ],
+     "hub": false
+    },
+    "ancient-tomb": {
+     "zh": "古代坟墓",
+     "kind": "area",
+     "order": 800,
+     "tier": 7,
+     "next": [
+      "mirage-spot-island",
+      "battle-resort"
+     ],
+     "hub": false
+    },
+    "battle-resort": {
+     "zh": "对战度假地",
+     "kind": "town",
+     "order": 810,
+     "tier": 7,
+     "next": [
+      "hoenn-route-134",
+      "ancient-tomb",
+      "desert-ruins",
+      "hoenn-pokemon-league"
+     ],
+     "hub": true
+    },
+    "desert-ruins": {
+     "zh": "沙漠遗迹",
+     "kind": "area",
+     "order": 820,
+     "tier": 7,
+     "next": [
+      "battle-resort",
+      "southern-island"
+     ],
+     "hub": false
+    },
+    "southern-island": {
+     "zh": "南方孤岛",
+     "kind": "area",
+     "order": 830,
+     "tier": 7,
+     "next": [
+      "desert-ruins",
+      "hoenn-battle-frontier"
+     ],
+     "hub": false
+    },
+    "hoenn-battle-frontier": {
+     "zh": "对战开拓区(第三世代)",
+     "kind": "area",
+     "order": 840,
+     "tier": 8,
+     "next": [
+      "southern-island",
+      "sky-pillar"
+     ],
+     "hub": false
+    },
+    "sky-pillar": {
+     "zh": "天空之柱",
+     "kind": "area",
+     "order": 850,
+     "tier": 8,
+     "next": [
+      "hoenn-battle-frontier",
+      "crescent-isle"
+     ],
+     "hub": false
+    },
+    "crescent-isle": {
+     "zh": "弓形島",
+     "kind": "area",
+     "order": 860,
+     "tier": 8,
+     "next": [
+      "sky-pillar",
+      "fabled-cave"
+     ],
+     "hub": false
+    },
+    "fabled-cave": {
+     "zh": "朦胧洞窟",
+     "kind": "area",
+     "order": 870,
+     "tier": 8,
+     "next": [
+      "crescent-isle",
+      "gnarled-den"
+     ],
+     "hub": false
+    },
+    "gnarled-den": {
+     "zh": "歪曲洞穴",
+     "kind": "area",
+     "order": 880,
+     "tier": 8,
+     "next": [
+      "fabled-cave",
+      "nameless-cavern"
+     ],
+     "hub": false
+    },
+    "nameless-cavern": {
+     "zh": "未知洞窟",
+     "kind": "area",
+     "order": 890,
+     "tier": 8,
+     "next": [
+      "gnarled-den",
+      "pathless-plain"
+     ],
+     "hub": false
+    },
+    "pathless-plain": {
+     "zh": "无名平原",
+     "kind": "area",
+     "order": 900,
+     "tier": 8,
+     "next": [
+      "nameless-cavern",
+      "soaring-in-the-sky"
+     ],
+     "hub": false
+    },
+    "soaring-in-the-sky": {
+     "zh": "翱翔高空",
+     "kind": "area",
+     "order": 910,
+     "tier": 8,
+     "next": [
+      "pathless-plain",
+      "trackless-forest"
+     ],
+     "hub": false
+    },
+    "trackless-forest": {
+     "zh": "原始森林",
+     "kind": "area",
      "order": 920,
      "tier": 8,
      "next": [
-      "hoenn-route-133",
+      "soaring-in-the-sky",
       "marine-cave"
      ],
      "hub": false
@@ -2628,7 +2588,7 @@
      "order": 930,
      "tier": 8,
      "next": [
-      "hoenn-route-134",
+      "trackless-forest",
       "terra-cave"
      ],
      "hub": false
@@ -2650,7 +2610,7 @@
      "order": 950,
      "tier": 8,
      "next": [
-      "pacifidlog-town",
+      "battle-resort",
       "terra-cave"
      ],
      "hub": true
@@ -2669,52 +2629,72 @@
      "order": 10,
      "tier": 1,
      "next": [
-      "oreburgh-city",
       "sinnoh-route-201"
      ],
      "hub": true
     },
-    "oreburgh-city": {
-     "zh": "黑金市",
-     "kind": "town",
+    "sinnoh-route-201": {
+     "zh": "201号道路(神奥)",
+     "kind": "route",
      "order": 20,
      "tier": 1,
      "next": [
       "twinleaf-town",
-      "oreburgh-mine",
-      "sinnoh-route-201"
+      "sinnoh-route-202"
      ],
-     "hub": true
+     "hub": false
     },
-    "oreburgh-mine": {
-     "zh": "黑金炭坑",
-     "kind": "area",
+    "sinnoh-route-202": {
+     "zh": "202号道路(神奥)",
+     "kind": "route",
      "order": 30,
      "tier": 1,
      "next": [
-      "oreburgh-city",
-      "floaroma-meadow"
+      "sinnoh-route-201",
+      "oreburgh-city"
      ],
      "hub": false
     },
-    "floaroma-meadow": {
-     "zh": "花苑花田",
-     "kind": "area",
+    "oreburgh-city": {
+     "zh": "黑金市",
+     "kind": "town",
      "order": 40,
      "tier": 1,
      "next": [
-      "oreburgh-mine",
-      "eterna-forest"
+      "sinnoh-route-202",
+      "sinnoh-route-203"
      ],
-     "hub": false
+     "hub": true
     },
-    "eterna-forest": {
-     "zh": "百代森林",
-     "kind": "area",
+    "sinnoh-route-203": {
+     "zh": "203号道路(神奥)",
+     "kind": "route",
      "order": 50,
      "tier": 1,
      "next": [
-      "floaroma-meadow",
+      "oreburgh-city",
+      "sinnoh-route-204"
+     ],
+     "hub": false
+    },
+    "sinnoh-route-204": {
+     "zh": "204号道路(神奥)",
+     "kind": "route",
+     "order": 60,
+     "tier": 1,
+     "next": [
+      "sinnoh-route-203",
+      "sinnoh-route-205"
+     ],
+     "hub": false
+    },
+    "sinnoh-route-205": {
+     "zh": "205号道路(神奥)",
+     "kind": "route",
+     "order": 70,
+     "tier": 1,
+     "next": [
+      "sinnoh-route-204",
       "hearthome-city"
      ],
      "hub": false
@@ -2722,110 +2702,88 @@
     "hearthome-city": {
      "zh": "家缘市",
      "kind": "town",
-     "order": 60,
-     "tier": 1,
-     "next": [
-      "eterna-forest",
-      "lake-verity",
-      "sinnoh-route-201"
-     ],
-     "hub": true
-    },
-    "lake-verity": {
-     "zh": "心齐湖",
-     "kind": "area",
-     "order": 70,
-     "tier": 1,
-     "next": [
-      "hearthome-city",
-      "old-chateau"
-     ],
-     "hub": false
-    },
-    "old-chateau": {
-     "zh": "森之洋馆",
-     "kind": "area",
      "order": 80,
      "tier": 1,
      "next": [
-      "lake-verity",
-      "valley-windworks"
+      "sinnoh-route-205",
+      "sinnoh-route-206"
      ],
-     "hub": false
+     "hub": true
     },
-    "valley-windworks": {
-     "zh": "山谷发电厂",
-     "kind": "area",
+    "sinnoh-route-206": {
+     "zh": "206号道路(神奥)",
+     "kind": "route",
      "order": 90,
      "tier": 1,
      "next": [
-      "old-chateau",
-      "wayward-cave"
+      "hearthome-city",
+      "eterna-forest"
+     ],
+     "hub": false
+    },
+    "eterna-forest": {
+     "zh": "百代森林",
+     "kind": "area",
+     "order": 100,
+     "tier": 2,
+     "next": [
+      "sinnoh-route-206",
+      "sinnoh-route-207"
+     ],
+     "hub": false
+    },
+    "sinnoh-route-207": {
+     "zh": "207号道路(神奥)",
+     "kind": "route",
+     "order": 110,
+     "tier": 2,
+     "next": [
+      "eterna-forest",
+      "oreburgh-mine"
+     ],
+     "hub": false
+    },
+    "oreburgh-mine": {
+     "zh": "黑金炭坑",
+     "kind": "area",
+     "order": 120,
+     "tier": 2,
+     "next": [
+      "sinnoh-route-207",
+      "floaroma-meadow"
+     ],
+     "hub": false
+    },
+    "floaroma-meadow": {
+     "zh": "花苑花田",
+     "kind": "area",
+     "order": 130,
+     "tier": 2,
+     "next": [
+      "oreburgh-mine",
+      "sinnoh-route-208"
+     ],
+     "hub": false
+    },
+    "sinnoh-route-208": {
+     "zh": "208号道路(神奥)",
+     "kind": "route",
+     "order": 140,
+     "tier": 2,
+     "next": [
+      "floaroma-meadow",
+      "wayward-cave",
+      "eterna-city"
      ],
      "hub": false
     },
     "wayward-cave": {
      "zh": "迷幻洞窟",
      "kind": "area",
-     "order": 100,
-     "tier": 2,
-     "next": [
-      "valley-windworks",
-      "trainers-school"
-     ],
-     "hub": false
-    },
-    "trainers-school": {
-     "zh": "Trainers’ School",
-     "kind": "area",
-     "order": 110,
-     "tier": 2,
-     "next": [
-      "wayward-cave",
-      "lost-tower"
-     ],
-     "hub": false
-    },
-    "lost-tower": {
-     "zh": "迷失塔",
-     "kind": "area",
-     "order": 120,
-     "tier": 2,
-     "next": [
-      "trainers-school",
-      "trophy-garden"
-     ],
-     "hub": false
-    },
-    "trophy-garden": {
-     "zh": "自豪的後院",
-     "kind": "area",
-     "order": 130,
-     "tier": 2,
-     "next": [
-      "lost-tower",
-      "oreburgh-gate"
-     ],
-     "hub": false
-    },
-    "oreburgh-gate": {
-     "zh": "黑金闸口",
-     "kind": "area",
-     "order": 140,
-     "tier": 2,
-     "next": [
-      "trophy-garden",
-      "ravaged-path"
-     ],
-     "hub": false
-    },
-    "ravaged-path": {
-     "zh": "荒芜小道",
-     "kind": "area",
      "order": 150,
      "tier": 2,
      "next": [
-      "oreburgh-gate",
+      "sinnoh-route-208",
       "eterna-city"
      ],
      "hub": false
@@ -2836,96 +2794,75 @@
      "order": 160,
      "tier": 2,
      "next": [
-      "ravaged-path",
-      "fuego-ironworks",
-      "sinnoh-route-201"
+      "sinnoh-route-208",
+      "wayward-cave",
+      "sinnoh-route-209"
      ],
      "hub": true
     },
-    "fuego-ironworks": {
-     "zh": "多多罗钢铁厂",
-     "kind": "area",
+    "sinnoh-route-209": {
+     "zh": "209号道路(神奥)",
+     "kind": "route",
      "order": 170,
      "tier": 2,
      "next": [
       "eterna-city",
-      "solaceon-ruins"
+      "sinnoh-route-210"
      ],
      "hub": false
     },
-    "solaceon-ruins": {
-     "zh": "随意遗迹",
-     "kind": "area",
+    "sinnoh-route-210": {
+     "zh": "210号道路(神奥)",
+     "kind": "route",
      "order": 180,
      "tier": 2,
      "next": [
-      "fuego-ironworks",
-      "ruin-maniac-cave"
+      "sinnoh-route-209",
+      "oreburgh-gate"
      ],
      "hub": false
     },
-    "ruin-maniac-cave": {
-     "zh": "遗迹迷隧道",
+    "oreburgh-gate": {
+     "zh": "黑金闸口",
      "kind": "area",
      "order": 190,
      "tier": 3,
      "next": [
-      "solaceon-ruins",
-      "valor-lakefront"
+      "sinnoh-route-210",
+      "sinnoh-route-211"
      ],
      "hub": false
     },
-    "valor-lakefront": {
-     "zh": "立志湖畔",
-     "kind": "area",
+    "sinnoh-route-211": {
+     "zh": "211号道路(神奥)",
+     "kind": "route",
      "order": 200,
      "tier": 3,
      "next": [
-      "ruin-maniac-cave",
-      "maniac-tunnel"
+      "oreburgh-gate",
+      "old-chateau",
+      "veilstone-city"
      ],
      "hub": false
     },
-    "maniac-tunnel": {
-     "zh": "遗迹迷隧道",
+    "old-chateau": {
+     "zh": "森之洋馆",
      "kind": "area",
      "order": 210,
      "tier": 3,
      "next": [
-      "valor-lakefront",
-      "great-marsh"
+      "sinnoh-route-211",
+      "valley-windworks"
      ],
      "hub": false
     },
-    "great-marsh": {
-     "zh": "大湿地",
+    "valley-windworks": {
+     "zh": "山谷发电厂",
      "kind": "area",
      "order": 220,
      "tier": 3,
      "next": [
-      "maniac-tunnel",
-      "iron-island"
-     ],
-     "hub": false
-    },
-    "iron-island": {
-     "zh": "钢铁岛",
-     "kind": "area",
-     "order": 230,
-     "tier": 3,
-     "next": [
-      "great-marsh",
-      "mt-coronet"
-     ],
-     "hub": false
-    },
-    "mt-coronet": {
-     "zh": "天冠山",
-     "kind": "area",
-     "order": 240,
-     "tier": 3,
-     "next": [
-      "iron-island",
+      "old-chateau",
       "veilstone-city"
      ],
      "hub": false
@@ -2933,78 +2870,78 @@
     "veilstone-city": {
      "zh": "帷幕市",
      "kind": "town",
-     "order": 250,
+     "order": 230,
      "tier": 3,
      "next": [
-      "mt-coronet",
-      "flower-paradise",
-      "sinnoh-route-201"
+      "sinnoh-route-211",
+      "valley-windworks",
+      "sinnoh-route-212"
      ],
      "hub": true
     },
-    "flower-paradise": {
-     "zh": "花之乐园",
-     "kind": "area",
-     "order": 260,
+    "sinnoh-route-212": {
+     "zh": "212号道路(神奥)",
+     "kind": "route",
+     "order": 240,
      "tier": 3,
      "next": [
       "veilstone-city",
-      "resort-area"
+      "sinnoh-route-213"
      ],
      "hub": false
     },
-    "resort-area": {
-     "zh": "名胜区",
-     "kind": "town",
+    "sinnoh-route-213": {
+     "zh": "213号道路(神奥)",
+     "kind": "route",
+     "order": 250,
+     "tier": 3,
+     "next": [
+      "sinnoh-route-212",
+      "sinnoh-route-214"
+     ],
+     "hub": false
+    },
+    "sinnoh-route-214": {
+     "zh": "214号道路(神奥)",
+     "kind": "route",
+     "order": 260,
+     "tier": 3,
+     "next": [
+      "sinnoh-route-213",
+      "trainers-school",
+      "pastoria-city"
+     ],
+     "hub": false
+    },
+    "trainers-school": {
+     "zh": "Trainers’ School",
+     "kind": "area",
      "order": 270,
      "tier": 3,
      "next": [
-      "flower-paradise",
-      "lake-valor",
-      "sinnoh-route-201"
+      "sinnoh-route-214",
+      "lost-tower"
      ],
-     "hub": true
+     "hub": false
     },
-    "lake-valor": {
-     "zh": "立志湖",
+    "lost-tower": {
+     "zh": "迷失塔",
      "kind": "area",
      "order": 280,
      "tier": 3,
      "next": [
-      "resort-area",
-      "lake-acuity"
+      "trainers-school",
+      "trophy-garden"
      ],
      "hub": false
     },
-    "lake-acuity": {
-     "zh": "睿智湖",
+    "trophy-garden": {
+     "zh": "自豪的後院",
      "kind": "area",
      "order": 290,
      "tier": 4,
      "next": [
-      "lake-valor",
-      "acuity-lakefront"
-     ],
-     "hub": false
-    },
-    "acuity-lakefront": {
-     "zh": "睿智湖畔",
-     "kind": "area",
-     "order": 300,
-     "tier": 4,
-     "next": [
-      "lake-acuity",
-      "sendoff-spring"
-     ],
-     "hub": false
-    },
-    "sendoff-spring": {
-     "zh": "送行之泉",
-     "kind": "area",
-     "order": 310,
-     "tier": 4,
-     "next": [
-      "acuity-lakefront",
+      "lost-tower",
       "pastoria-city"
      ],
      "hub": false
@@ -3012,44 +2949,67 @@
     "pastoria-city": {
      "zh": "野原市",
      "kind": "town",
-     "order": 320,
+     "order": 300,
      "tier": 4,
      "next": [
-      "sendoff-spring",
-      "turnback-cave",
-      "sinnoh-route-201"
+      "sinnoh-route-214",
+      "trophy-garden",
+      "sinnoh-route-215"
      ],
      "hub": true
     },
-    "turnback-cave": {
-     "zh": "归途洞窟",
-     "kind": "area",
-     "order": 330,
+    "sinnoh-route-215": {
+     "zh": "215号道路(神奥)",
+     "kind": "route",
+     "order": 310,
      "tier": 4,
      "next": [
       "pastoria-city",
-      "sinnoh-victory-road"
+      "lake-verity"
      ],
      "hub": false
     },
-    "sinnoh-victory-road": {
-     "zh": "冠军之路",
+    "lake-verity": {
+     "zh": "心齐湖",
+     "kind": "area",
+     "order": 320,
+     "tier": 4,
+     "next": [
+      "sinnoh-route-215",
+      "sinnoh-route-216"
+     ],
+     "hub": false
+    },
+    "sinnoh-route-216": {
+     "zh": "216号道路(神奥)",
+     "kind": "route",
+     "order": 330,
+     "tier": 4,
+     "next": [
+      "lake-verity",
+      "lake-valor",
+      "celestic-town"
+     ],
+     "hub": false
+    },
+    "lake-valor": {
+     "zh": "立志湖",
      "kind": "area",
      "order": 340,
      "tier": 4,
      "next": [
-      "turnback-cave",
-      "newmoon-island"
+      "sinnoh-route-216",
+      "lake-acuity"
      ],
      "hub": false
     },
-    "newmoon-island": {
-     "zh": "新月岛",
+    "lake-acuity": {
+     "zh": "睿智湖",
      "kind": "area",
      "order": 350,
      "tier": 4,
      "next": [
-      "sinnoh-victory-road",
+      "lake-valor",
       "celestic-town"
      ],
      "hub": false
@@ -3060,284 +3020,30 @@
      "order": 360,
      "tier": 4,
      "next": [
-      "newmoon-island",
-      "distortion-world",
-      "sinnoh-route-201"
-     ],
-     "hub": true
-    },
-    "distortion-world": {
-     "zh": "毀壞的世界",
-     "kind": "area",
-     "order": 370,
-     "tier": 4,
-     "next": [
-      "celestic-town",
-      "snowpoint-temple"
-     ],
-     "hub": false
-    },
-    "snowpoint-temple": {
-     "zh": "雪峰神殿",
-     "kind": "area",
-     "order": 380,
-     "tier": 5,
-     "next": [
-      "distortion-world",
-      "stark-mountain"
-     ],
-     "hub": false
-    },
-    "stark-mountain": {
-     "zh": "严酷山",
-     "kind": "area",
-     "order": 390,
-     "tier": 5,
-     "next": [
-      "snowpoint-temple",
-      "canalave-city"
-     ],
-     "hub": false
-    },
-    "canalave-city": {
-     "zh": "水脉市",
-     "kind": "town",
-     "order": 400,
-     "tier": 5,
-     "next": [
-      "stark-mountain",
-      "spear-pillar",
-      "sinnoh-route-201"
-     ],
-     "hub": true
-    },
-    "spear-pillar": {
-     "zh": "枪之柱",
-     "kind": "area",
-     "order": 410,
-     "tier": 5,
-     "next": [
-      "canalave-city",
-      "snowpoint-city"
-     ],
-     "hub": false
-    },
-    "snowpoint-city": {
-     "zh": "雪峰市",
-     "kind": "town",
-     "order": 420,
-     "tier": 5,
-     "next": [
-      "spear-pillar",
-      "sunyshore-city",
-      "sinnoh-route-201"
-     ],
-     "hub": true
-    },
-    "sunyshore-city": {
-     "zh": "滨海市",
-     "kind": "town",
-     "order": 430,
-     "tier": 5,
-     "next": [
-      "snowpoint-city",
-      "sinnoh-route-201"
-     ],
-     "hub": true
-    },
-    "sinnoh-route-201": {
-     "zh": "201号道路(神奥)",
-     "kind": "route",
-     "order": 440,
-     "tier": 5,
-     "next": [
-      "twinleaf-town",
-      "oreburgh-city",
-      "hearthome-city",
-      "eterna-city",
-      "veilstone-city",
-      "resort-area",
-      "pastoria-city",
-      "celestic-town",
-      "canalave-city",
-      "snowpoint-city",
-      "sunyshore-city",
-      "sinnoh-route-202"
-     ],
-     "hub": false
-    },
-    "sinnoh-route-202": {
-     "zh": "202号道路(神奥)",
-     "kind": "route",
-     "order": 450,
-     "tier": 5,
-     "next": [
-      "sinnoh-route-201",
-      "sinnoh-route-203"
-     ],
-     "hub": false
-    },
-    "sinnoh-route-203": {
-     "zh": "203号道路(神奥)",
-     "kind": "route",
-     "order": 460,
-     "tier": 5,
-     "next": [
-      "sinnoh-route-202",
-      "sinnoh-route-204"
-     ],
-     "hub": false
-    },
-    "sinnoh-route-204": {
-     "zh": "204号道路(神奥)",
-     "kind": "route",
-     "order": 470,
-     "tier": 6,
-     "next": [
-      "sinnoh-route-203",
-      "sinnoh-route-205"
-     ],
-     "hub": false
-    },
-    "sinnoh-route-205": {
-     "zh": "205号道路(神奥)",
-     "kind": "route",
-     "order": 480,
-     "tier": 6,
-     "next": [
-      "sinnoh-route-204",
-      "sinnoh-route-206"
-     ],
-     "hub": false
-    },
-    "sinnoh-route-206": {
-     "zh": "206号道路(神奥)",
-     "kind": "route",
-     "order": 490,
-     "tier": 6,
-     "next": [
-      "sinnoh-route-205",
-      "sinnoh-route-207"
-     ],
-     "hub": false
-    },
-    "sinnoh-route-207": {
-     "zh": "207号道路(神奥)",
-     "kind": "route",
-     "order": 500,
-     "tier": 6,
-     "next": [
-      "sinnoh-route-206",
-      "sinnoh-route-208"
-     ],
-     "hub": false
-    },
-    "sinnoh-route-208": {
-     "zh": "208号道路(神奥)",
-     "kind": "route",
-     "order": 510,
-     "tier": 6,
-     "next": [
-      "sinnoh-route-207",
-      "sinnoh-route-209"
-     ],
-     "hub": false
-    },
-    "sinnoh-route-209": {
-     "zh": "209号道路(神奥)",
-     "kind": "route",
-     "order": 520,
-     "tier": 6,
-     "next": [
-      "sinnoh-route-208",
-      "sinnoh-route-210"
-     ],
-     "hub": false
-    },
-    "sinnoh-route-210": {
-     "zh": "210号道路(神奥)",
-     "kind": "route",
-     "order": 530,
-     "tier": 6,
-     "next": [
-      "sinnoh-route-209",
-      "sinnoh-route-211"
-     ],
-     "hub": false
-    },
-    "sinnoh-route-211": {
-     "zh": "211号道路(神奥)",
-     "kind": "route",
-     "order": 540,
-     "tier": 6,
-     "next": [
-      "sinnoh-route-210",
-      "sinnoh-route-212"
-     ],
-     "hub": false
-    },
-    "sinnoh-route-212": {
-     "zh": "212号道路(神奥)",
-     "kind": "route",
-     "order": 550,
-     "tier": 6,
-     "next": [
-      "sinnoh-route-211",
-      "sinnoh-route-213"
-     ],
-     "hub": false
-    },
-    "sinnoh-route-213": {
-     "zh": "213号道路(神奥)",
-     "kind": "route",
-     "order": 560,
-     "tier": 6,
-     "next": [
-      "sinnoh-route-212",
-      "sinnoh-route-214"
-     ],
-     "hub": false
-    },
-    "sinnoh-route-214": {
-     "zh": "214号道路(神奥)",
-     "kind": "route",
-     "order": 570,
-     "tier": 7,
-     "next": [
-      "sinnoh-route-213",
-      "sinnoh-route-215"
-     ],
-     "hub": false
-    },
-    "sinnoh-route-215": {
-     "zh": "215号道路(神奥)",
-     "kind": "route",
-     "order": 580,
-     "tier": 7,
-     "next": [
-      "sinnoh-route-214",
-      "sinnoh-route-216"
-     ],
-     "hub": false
-    },
-    "sinnoh-route-216": {
-     "zh": "216号道路(神奥)",
-     "kind": "route",
-     "order": 590,
-     "tier": 7,
-     "next": [
-      "sinnoh-route-215",
+      "sinnoh-route-216",
+      "lake-acuity",
       "sinnoh-route-217"
      ],
-     "hub": false
+     "hub": true
     },
     "sinnoh-route-217": {
      "zh": "217号道路(神奥)",
      "kind": "route",
-     "order": 600,
-     "tier": 7,
+     "order": 370,
+     "tier": 4,
      "next": [
-      "sinnoh-route-216",
+      "celestic-town",
+      "acuity-lakefront"
+     ],
+     "hub": false
+    },
+    "acuity-lakefront": {
+     "zh": "睿智湖畔",
+     "kind": "area",
+     "order": 380,
+     "tier": 5,
+     "next": [
+      "sinnoh-route-217",
       "sinnoh-route-218"
      ],
      "hub": false
@@ -3345,43 +3051,78 @@
     "sinnoh-route-218": {
      "zh": "218号道路(神奥)",
      "kind": "route",
-     "order": 610,
-     "tier": 7,
+     "order": 390,
+     "tier": 5,
      "next": [
-      "sinnoh-route-217",
-      "sinnoh-pokemon-league"
+      "acuity-lakefront",
+      "ravaged-path"
      ],
      "hub": false
     },
-    "sinnoh-pokemon-league": {
-     "zh": "宝可梦联盟",
-     "kind": "town",
-     "order": 620,
-     "tier": 7,
+    "ravaged-path": {
+     "zh": "荒芜小道",
+     "kind": "area",
+     "order": 400,
+     "tier": 5,
      "next": [
       "sinnoh-route-218",
       "sinnoh-route-219"
      ],
-     "hub": true
+     "hub": false
     },
     "sinnoh-route-219": {
      "zh": "219号道路(神奥)",
      "kind": "route",
-     "order": 630,
-     "tier": 7,
+     "order": 410,
+     "tier": 5,
      "next": [
-      "sinnoh-pokemon-league",
-      "sinnoh-sea-route-220"
+      "ravaged-path",
+      "maniac-tunnel",
+      "canalave-city"
      ],
      "hub": false
+    },
+    "maniac-tunnel": {
+     "zh": "遗迹迷隧道",
+     "kind": "area",
+     "order": 420,
+     "tier": 5,
+     "next": [
+      "sinnoh-route-219",
+      "great-marsh"
+     ],
+     "hub": false
+    },
+    "great-marsh": {
+     "zh": "大湿地",
+     "kind": "area",
+     "order": 430,
+     "tier": 5,
+     "next": [
+      "maniac-tunnel",
+      "canalave-city"
+     ],
+     "hub": false
+    },
+    "canalave-city": {
+     "zh": "水脉市",
+     "kind": "town",
+     "order": 440,
+     "tier": 5,
+     "next": [
+      "sinnoh-route-219",
+      "great-marsh",
+      "sinnoh-sea-route-220"
+     ],
+     "hub": true
     },
     "sinnoh-sea-route-220": {
      "zh": "220号水路(神奥)",
      "kind": "route",
-     "order": 640,
-     "tier": 7,
+     "order": 450,
+     "tier": 5,
      "next": [
-      "sinnoh-route-219",
+      "canalave-city",
       "sinnoh-route-221"
      ],
      "hub": false
@@ -3389,10 +3130,54 @@
     "sinnoh-route-221": {
      "zh": "221号道路(神奥)",
      "kind": "route",
-     "order": 650,
-     "tier": 7,
+     "order": 460,
+     "tier": 5,
      "next": [
       "sinnoh-sea-route-220",
+      "fuego-ironworks"
+     ],
+     "hub": false
+    },
+    "fuego-ironworks": {
+     "zh": "多多罗钢铁厂",
+     "kind": "area",
+     "order": 470,
+     "tier": 6,
+     "next": [
+      "sinnoh-route-221",
+      "solaceon-ruins"
+     ],
+     "hub": false
+    },
+    "solaceon-ruins": {
+     "zh": "随意遗迹",
+     "kind": "area",
+     "order": 480,
+     "tier": 6,
+     "next": [
+      "fuego-ironworks",
+      "ruin-maniac-cave"
+     ],
+     "hub": false
+    },
+    "ruin-maniac-cave": {
+     "zh": "遗迹迷隧道",
+     "kind": "area",
+     "order": 490,
+     "tier": 6,
+     "next": [
+      "solaceon-ruins",
+      "valor-lakefront"
+     ],
+     "hub": false
+    },
+    "valor-lakefront": {
+     "zh": "立志湖畔",
+     "kind": "area",
+     "order": 500,
+     "tier": 6,
+     "next": [
+      "ruin-maniac-cave",
       "sinnoh-route-222"
      ],
      "hub": false
@@ -3400,21 +3185,45 @@
     "sinnoh-route-222": {
      "zh": "222号道路(神奥)",
      "kind": "route",
-     "order": 660,
-     "tier": 8,
+     "order": 510,
+     "tier": 6,
      "next": [
-      "sinnoh-route-221",
-      "sinnoh-sea-route-223"
+      "valor-lakefront",
+      "mt-coronet",
+      "snowpoint-city"
      ],
      "hub": false
+    },
+    "mt-coronet": {
+     "zh": "天冠山",
+     "kind": "area",
+     "order": 520,
+     "tier": 6,
+     "next": [
+      "sinnoh-route-222",
+      "snowpoint-city"
+     ],
+     "hub": false
+    },
+    "snowpoint-city": {
+     "zh": "雪峰市",
+     "kind": "town",
+     "order": 530,
+     "tier": 6,
+     "next": [
+      "sinnoh-route-222",
+      "mt-coronet",
+      "sinnoh-sea-route-223"
+     ],
+     "hub": true
     },
     "sinnoh-sea-route-223": {
      "zh": "223号水路(神奥)",
      "kind": "route",
-     "order": 670,
-     "tier": 8,
+     "order": 540,
+     "tier": 6,
      "next": [
-      "sinnoh-route-222",
+      "snowpoint-city",
       "sinnoh-route-224"
      ],
      "hub": false
@@ -3422,10 +3231,21 @@
     "sinnoh-route-224": {
      "zh": "224号道路(神奥)",
      "kind": "route",
-     "order": 680,
-     "tier": 8,
+     "order": 550,
+     "tier": 6,
      "next": [
       "sinnoh-sea-route-223",
+      "turnback-cave"
+     ],
+     "hub": false
+    },
+    "turnback-cave": {
+     "zh": "归途洞窟",
+     "kind": "area",
+     "order": 560,
+     "tier": 6,
+     "next": [
+      "sinnoh-route-224",
       "sinnoh-route-225"
      ],
      "hub": false
@@ -3433,21 +3253,32 @@
     "sinnoh-route-225": {
      "zh": "225号道路(神奥)",
      "kind": "route",
-     "order": 690,
-     "tier": 8,
+     "order": 570,
+     "tier": 7,
      "next": [
-      "sinnoh-route-224",
-      "sinnoh-sea-route-226"
+      "turnback-cave",
+      "sunyshore-city"
      ],
      "hub": false
+    },
+    "sunyshore-city": {
+     "zh": "滨海市",
+     "kind": "town",
+     "order": 580,
+     "tier": 7,
+     "next": [
+      "sinnoh-route-225",
+      "sinnoh-sea-route-226"
+     ],
+     "hub": true
     },
     "sinnoh-sea-route-226": {
      "zh": "226号水路(神奥)",
      "kind": "route",
-     "order": 700,
-     "tier": 8,
+     "order": 590,
+     "tier": 7,
      "next": [
-      "sinnoh-route-225",
+      "sunyshore-city",
       "sinnoh-route-227"
      ],
      "hub": false
@@ -3455,10 +3286,43 @@
     "sinnoh-route-227": {
      "zh": "227号道路(神奥)",
      "kind": "route",
-     "order": 710,
-     "tier": 8,
+     "order": 600,
+     "tier": 7,
      "next": [
       "sinnoh-sea-route-226",
+      "sinnoh-victory-road"
+     ],
+     "hub": false
+    },
+    "sinnoh-victory-road": {
+     "zh": "冠军之路",
+     "kind": "area",
+     "order": 610,
+     "tier": 7,
+     "next": [
+      "sinnoh-route-227",
+      "snowpoint-temple"
+     ],
+     "hub": false
+    },
+    "snowpoint-temple": {
+     "zh": "雪峰神殿",
+     "kind": "area",
+     "order": 620,
+     "tier": 7,
+     "next": [
+      "sinnoh-victory-road",
+      "spear-pillar"
+     ],
+     "hub": false
+    },
+    "spear-pillar": {
+     "zh": "枪之柱",
+     "kind": "area",
+     "order": 630,
+     "tier": 7,
+     "next": [
+      "snowpoint-temple",
       "sinnoh-route-228"
      ],
      "hub": false
@@ -3466,21 +3330,33 @@
     "sinnoh-route-228": {
      "zh": "228号道路(神奥)",
      "kind": "route",
-     "order": 720,
-     "tier": 8,
+     "order": 640,
+     "tier": 7,
      "next": [
-      "sinnoh-route-227",
-      "sinnoh-route-229"
+      "spear-pillar",
+      "sinnoh-pokemon-league"
      ],
      "hub": false
+    },
+    "sinnoh-pokemon-league": {
+     "zh": "宝可梦联盟",
+     "kind": "town",
+     "order": 650,
+     "tier": 7,
+     "next": [
+      "sinnoh-route-228",
+      "sinnoh-route-229",
+      "resort-area"
+     ],
+     "hub": true
     },
     "sinnoh-route-229": {
      "zh": "229号道路(神奥)",
      "kind": "route",
-     "order": 730,
+     "order": 660,
      "tier": 8,
      "next": [
-      "sinnoh-route-228",
+      "sinnoh-pokemon-league",
       "sinnoh-sea-route-230"
      ],
      "hub": false
@@ -3488,10 +3364,90 @@
     "sinnoh-sea-route-230": {
      "zh": "230号水路(神奥)",
      "kind": "route",
-     "order": 740,
+     "order": 670,
      "tier": 8,
      "next": [
       "sinnoh-route-229",
+      "iron-island",
+      "resort-area"
+     ],
+     "hub": false
+    },
+    "iron-island": {
+     "zh": "钢铁岛",
+     "kind": "area",
+     "order": 680,
+     "tier": 8,
+     "next": [
+      "sinnoh-sea-route-230",
+      "flower-paradise"
+     ],
+     "hub": false
+    },
+    "flower-paradise": {
+     "zh": "花之乐园",
+     "kind": "area",
+     "order": 690,
+     "tier": 8,
+     "next": [
+      "iron-island",
+      "resort-area"
+     ],
+     "hub": false
+    },
+    "resort-area": {
+     "zh": "名胜区",
+     "kind": "town",
+     "order": 700,
+     "tier": 8,
+     "next": [
+      "sinnoh-pokemon-league",
+      "sinnoh-sea-route-230",
+      "flower-paradise",
+      "sendoff-spring"
+     ],
+     "hub": true
+    },
+    "sendoff-spring": {
+     "zh": "送行之泉",
+     "kind": "area",
+     "order": 710,
+     "tier": 8,
+     "next": [
+      "resort-area",
+      "newmoon-island"
+     ],
+     "hub": false
+    },
+    "newmoon-island": {
+     "zh": "新月岛",
+     "kind": "area",
+     "order": 720,
+     "tier": 8,
+     "next": [
+      "sendoff-spring",
+      "distortion-world"
+     ],
+     "hub": false
+    },
+    "distortion-world": {
+     "zh": "毀壞的世界",
+     "kind": "area",
+     "order": 730,
+     "tier": 8,
+     "next": [
+      "newmoon-island",
+      "stark-mountain"
+     ],
+     "hub": false
+    },
+    "stark-mountain": {
+     "zh": "严酷山",
+     "kind": "area",
+     "order": 740,
+     "tier": 8,
+     "next": [
+      "distortion-world",
       "sinnoh-hall-of-origin-1"
      ],
      "hub": false
@@ -3502,7 +3458,7 @@
      "order": 750,
      "tier": 8,
      "next": [
-      "sinnoh-sea-route-230"
+      "stark-mountain"
      ],
      "hub": false
     }
@@ -3531,22 +3487,20 @@
      "tier": 1,
      "next": [
       "nuvema-town",
-      "floccesy-town",
-      "accumula-town"
+      "unova-route-2"
      ],
      "hub": false
     },
-    "floccesy-town": {
-     "zh": "算木鎮",
-     "kind": "town",
+    "unova-route-2": {
+     "zh": "2号道路",
+     "kind": "route",
      "order": 30,
      "tier": 1,
      "next": [
       "unova-route-1",
-      "accumula-town",
-      "unova-route-2"
+      "accumula-town"
      ],
-     "hub": true
+     "hub": false
     },
     "accumula-town": {
      "zh": "唐草鎮",
@@ -3554,31 +3508,40 @@
      "order": 40,
      "tier": 1,
      "next": [
-      "unova-route-1",
-      "floccesy-town",
-      "unova-route-2"
-     ],
-     "hub": true
-    },
-    "unova-route-2": {
-     "zh": "2号道路",
-     "kind": "route",
-     "order": 50,
-     "tier": 1,
-     "next": [
-      "floccesy-town",
-      "accumula-town",
+      "unova-route-2",
       "unova-route-3"
      ],
-     "hub": false
+     "hub": true
     },
     "unova-route-3": {
      "zh": "3号道路(关都)",
      "kind": "route",
+     "order": 50,
+     "tier": 1,
+     "next": [
+      "accumula-town",
+      "undella-bay"
+     ],
+     "hub": false
+    },
+    "undella-bay": {
+     "zh": "涟漪湾",
+     "kind": "area",
      "order": 60,
      "tier": 1,
      "next": [
-      "unova-route-2",
+      "unova-route-3",
+      "unova-route-4"
+     ],
+     "hub": false
+    },
+    "unova-route-4": {
+     "zh": "4号道路(合众)",
+     "kind": "route",
+     "order": 70,
+     "tier": 1,
+     "next": [
+      "undella-bay",
       "striaton-city"
      ],
      "hub": false
@@ -3586,24 +3549,13 @@
     "striaton-city": {
      "zh": "三曜市",
      "kind": "town",
-     "order": 70,
-     "tier": 1,
-     "next": [
-      "unova-route-3",
-      "unova-route-4"
-     ],
-     "hub": true
-    },
-    "unova-route-4": {
-     "zh": "4号道路(合众)",
-     "kind": "route",
      "order": 80,
      "tier": 1,
      "next": [
-      "striaton-city",
+      "unova-route-4",
       "unova-route-5"
      ],
-     "hub": false
+     "hub": true
     },
     "unova-route-5": {
      "zh": "5号道路(合众)",
@@ -3611,19 +3563,41 @@
      "order": 90,
      "tier": 1,
      "next": [
-      "unova-route-4",
-      "liberty-garden",
-      "nacrene-city"
+      "striaton-city",
+      "unova-route-6"
      ],
      "hub": false
     },
-    "liberty-garden": {
-     "zh": "自由庭園島",
-     "kind": "area",
+    "unova-route-6": {
+     "zh": "6号道路(合众)",
+     "kind": "route",
      "order": 100,
      "tier": 2,
      "next": [
       "unova-route-5",
+      "chargestone-cave",
+      "nacrene-city"
+     ],
+     "hub": false
+    },
+    "chargestone-cave": {
+     "zh": "电气石洞穴",
+     "kind": "area",
+     "order": 110,
+     "tier": 2,
+     "next": [
+      "unova-route-6",
+      "castelia-sewers"
+     ],
+     "hub": false
+    },
+    "castelia-sewers": {
+     "zh": "飞云下水道",
+     "kind": "area",
+     "order": 120,
+     "tier": 2,
+     "next": [
+      "chargestone-cave",
       "nacrene-city"
      ],
      "hub": false
@@ -3631,33 +3605,33 @@
     "nacrene-city": {
      "zh": "七寶市",
      "kind": "town",
-     "order": 110,
-     "tier": 2,
-     "next": [
-      "unova-route-5",
-      "liberty-garden",
-      "unova-route-6"
-     ],
-     "hub": true
-    },
-    "unova-route-6": {
-     "zh": "6号道路(合众)",
-     "kind": "route",
-     "order": 120,
-     "tier": 2,
-     "next": [
-      "nacrene-city",
-      "unova-route-7"
-     ],
-     "hub": false
-    },
-    "unova-route-7": {
-     "zh": "7号道路(合众)",
-     "kind": "route",
      "order": 130,
      "tier": 2,
      "next": [
       "unova-route-6",
+      "castelia-sewers",
+      "unova-route-7"
+     ],
+     "hub": true
+    },
+    "unova-route-7": {
+     "zh": "7号道路(合众)",
+     "kind": "route",
+     "order": 140,
+     "tier": 2,
+     "next": [
+      "nacrene-city",
+      "strange-house"
+     ],
+     "hub": false
+    },
+    "strange-house": {
+     "zh": "陌生人之家",
+     "kind": "area",
+     "order": 150,
+     "tier": 2,
+     "next": [
+      "unova-route-7",
       "unova-route-8"
      ],
      "hub": false
@@ -3665,40 +3639,13 @@
     "unova-route-8": {
      "zh": "8號道路(阿羅拉)",
      "kind": "route",
-     "order": 140,
-     "tier": 2,
-     "next": [
-      "unova-route-7",
-      "floccesy-ranch",
-      "desert-resort",
-      "castelia-city"
-     ],
-     "hub": false
-    },
-    "floccesy-ranch": {
-     "zh": "算木牧场",
-     "kind": "town",
-     "order": 150,
-     "tier": 2,
-     "next": [
-      "unova-route-8",
-      "desert-resort",
-      "unova-route-9"
-     ],
-     "hub": true
-    },
-    "desert-resort": {
-     "zh": "荒野名勝區",
-     "kind": "town",
      "order": 160,
      "tier": 2,
      "next": [
-      "unova-route-8",
-      "floccesy-ranch",
-      "castelia-city",
-      "unova-route-9"
+      "strange-house",
+      "castelia-city"
      ],
-     "hub": true
+     "hub": false
     },
     "castelia-city": {
      "zh": "飛雲市",
@@ -3707,7 +3654,6 @@
      "tier": 2,
      "next": [
       "unova-route-8",
-      "desert-resort",
       "unova-route-9"
      ],
      "hub": true
@@ -3718,8 +3664,6 @@
      "order": 180,
      "tier": 2,
      "next": [
-      "floccesy-ranch",
-      "desert-resort",
       "castelia-city",
       "unova-route-10"
      ],
@@ -3732,51 +3676,51 @@
      "tier": 2,
      "next": [
       "unova-route-9",
-      "virbank-complex",
+      "celestial-tower",
       "driftveil-city"
      ],
      "hub": false
     },
-    "virbank-complex": {
-     "zh": "立湧聯合工業區",
+    "celestial-tower": {
+     "zh": "天堂之塔",
      "kind": "area",
      "order": 200,
      "tier": 3,
      "next": [
       "unova-route-10",
-      "cold-storage"
+      "reversal-mountain"
      ],
      "hub": false
     },
-    "cold-storage": {
-     "zh": "冷冻仓库",
+    "reversal-mountain": {
+     "zh": "反转山",
      "kind": "area",
      "order": 210,
      "tier": 3,
      "next": [
-      "virbank-complex",
-      "driftveil-drawbridge"
+      "celestial-tower",
+      "relic-castle"
      ],
      "hub": false
     },
-    "driftveil-drawbridge": {
-     "zh": "帆巴吊桥",
+    "relic-castle": {
+     "zh": "古代城",
      "kind": "area",
      "order": 220,
      "tier": 3,
      "next": [
-      "cold-storage",
-      "lostlorn-forest"
+      "reversal-mountain",
+      "marvelous-bridge"
      ],
      "hub": false
     },
-    "lostlorn-forest": {
-     "zh": "迷幻森林",
+    "marvelous-bridge": {
+     "zh": "奇幻桥",
      "kind": "area",
      "order": 230,
      "tier": 3,
      "next": [
-      "driftveil-drawbridge",
+      "relic-castle",
       "driftveil-city"
      ],
      "hub": false
@@ -3788,7 +3732,7 @@
      "tier": 3,
      "next": [
       "unova-route-10",
-      "lostlorn-forest",
+      "marvelous-bridge",
       "unova-route-11"
      ],
      "hub": true
@@ -3800,73 +3744,73 @@
      "tier": 3,
      "next": [
       "driftveil-city",
-      "unova-route-12"
+      "village-bridge"
      ],
      "hub": false
     },
-    "unova-route-12": {
-     "zh": "12号道路",
-     "kind": "route",
+    "village-bridge": {
+     "zh": "村庄桥",
+     "kind": "town",
      "order": 260,
      "tier": 3,
      "next": [
       "unova-route-11",
-      "chargestone-cave",
-      "icirrus-city"
+      "unova-route-12"
      ],
-     "hub": false
+     "hub": true
     },
-    "chargestone-cave": {
-     "zh": "电气石洞穴",
-     "kind": "area",
+    "unova-route-12": {
+     "zh": "12号道路",
+     "kind": "route",
      "order": 270,
      "tier": 3,
      "next": [
-      "unova-route-12",
-      "castelia-sewers"
+      "village-bridge",
+      "moor-of-icirrus"
      ],
      "hub": false
     },
-    "castelia-sewers": {
-     "zh": "飞云下水道",
+    "moor-of-icirrus": {
+     "zh": "雪花湿地",
      "kind": "area",
      "order": 280,
      "tier": 3,
      "next": [
-      "chargestone-cave",
-      "guidance-chamber"
+      "unova-route-12",
+      "dreamyard"
      ],
      "hub": false
     },
-    "guidance-chamber": {
-     "zh": "吹寄洞穴",
+    "dreamyard": {
+     "zh": "夢的遺址",
      "kind": "area",
      "order": 290,
      "tier": 4,
      "next": [
-      "castelia-sewers",
-      "relic-passage"
+      "moor-of-icirrus",
+      "unova-route-13"
      ],
      "hub": false
     },
-    "relic-passage": {
-     "zh": "古代秘道",
-     "kind": "area",
+    "unova-route-13": {
+     "zh": "13号道路",
+     "kind": "route",
      "order": 300,
      "tier": 4,
      "next": [
-      "guidance-chamber",
-      "mistralton-cave"
+      "dreamyard",
+      "abundant-shrine",
+      "icirrus-city"
      ],
      "hub": false
     },
-    "mistralton-cave": {
-     "zh": "吹寄洞穴",
+    "abundant-shrine": {
+     "zh": "丰饶之祠",
      "kind": "area",
      "order": 310,
      "tier": 4,
      "next": [
-      "relic-passage",
+      "unova-route-13",
       "icirrus-city"
      ],
      "hub": false
@@ -3877,439 +3821,42 @@
      "order": 320,
      "tier": 4,
      "next": [
-      "unova-route-12",
-      "mistralton-cave",
-      "unova-route-13"
+      "unova-route-13",
+      "abundant-shrine",
+      "unova-route-14"
      ],
      "hub": true
     },
-    "unova-route-13": {
-     "zh": "13号道路",
+    "unova-route-14": {
+     "zh": "14号道路",
      "kind": "route",
      "order": 330,
      "tier": 4,
      "next": [
       "icirrus-city",
-      "unova-route-14"
-     ],
-     "hub": false
-    },
-    "unova-route-14": {
-     "zh": "14号道路",
-     "kind": "route",
-     "order": 340,
-     "tier": 4,
-     "next": [
-      "unova-route-13",
-      "strange-house",
-      "undella-town"
-     ],
-     "hub": false
-    },
-    "strange-house": {
-     "zh": "陌生人之家",
-     "kind": "area",
-     "order": 350,
-     "tier": 4,
-     "next": [
-      "unova-route-14",
-      "celestial-tower"
-     ],
-     "hub": false
-    },
-    "celestial-tower": {
-     "zh": "天堂之塔",
-     "kind": "area",
-     "order": 360,
-     "tier": 4,
-     "next": [
-      "strange-house",
-      "reversal-mountain"
-     ],
-     "hub": false
-    },
-    "reversal-mountain": {
-     "zh": "反转山",
-     "kind": "area",
-     "order": 370,
-     "tier": 4,
-     "next": [
-      "celestial-tower",
-      "relic-castle"
-     ],
-     "hub": false
-    },
-    "relic-castle": {
-     "zh": "古代城",
-     "kind": "area",
-     "order": 380,
-     "tier": 4,
-     "next": [
-      "reversal-mountain",
-      "marvelous-bridge"
-     ],
-     "hub": false
-    },
-    "marvelous-bridge": {
-     "zh": "奇幻桥",
-     "kind": "area",
-     "order": 390,
-     "tier": 5,
-     "next": [
-      "relic-castle",
-      "undella-town"
-     ],
-     "hub": false
-    },
-    "undella-town": {
-     "zh": "漣漪鎮",
-     "kind": "town",
-     "order": 400,
-     "tier": 5,
-     "next": [
-      "unova-route-14",
-      "marvelous-bridge",
       "unova-route-15"
      ],
-     "hub": true
+     "hub": false
     },
     "unova-route-15": {
      "zh": "15号道路",
      "kind": "route",
-     "order": 410,
-     "tier": 5,
+     "order": 340,
+     "tier": 4,
      "next": [
-      "undella-town",
-      "unova-route-16"
-     ],
-     "hub": false
-    },
-    "unova-route-16": {
-     "zh": "16号道路",
-     "kind": "route",
-     "order": 420,
-     "tier": 5,
-     "next": [
-      "unova-route-15",
-      "unova-route-17"
-     ],
-     "hub": false
-    },
-    "unova-route-17": {
-     "zh": "17号道路",
-     "kind": "route",
-     "order": 430,
-     "tier": 5,
-     "next": [
-      "unova-route-16",
-      "trial-chamber",
-      "humilau-city"
-     ],
-     "hub": false
-    },
-    "trial-chamber": {
-     "zh": "冠军之路(黑／白)",
-     "kind": "area",
-     "order": 440,
-     "tier": 5,
-     "next": [
-      "unova-route-17",
-      "seaside-cave"
-     ],
-     "hub": false
-    },
-    "seaside-cave": {
-     "zh": "海邊洞穴",
-     "kind": "area",
-     "order": 450,
-     "tier": 5,
-     "next": [
-      "trial-chamber",
-      "unova-victory-road"
-     ],
-     "hub": false
-    },
-    "unova-victory-road": {
-     "zh": "冠军之路",
-     "kind": "area",
-     "order": 460,
-     "tier": 5,
-     "next": [
-      "seaside-cave",
-      "wellspring-cave"
-     ],
-     "hub": false
-    },
-    "wellspring-cave": {
-     "zh": "泉源洞穴",
-     "kind": "area",
-     "order": 470,
-     "tier": 5,
-     "next": [
-      "unova-victory-road",
-      "pinwheel-forest"
-     ],
-     "hub": false
-    },
-    "pinwheel-forest": {
-     "zh": "矢车森林",
-     "kind": "area",
-     "order": 480,
-     "tier": 6,
-     "next": [
-      "wellspring-cave",
-      "humilau-city"
-     ],
-     "hub": false
-    },
-    "humilau-city": {
-     "zh": "青海波市",
-     "kind": "town",
-     "order": 490,
-     "tier": 6,
-     "next": [
-      "unova-route-17",
-      "pinwheel-forest",
-      "unova-route-18"
-     ],
-     "hub": true
-    },
-    "unova-route-18": {
-     "zh": "18号道路",
-     "kind": "route",
-     "order": 500,
-     "tier": 6,
-     "next": [
-      "humilau-city",
-      "unova-route-19"
-     ],
-     "hub": false
-    },
-    "unova-route-19": {
-     "zh": "19号道路",
-     "kind": "route",
-     "order": 510,
-     "tier": 6,
-     "next": [
-      "unova-route-18",
-      "undella-bay",
-      "village-bridge",
-      "aspertia-city"
-     ],
-     "hub": false
-    },
-    "undella-bay": {
-     "zh": "涟漪湾",
-     "kind": "area",
-     "order": 520,
-     "tier": 6,
-     "next": [
-      "unova-route-19",
-      "abundant-shrine"
-     ],
-     "hub": false
-    },
-    "abundant-shrine": {
-     "zh": "丰饶之祠",
-     "kind": "area",
-     "order": 530,
-     "tier": 6,
-     "next": [
-      "undella-bay",
-      "village-bridge"
-     ],
-     "hub": false
-    },
-    "village-bridge": {
-     "zh": "村庄桥",
-     "kind": "town",
-     "order": 540,
-     "tier": 6,
-     "next": [
-      "unova-route-19",
-      "abundant-shrine",
-      "moor-of-icirrus",
-      "unova-route-20"
-     ],
-     "hub": true
-    },
-    "moor-of-icirrus": {
-     "zh": "雪花湿地",
-     "kind": "area",
-     "order": 550,
-     "tier": 6,
-     "next": [
-      "village-bridge",
-      "dreamyard"
-     ],
-     "hub": false
-    },
-    "dreamyard": {
-     "zh": "夢的遺址",
-     "kind": "area",
-     "order": 560,
-     "tier": 6,
-     "next": [
-      "moor-of-icirrus",
-      "twist-mountain"
-     ],
-     "hub": false
-    },
-    "twist-mountain": {
-     "zh": "羅斯山",
-     "kind": "area",
-     "order": 570,
-     "tier": 6,
-     "next": [
-      "dreamyard",
-      "challengers-cave"
-     ],
-     "hub": false
-    },
-    "challengers-cave": {
-     "zh": "修行岩屋",
-     "kind": "area",
-     "order": 580,
-     "tier": 7,
-     "next": [
-      "twist-mountain",
-      "dragonspiral-tower"
-     ],
-     "hub": false
-    },
-    "dragonspiral-tower": {
-     "zh": "龙螺旋之塔",
-     "kind": "area",
-     "order": 590,
-     "tier": 7,
-     "next": [
-      "challengers-cave",
-      "p2-laboratory"
-     ],
-     "hub": false
-    },
-    "p2-laboratory": {
-     "zh": "Ｐ2实验室",
-     "kind": "area",
-     "order": 600,
-     "tier": 7,
-     "next": [
-      "dragonspiral-tower",
-      "aspertia-city"
-     ],
-     "hub": false
-    },
-    "aspertia-city": {
-     "zh": "檜扇市",
-     "kind": "town",
-     "order": 610,
-     "tier": 7,
-     "next": [
-      "unova-route-19",
-      "p2-laboratory",
-      "unova-route-20"
-     ],
-     "hub": true
-    },
-    "unova-route-20": {
-     "zh": "20号道路",
-     "kind": "route",
-     "order": 620,
-     "tier": 7,
-     "next": [
-      "village-bridge",
-      "aspertia-city",
-      "unova-route-21"
-     ],
-     "hub": false
-    },
-    "unova-route-21": {
-     "zh": "21号水路",
-     "kind": "route",
-     "order": 630,
-     "tier": 7,
-     "next": [
-      "unova-route-20",
-      "ns-castle",
-      "virbank-city"
-     ],
-     "hub": false
-    },
-    "ns-castle": {
-     "zh": "Ｎ的城堡",
-     "kind": "area",
-     "order": 640,
-     "tier": 7,
-     "next": [
-      "unova-route-21",
-      "giant-chasm"
-     ],
-     "hub": false
-    },
-    "giant-chasm": {
-     "zh": "巨人洞窟",
-     "kind": "area",
-     "order": 650,
-     "tier": 7,
-     "next": [
-      "ns-castle",
-      "unova-victory-road-2"
-     ],
-     "hub": false
-    },
-    "unova-victory-road-2": {
-     "zh": "冠军之路",
-     "kind": "area",
-     "order": 660,
-     "tier": 7,
-     "next": [
-      "giant-chasm",
-      "virbank-city"
-     ],
-     "hub": false
-    },
-    "virbank-city": {
-     "zh": "立湧市",
-     "kind": "town",
-     "order": 670,
-     "tier": 8,
-     "next": [
-      "unova-route-21",
-      "unova-victory-road-2",
-      "unova-route-22",
-      "unova-pokemon-league"
-     ],
-     "hub": true
-    },
-    "unova-route-22": {
-     "zh": "22号道路",
-     "kind": "route",
-     "order": 680,
-     "tier": 8,
-     "next": [
-      "virbank-city",
-      "unova-route-23"
-     ],
-     "hub": false
-    },
-    "unova-route-23": {
-     "zh": "23号道路",
-     "kind": "route",
-     "order": 690,
-     "tier": 8,
-     "next": [
-      "unova-route-22",
-      "glacier-room"
+      "unova-route-14",
+      "glacier-room",
+      "undella-town"
      ],
      "hub": false
     },
     "glacier-room": {
      "zh": "Glacier Room",
      "kind": "area",
-     "order": 700,
-     "tier": 8,
+     "order": 350,
+     "tier": 4,
      "next": [
-      "unova-route-23",
+      "unova-route-15",
       "iron-room"
      ],
      "hub": false
@@ -4317,8 +3864,8 @@
     "iron-room": {
      "zh": "Iron Room",
      "kind": "area",
-     "order": 710,
-     "tier": 8,
+     "order": 360,
+     "tier": 4,
      "next": [
       "glacier-room",
       "rocky-mountain-room"
@@ -4328,8 +3875,8 @@
     "rocky-mountain-room": {
      "zh": "Rocky Mountain Room",
      "kind": "area",
-     "order": 720,
-     "tier": 8,
+     "order": 370,
+     "tier": 4,
      "next": [
       "iron-room",
       "clay-tunnel"
@@ -4339,8 +3886,8 @@
     "clay-tunnel": {
      "zh": "菊老大之路",
      "kind": "area",
-     "order": 730,
-     "tier": 8,
+     "order": 380,
+     "tier": 4,
      "next": [
       "rocky-mountain-room",
       "nature-sanctuary"
@@ -4350,8 +3897,8 @@
     "nature-sanctuary": {
      "zh": "自然保護區",
      "kind": "area",
-     "order": 740,
-     "tier": 8,
+     "order": 390,
+     "tier": 5,
      "next": [
       "clay-tunnel",
       "underground-ruins"
@@ -4361,10 +3908,407 @@
     "underground-ruins": {
      "zh": "地底遺跡",
      "kind": "area",
+     "order": 400,
+     "tier": 5,
+     "next": [
+      "nature-sanctuary",
+      "undella-town"
+     ],
+     "hub": false
+    },
+    "undella-town": {
+     "zh": "漣漪鎮",
+     "kind": "town",
+     "order": 410,
+     "tier": 5,
+     "next": [
+      "unova-route-15",
+      "underground-ruins",
+      "unova-route-16"
+     ],
+     "hub": true
+    },
+    "unova-route-16": {
+     "zh": "16号道路",
+     "kind": "route",
+     "order": 420,
+     "tier": 5,
+     "next": [
+      "undella-town",
+      "virbank-complex"
+     ],
+     "hub": false
+    },
+    "virbank-complex": {
+     "zh": "立湧聯合工業區",
+     "kind": "area",
+     "order": 430,
+     "tier": 5,
+     "next": [
+      "unova-route-16",
+      "cold-storage"
+     ],
+     "hub": false
+    },
+    "cold-storage": {
+     "zh": "冷冻仓库",
+     "kind": "area",
+     "order": 440,
+     "tier": 5,
+     "next": [
+      "virbank-complex",
+      "driftveil-drawbridge"
+     ],
+     "hub": false
+    },
+    "driftveil-drawbridge": {
+     "zh": "帆巴吊桥",
+     "kind": "area",
+     "order": 450,
+     "tier": 5,
+     "next": [
+      "cold-storage",
+      "lostlorn-forest"
+     ],
+     "hub": false
+    },
+    "lostlorn-forest": {
+     "zh": "迷幻森林",
+     "kind": "area",
+     "order": 460,
+     "tier": 5,
+     "next": [
+      "driftveil-drawbridge",
+      "unova-route-17"
+     ],
+     "hub": false
+    },
+    "unova-route-17": {
+     "zh": "17号道路",
+     "kind": "route",
+     "order": 470,
+     "tier": 5,
+     "next": [
+      "lostlorn-forest",
+      "humilau-city"
+     ],
+     "hub": false
+    },
+    "humilau-city": {
+     "zh": "青海波市",
+     "kind": "town",
+     "order": 480,
+     "tier": 6,
+     "next": [
+      "unova-route-17",
+      "unova-route-18"
+     ],
+     "hub": true
+    },
+    "unova-route-18": {
+     "zh": "18号道路",
+     "kind": "route",
+     "order": 490,
+     "tier": 6,
+     "next": [
+      "humilau-city",
+      "twist-mountain"
+     ],
+     "hub": false
+    },
+    "twist-mountain": {
+     "zh": "羅斯山",
+     "kind": "area",
+     "order": 500,
+     "tier": 6,
+     "next": [
+      "unova-route-18",
+      "challengers-cave"
+     ],
+     "hub": false
+    },
+    "challengers-cave": {
+     "zh": "修行岩屋",
+     "kind": "area",
+     "order": 510,
+     "tier": 6,
+     "next": [
+      "twist-mountain",
+      "dragonspiral-tower"
+     ],
+     "hub": false
+    },
+    "dragonspiral-tower": {
+     "zh": "龙螺旋之塔",
+     "kind": "area",
+     "order": 520,
+     "tier": 6,
+     "next": [
+      "challengers-cave",
+      "unova-victory-road-2"
+     ],
+     "hub": false
+    },
+    "unova-victory-road-2": {
+     "zh": "冠军之路",
+     "kind": "area",
+     "order": 530,
+     "tier": 6,
+     "next": [
+      "dragonspiral-tower",
+      "unova-route-19"
+     ],
+     "hub": false
+    },
+    "unova-route-19": {
+     "zh": "19号道路",
+     "kind": "route",
+     "order": 540,
+     "tier": 6,
+     "next": [
+      "unova-victory-road-2",
+      "relic-passage",
+      "aspertia-city"
+     ],
+     "hub": false
+    },
+    "relic-passage": {
+     "zh": "古代秘道",
+     "kind": "area",
+     "order": 550,
+     "tier": 6,
+     "next": [
+      "unova-route-19",
+      "mistralton-cave"
+     ],
+     "hub": false
+    },
+    "mistralton-cave": {
+     "zh": "吹寄洞穴",
+     "kind": "area",
+     "order": 560,
+     "tier": 6,
+     "next": [
+      "relic-passage",
+      "aspertia-city"
+     ],
+     "hub": false
+    },
+    "aspertia-city": {
+     "zh": "檜扇市",
+     "kind": "town",
+     "order": 570,
+     "tier": 6,
+     "next": [
+      "unova-route-19",
+      "mistralton-cave",
+      "unova-route-20"
+     ],
+     "hub": true
+    },
+    "unova-route-20": {
+     "zh": "20号道路",
+     "kind": "route",
+     "order": 580,
+     "tier": 7,
+     "next": [
+      "aspertia-city",
+      "floccesy-town",
+      "floccesy-ranch"
+     ],
+     "hub": false
+    },
+    "floccesy-town": {
+     "zh": "算木鎮",
+     "kind": "town",
+     "order": 590,
+     "tier": 7,
+     "next": [
+      "unova-route-20",
+      "liberty-garden",
+      "unova-route-21"
+     ],
+     "hub": true
+    },
+    "liberty-garden": {
+     "zh": "自由庭園島",
+     "kind": "area",
+     "order": 600,
+     "tier": 7,
+     "next": [
+      "floccesy-town",
+      "floccesy-ranch"
+     ],
+     "hub": false
+    },
+    "floccesy-ranch": {
+     "zh": "算木牧场",
+     "kind": "town",
+     "order": 610,
+     "tier": 7,
+     "next": [
+      "unova-route-20",
+      "liberty-garden",
+      "unova-route-21"
+     ],
+     "hub": true
+    },
+    "unova-route-21": {
+     "zh": "21号水路",
+     "kind": "route",
+     "order": 620,
+     "tier": 7,
+     "next": [
+      "floccesy-town",
+      "floccesy-ranch",
+      "p2-laboratory",
+      "virbank-city"
+     ],
+     "hub": false
+    },
+    "p2-laboratory": {
+     "zh": "Ｐ2实验室",
+     "kind": "area",
+     "order": 630,
+     "tier": 7,
+     "next": [
+      "unova-route-21",
+      "virbank-city"
+     ],
+     "hub": false
+    },
+    "virbank-city": {
+     "zh": "立湧市",
+     "kind": "town",
+     "order": 640,
+     "tier": 7,
+     "next": [
+      "unova-route-21",
+      "p2-laboratory",
+      "unova-route-22"
+     ],
+     "hub": true
+    },
+    "unova-route-22": {
+     "zh": "22号道路",
+     "kind": "route",
+     "order": 650,
+     "tier": 7,
+     "next": [
+      "virbank-city",
+      "seaside-cave"
+     ],
+     "hub": false
+    },
+    "seaside-cave": {
+     "zh": "海邊洞穴",
+     "kind": "area",
+     "order": 660,
+     "tier": 7,
+     "next": [
+      "unova-route-22",
+      "unova-victory-road"
+     ],
+     "hub": false
+    },
+    "unova-victory-road": {
+     "zh": "冠军之路",
+     "kind": "area",
+     "order": 670,
+     "tier": 8,
+     "next": [
+      "seaside-cave",
+      "wellspring-cave"
+     ],
+     "hub": false
+    },
+    "wellspring-cave": {
+     "zh": "泉源洞穴",
+     "kind": "area",
+     "order": 680,
+     "tier": 8,
+     "next": [
+      "unova-victory-road",
+      "pinwheel-forest"
+     ],
+     "hub": false
+    },
+    "pinwheel-forest": {
+     "zh": "矢车森林",
+     "kind": "area",
+     "order": 690,
+     "tier": 8,
+     "next": [
+      "wellspring-cave",
+      "unova-route-23"
+     ],
+     "hub": false
+    },
+    "unova-route-23": {
+     "zh": "23号道路",
+     "kind": "route",
+     "order": 700,
+     "tier": 8,
+     "next": [
+      "pinwheel-forest",
+      "ns-castle",
+      "desert-resort"
+     ],
+     "hub": false
+    },
+    "ns-castle": {
+     "zh": "Ｎ的城堡",
+     "kind": "area",
+     "order": 710,
+     "tier": 8,
+     "next": [
+      "unova-route-23",
+      "giant-chasm"
+     ],
+     "hub": false
+    },
+    "giant-chasm": {
+     "zh": "巨人洞窟",
+     "kind": "area",
+     "order": 720,
+     "tier": 8,
+     "next": [
+      "ns-castle",
+      "desert-resort"
+     ],
+     "hub": false
+    },
+    "desert-resort": {
+     "zh": "荒野名勝區",
+     "kind": "town",
+     "order": 730,
+     "tier": 8,
+     "next": [
+      "unova-route-23",
+      "giant-chasm",
+      "guidance-chamber",
+      "unova-pokemon-league"
+     ],
+     "hub": true
+    },
+    "guidance-chamber": {
+     "zh": "吹寄洞穴",
+     "kind": "area",
+     "order": 740,
+     "tier": 8,
+     "next": [
+      "desert-resort",
+      "trial-chamber"
+     ],
+     "hub": false
+    },
+    "trial-chamber": {
+     "zh": "冠军之路(黑／白)",
+     "kind": "area",
      "order": 750,
      "tier": 8,
      "next": [
-      "nature-sanctuary",
+      "guidance-chamber",
       "unova-pokemon-league"
      ],
      "hub": false
@@ -4375,8 +4319,8 @@
      "order": 760,
      "tier": 8,
      "next": [
-      "virbank-city",
-      "underground-ruins"
+      "desert-resort",
+      "trial-chamber"
      ],
      "hub": true
     }
@@ -4394,29 +4338,6 @@
      "order": 10,
      "tier": 1,
      "next": [
-      "santalune-forest",
-      "kalos-route-2"
-     ],
-     "hub": true
-    },
-    "santalune-forest": {
-     "zh": "白檀森林",
-     "kind": "area",
-     "order": 20,
-     "tier": 1,
-     "next": [
-      "aquacorde-town",
-      "lumiose-city"
-     ],
-     "hub": false
-    },
-    "lumiose-city": {
-     "zh": "密阿雷市",
-     "kind": "town",
-     "order": 30,
-     "tier": 1,
-     "next": [
-      "santalune-forest",
       "kalos-route-2"
      ],
      "hub": true
@@ -4424,11 +4345,21 @@
     "kalos-route-2": {
      "zh": "2号道路",
      "kind": "route",
-     "order": 40,
+     "order": 20,
      "tier": 1,
      "next": [
       "aquacorde-town",
-      "lumiose-city",
+      "santalune-forest"
+     ],
+     "hub": false
+    },
+    "santalune-forest": {
+     "zh": "白檀森林",
+     "kind": "area",
+     "order": 30,
+     "tier": 1,
+     "next": [
+      "kalos-route-2",
       "kalos-route-3"
      ],
      "hub": false
@@ -4436,21 +4367,45 @@
     "kalos-route-3": {
      "zh": "3号道路(关都)",
      "kind": "route",
-     "order": 50,
+     "order": 40,
      "tier": 1,
      "next": [
-      "kalos-route-2",
-      "kalos-route-4"
+      "santalune-forest",
+      "glittering-cave",
+      "lumiose-city"
      ],
      "hub": false
     },
-    "kalos-route-4": {
-     "zh": "4号道路",
-     "kind": "route",
+    "glittering-cave": {
+     "zh": "閃耀洞窟",
+     "kind": "area",
+     "order": 50,
+     "tier": 1,
+     "next": [
+      "kalos-route-3",
+      "lumiose-city"
+     ],
+     "hub": false
+    },
+    "lumiose-city": {
+     "zh": "密阿雷市",
+     "kind": "town",
      "order": 60,
      "tier": 2,
      "next": [
       "kalos-route-3",
+      "glittering-cave",
+      "kalos-route-4"
+     ],
+     "hub": true
+    },
+    "kalos-route-4": {
+     "zh": "4号道路",
+     "kind": "route",
+     "order": 70,
+     "tier": 2,
+     "next": [
+      "lumiose-city",
       "kalos-route-5"
      ],
      "hub": false
@@ -4458,10 +4413,21 @@
     "kalos-route-5": {
      "zh": "5号道路",
      "kind": "route",
-     "order": 70,
+     "order": 80,
      "tier": 2,
      "next": [
       "kalos-route-4",
+      "kalos-route-6"
+     ],
+     "hub": false
+    },
+    "kalos-route-6": {
+     "zh": "6号道路",
+     "kind": "route",
+     "order": 90,
+     "tier": 2,
+     "next": [
+      "kalos-route-5",
       "connecting-cave",
       "cyllage-city"
      ],
@@ -4470,43 +4436,10 @@
     "connecting-cave": {
      "zh": "串連地洞",
      "kind": "area",
-     "order": 80,
-     "tier": 2,
-     "next": [
-      "kalos-route-5",
-      "kalos-berry-fields"
-     ],
-     "hub": false
-    },
-    "kalos-berry-fields": {
-     "zh": "kalos-berry-fields",
-     "kind": "area",
-     "order": 90,
-     "tier": 2,
-     "next": [
-      "connecting-cave",
-      "glittering-cave"
-     ],
-     "hub": false
-    },
-    "glittering-cave": {
-     "zh": "閃耀洞窟",
-     "kind": "area",
      "order": 100,
      "tier": 2,
      "next": [
-      "kalos-berry-fields",
-      "reflection-cave"
-     ],
-     "hub": false
-    },
-    "reflection-cave": {
-     "zh": "鏡穴",
-     "kind": "area",
-     "order": 110,
-     "tier": 2,
-     "next": [
-      "glittering-cave",
+      "kalos-route-6",
       "cyllage-city"
      ],
      "hub": false
@@ -4514,33 +4447,33 @@
     "cyllage-city": {
      "zh": "遙香市",
      "kind": "town",
-     "order": 120,
-     "tier": 3,
+     "order": 110,
+     "tier": 2,
      "next": [
-      "kalos-route-5",
-      "reflection-cave",
-      "kalos-route-6"
-     ],
-     "hub": true
-    },
-    "kalos-route-6": {
-     "zh": "6号道路",
-     "kind": "route",
-     "order": 130,
-     "tier": 3,
-     "next": [
-      "cyllage-city",
+      "kalos-route-6",
+      "connecting-cave",
       "kalos-route-7"
      ],
-     "hub": false
+     "hub": true
     },
     "kalos-route-7": {
      "zh": "7号道路",
      "kind": "route",
-     "order": 140,
+     "order": 120,
      "tier": 3,
      "next": [
-      "kalos-route-6",
+      "cyllage-city",
+      "kalos-berry-fields"
+     ],
+     "hub": false
+    },
+    "kalos-berry-fields": {
+     "zh": "kalos-berry-fields",
+     "kind": "area",
+     "order": 130,
+     "tier": 3,
+     "next": [
+      "kalos-route-7",
       "kalos-route-8"
      ],
      "hub": false
@@ -4548,10 +4481,10 @@
     "kalos-route-8": {
      "zh": "8号道路",
      "kind": "route",
-     "order": 150,
+     "order": 140,
      "tier": 3,
      "next": [
-      "kalos-route-7",
+      "kalos-berry-fields",
       "kalos-route-9"
      ],
      "hub": false
@@ -4559,82 +4492,43 @@
     "kalos-route-9": {
      "zh": "9号道路",
      "kind": "route",
-     "order": 160,
+     "order": 150,
      "tier": 3,
      "next": [
       "kalos-route-8",
-      "azure-bay",
-      "friend-safari",
-      "ambrette-town"
-     ],
-     "hub": false
-    },
-    "azure-bay": {
-     "zh": "蔚藍灣",
-     "kind": "area",
-     "order": 170,
-     "tier": 4,
-     "next": [
-      "kalos-route-9",
-      "parfum-palace"
-     ],
-     "hub": false
-    },
-    "parfum-palace": {
-     "zh": "巴爾法姆香殿",
-     "kind": "area",
-     "order": 180,
-     "tier": 4,
-     "next": [
-      "azure-bay",
-      "friend-safari"
-     ],
-     "hub": false
-    },
-    "friend-safari": {
-     "zh": "朋友狩猎",
-     "kind": "town",
-     "order": 190,
-     "tier": 4,
-     "next": [
-      "kalos-route-9",
-      "parfum-palace",
-      "ambrette-town",
       "kalos-route-10"
      ],
-     "hub": true
-    },
-    "ambrette-town": {
-     "zh": "古香鎮",
-     "kind": "town",
-     "order": 200,
-     "tier": 4,
-     "next": [
-      "kalos-route-9",
-      "friend-safari",
-      "kalos-route-10"
-     ],
-     "hub": true
+     "hub": false
     },
     "kalos-route-10": {
      "zh": "10号道路",
      "kind": "route",
-     "order": 210,
-     "tier": 4,
+     "order": 160,
+     "tier": 3,
      "next": [
-      "friend-safari",
-      "ambrette-town",
-      "kalos-route-11"
+      "kalos-route-9",
+      "ambrette-town"
      ],
      "hub": false
+    },
+    "ambrette-town": {
+     "zh": "古香鎮",
+     "kind": "town",
+     "order": 170,
+     "tier": 4,
+     "next": [
+      "kalos-route-10",
+      "kalos-route-11"
+     ],
+     "hub": true
     },
     "kalos-route-11": {
      "zh": "11号道路",
      "kind": "route",
-     "order": 220,
+     "order": 180,
      "tier": 4,
      "next": [
-      "kalos-route-10",
+      "ambrette-town",
       "kalos-route-12"
      ],
      "hub": false
@@ -4642,55 +4536,32 @@
     "kalos-route-12": {
      "zh": "12号道路",
      "kind": "route",
-     "order": 230,
-     "tier": 5,
+     "order": 190,
+     "tier": 4,
      "next": [
       "kalos-route-11",
-      "tower-of-mastery",
-      "shalour-city"
+      "azure-bay"
      ],
      "hub": false
     },
-    "tower-of-mastery": {
-     "zh": "精練之塔",
+    "azure-bay": {
+     "zh": "蔚藍灣",
      "kind": "area",
-     "order": 240,
-     "tier": 5,
+     "order": 200,
+     "tier": 4,
      "next": [
       "kalos-route-12",
-      "frost-cavern"
+      "kalos-route-13"
      ],
      "hub": false
     },
-    "frost-cavern": {
-     "zh": "冰结洞窟",
-     "kind": "area",
-     "order": 250,
-     "tier": 5,
+    "kalos-route-13": {
+     "zh": "13号道路",
+     "kind": "route",
+     "order": 210,
+     "tier": 4,
      "next": [
-      "tower-of-mastery",
-      "lost-hotel"
-     ],
-     "hub": false
-    },
-    "lost-hotel": {
-     "zh": "荒废酒店",
-     "kind": "area",
-     "order": 260,
-     "tier": 5,
-     "next": [
-      "frost-cavern",
-      "terminus-cave"
-     ],
-     "hub": false
-    },
-    "terminus-cave": {
-     "zh": "終結洞窟(卡洛斯)",
-     "kind": "area",
-     "order": 270,
-     "tier": 5,
-     "next": [
-      "lost-hotel",
+      "azure-bay",
       "shalour-city"
      ],
      "hub": false
@@ -4698,33 +4569,32 @@
     "shalour-city": {
      "zh": "娑羅市",
      "kind": "town",
-     "order": 280,
-     "tier": 5,
+     "order": 220,
+     "tier": 4,
      "next": [
-      "kalos-route-12",
-      "terminus-cave",
-      "kalos-route-13"
-     ],
-     "hub": true
-    },
-    "kalos-route-13": {
-     "zh": "13号道路",
-     "kind": "route",
-     "order": 290,
-     "tier": 6,
-     "next": [
-      "shalour-city",
+      "kalos-route-13",
       "kalos-route-14"
      ],
-     "hub": false
+     "hub": true
     },
     "kalos-route-14": {
      "zh": "14号道路",
      "kind": "route",
-     "order": 300,
-     "tier": 6,
+     "order": 230,
+     "tier": 5,
      "next": [
-      "kalos-route-13",
+      "shalour-city",
+      "parfum-palace"
+     ],
+     "hub": false
+    },
+    "parfum-palace": {
+     "zh": "巴爾法姆香殿",
+     "kind": "area",
+     "order": 240,
+     "tier": 5,
+     "next": [
+      "kalos-route-14",
       "kalos-route-15"
      ],
      "hub": false
@@ -4732,10 +4602,32 @@
     "kalos-route-15": {
      "zh": "15号道路",
      "kind": "route",
-     "order": 310,
-     "tier": 6,
+     "order": 250,
+     "tier": 5,
      "next": [
-      "kalos-route-14",
+      "parfum-palace",
+      "tower-of-mastery"
+     ],
+     "hub": false
+    },
+    "tower-of-mastery": {
+     "zh": "精練之塔",
+     "kind": "area",
+     "order": 260,
+     "tier": 5,
+     "next": [
+      "kalos-route-15",
+      "frost-cavern"
+     ],
+     "hub": false
+    },
+    "frost-cavern": {
+     "zh": "冰结洞窟",
+     "kind": "area",
+     "order": 270,
+     "tier": 5,
+     "next": [
+      "tower-of-mastery",
       "kalos-route-16"
      ],
      "hub": false
@@ -4743,45 +4635,33 @@
     "kalos-route-16": {
      "zh": "16号道路",
      "kind": "route",
-     "order": 320,
+     "order": 280,
+     "tier": 5,
+     "next": [
+      "frost-cavern",
+      "kalos-route-17"
+     ],
+     "hub": false
+    },
+    "kalos-route-17": {
+     "zh": "17号道路",
+     "kind": "route",
+     "order": 290,
      "tier": 6,
      "next": [
-      "kalos-route-15",
-      "pokemon-village",
+      "kalos-route-16",
+      "lost-hotel",
       "laverre-city"
      ],
      "hub": false
     },
-    "pokemon-village": {
-     "zh": "寶可夢村",
-     "kind": "town",
-     "order": 330,
+    "lost-hotel": {
+     "zh": "荒废酒店",
+     "kind": "area",
+     "order": 300,
      "tier": 6,
      "next": [
-      "kalos-route-16",
-      "team-flare-secret-hq",
-      "kalos-route-17"
-     ],
-     "hub": true
-    },
-    "team-flare-secret-hq": {
-     "zh": "闪焰队秘密基地",
-     "kind": "area",
-     "order": 340,
-     "tier": 7,
-     "next": [
-      "pokemon-village",
-      "kalos-victory-road"
-     ],
-     "hub": false
-    },
-    "kalos-victory-road": {
-     "zh": "冠军之路",
-     "kind": "area",
-     "order": 350,
-     "tier": 7,
-     "next": [
-      "team-flare-secret-hq",
+      "kalos-route-17",
       "laverre-city"
      ],
      "hub": false
@@ -4789,34 +4669,33 @@
     "laverre-city": {
      "zh": "香薰市",
      "kind": "town",
-     "order": 360,
-     "tier": 7,
+     "order": 310,
+     "tier": 6,
      "next": [
-      "kalos-route-16",
-      "kalos-victory-road",
-      "kalos-route-17"
-     ],
-     "hub": true
-    },
-    "kalos-route-17": {
-     "zh": "17号道路",
-     "kind": "route",
-     "order": 370,
-     "tier": 7,
-     "next": [
-      "pokemon-village",
-      "laverre-city",
+      "kalos-route-17",
+      "lost-hotel",
       "kalos-route-18"
      ],
-     "hub": false
+     "hub": true
     },
     "kalos-route-18": {
      "zh": "18号道路",
      "kind": "route",
-     "order": 380,
-     "tier": 7,
+     "order": 320,
+     "tier": 6,
      "next": [
-      "kalos-route-17",
+      "laverre-city",
+      "terminus-cave"
+     ],
+     "hub": false
+    },
+    "terminus-cave": {
+     "zh": "終結洞窟(卡洛斯)",
+     "kind": "area",
+     "order": 330,
+     "tier": 6,
+     "next": [
+      "kalos-route-18",
       "kalos-route-19"
      ],
      "hub": false
@@ -4824,10 +4703,10 @@
     "kalos-route-19": {
      "zh": "19号道路",
      "kind": "route",
-     "order": 390,
+     "order": 340,
      "tier": 7,
      "next": [
-      "kalos-route-18",
+      "terminus-cave",
       "kalos-route-20"
      ],
      "hub": false
@@ -4835,8 +4714,8 @@
     "kalos-route-20": {
      "zh": "20号道路",
      "kind": "route",
-     "order": 400,
-     "tier": 8,
+     "order": 350,
+     "tier": 7,
      "next": [
       "kalos-route-19",
       "couriway-town"
@@ -4846,22 +4725,43 @@
     "couriway-town": {
      "zh": "連理鎮",
      "kind": "town",
-     "order": 410,
-     "tier": 8,
+     "order": 360,
+     "tier": 7,
      "next": [
       "kalos-route-20",
-      "kalos-route-21",
-      "kalos-pokemon-league"
+      "kalos-route-21"
      ],
      "hub": true
     },
     "kalos-route-21": {
      "zh": "21号水路",
      "kind": "route",
-     "order": 420,
-     "tier": 8,
+     "order": 370,
+     "tier": 7,
      "next": [
       "couriway-town",
+      "team-flare-secret-hq"
+     ],
+     "hub": false
+    },
+    "team-flare-secret-hq": {
+     "zh": "闪焰队秘密基地",
+     "kind": "area",
+     "order": 380,
+     "tier": 7,
+     "next": [
+      "kalos-route-21",
+      "kalos-victory-road"
+     ],
+     "hub": false
+    },
+    "kalos-victory-road": {
+     "zh": "冠军之路",
+     "kind": "area",
+     "order": 390,
+     "tier": 7,
+     "next": [
+      "team-flare-secret-hq",
       "kalos-route-22"
      ],
      "hub": false
@@ -4869,13 +4769,51 @@
     "kalos-route-22": {
      "zh": "22号道路",
      "kind": "route",
+     "order": 400,
+     "tier": 8,
+     "next": [
+      "kalos-victory-road",
+      "reflection-cave",
+      "friend-safari",
+      "pokemon-village"
+     ],
+     "hub": false
+    },
+    "reflection-cave": {
+     "zh": "鏡穴",
+     "kind": "area",
+     "order": 410,
+     "tier": 8,
+     "next": [
+      "kalos-route-22",
+      "friend-safari"
+     ],
+     "hub": false
+    },
+    "friend-safari": {
+     "zh": "朋友狩猎",
+     "kind": "town",
+     "order": 420,
+     "tier": 8,
+     "next": [
+      "kalos-route-22",
+      "reflection-cave",
+      "pokemon-village"
+     ],
+     "hub": true
+    },
+    "pokemon-village": {
+     "zh": "寶可夢村",
+     "kind": "town",
      "order": 430,
      "tier": 8,
      "next": [
-      "kalos-route-21",
-      "sea-spirits-den"
+      "kalos-route-22",
+      "friend-safari",
+      "sea-spirits-den",
+      "kalos-pokemon-league"
      ],
-     "hub": false
+     "hub": true
     },
     "sea-spirits-den": {
      "zh": "海神之穴",
@@ -4883,7 +4821,7 @@
      "order": 440,
      "tier": 8,
      "next": [
-      "kalos-route-22",
+      "pokemon-village",
       "kalos-pokemon-league"
      ],
      "hub": false
@@ -4894,7 +4832,7 @@
      "order": 450,
      "tier": 8,
      "next": [
-      "couriway-town",
+      "pokemon-village",
       "sea-spirits-den"
      ],
      "hub": true
@@ -4924,8 +4862,7 @@
      "tier": 1,
      "next": [
       "iki-town",
-      "lake-of-the-moone",
-      "hauoli-city"
+      "lake-of-the-moone"
      ],
      "hub": false
     },
@@ -4958,17 +4895,40 @@
      "tier": 1,
      "next": [
       "lake-of-the-sunne",
-      "hauoli-cemetery"
+      "alola-route-2"
+     ],
+     "hub": false
+    },
+    "alola-route-2": {
+     "zh": "2号道路",
+     "kind": "route",
+     "order": 60,
+     "tier": 1,
+     "next": [
+      "sandy-cave",
+      "hauoli-cemetery",
+      "hauoli-city"
      ],
      "hub": false
     },
     "hauoli-cemetery": {
      "zh": "好奧樂墓園",
      "kind": "area",
-     "order": 60,
+     "order": 70,
      "tier": 1,
      "next": [
-      "sandy-cave",
+      "alola-route-2",
+      "alola-berry-fields"
+     ],
+     "hub": false
+    },
+    "alola-berry-fields": {
+     "zh": "树果园(阿罗拉)",
+     "kind": "area",
+     "order": 80,
+     "tier": 1,
+     "next": [
+      "hauoli-cemetery",
       "hauoli-city"
      ],
      "hub": false
@@ -4976,46 +4936,44 @@
     "hauoli-city": {
      "zh": "好奧樂市",
      "kind": "town",
-     "order": 70,
-     "tier": 1,
-     "next": [
-      "alola-route-1",
-      "hauoli-cemetery",
-      "alola-route-2"
-     ],
-     "hub": true
-    },
-    "alola-route-2": {
-     "zh": "2号道路",
-     "kind": "route",
-     "order": 80,
-     "tier": 1,
-     "next": [
-      "hauoli-city",
-      "alola-route-3"
-     ],
-     "hub": false
-    },
-    "alola-route-3": {
-     "zh": "3号道路",
-     "kind": "route",
      "order": 90,
      "tier": 1,
      "next": [
       "alola-route-2",
       "alola-berry-fields",
-      "paniola-ranch",
+      "alola-route-3"
+     ],
+     "hub": true
+    },
+    "alola-route-3": {
+     "zh": "3号道路",
+     "kind": "route",
+     "order": 100,
+     "tier": 1,
+     "next": [
+      "hauoli-city",
       "heahea-city"
      ],
      "hub": false
     },
-    "alola-berry-fields": {
-     "zh": "树果园(阿罗拉)",
-     "kind": "area",
-     "order": 100,
-     "tier": 1,
+    "heahea-city": {
+     "zh": "慷待市",
+     "kind": "town",
+     "order": 110,
+     "tier": 2,
      "next": [
       "alola-route-3",
+      "alola-route-4"
+     ],
+     "hub": true
+    },
+    "alola-route-4": {
+     "zh": "4号道路",
+     "kind": "route",
+     "order": 120,
+     "tier": 2,
+     "next": [
+      "heahea-city",
       "paniola-ranch"
      ],
      "hub": false
@@ -5023,20 +4981,19 @@
     "paniola-ranch": {
      "zh": "歐哈納牧場",
      "kind": "town",
-     "order": 110,
+     "order": 130,
      "tier": 2,
      "next": [
-      "alola-route-3",
-      "alola-berry-fields",
+      "alola-route-4",
       "seaward-cave",
-      "alola-route-4"
+      "alola-route-5"
      ],
      "hub": true
     },
     "seaward-cave": {
      "zh": "通海洞穴",
      "kind": "area",
-     "order": 120,
+     "order": 140,
      "tier": 2,
      "next": [
       "paniola-ranch",
@@ -5047,56 +5004,10 @@
     "melemele-meadow": {
      "zh": "美樂美樂花園",
      "kind": "area",
-     "order": 130,
-     "tier": 2,
-     "next": [
-      "seaward-cave",
-      "brooklet-hill"
-     ],
-     "hub": false
-    },
-    "brooklet-hill": {
-     "zh": "潺潺之丘",
-     "kind": "area",
-     "order": 140,
-     "tier": 2,
-     "next": [
-      "melemele-meadow",
-      "melemele-sea"
-     ],
-     "hub": false
-    },
-    "melemele-sea": {
-     "zh": "美樂美樂海",
-     "kind": "area",
      "order": 150,
      "tier": 2,
      "next": [
-      "brooklet-hill",
-      "heahea-city"
-     ],
-     "hub": false
-    },
-    "heahea-city": {
-     "zh": "慷待市",
-     "kind": "town",
-     "order": 160,
-     "tier": 2,
-     "next": [
-      "alola-route-3",
-      "melemele-sea",
-      "alola-route-4"
-     ],
-     "hub": true
-    },
-    "alola-route-4": {
-     "zh": "4号道路",
-     "kind": "route",
-     "order": 170,
-     "tier": 2,
-     "next": [
-      "paniola-ranch",
-      "heahea-city",
+      "seaward-cave",
       "alola-route-5"
      ],
      "hub": false
@@ -5104,10 +5015,44 @@
     "alola-route-5": {
      "zh": "5号道路",
      "kind": "route",
+     "order": 160,
+     "tier": 2,
+     "next": [
+      "paniola-ranch",
+      "melemele-meadow",
+      "brooklet-hill"
+     ],
+     "hub": false
+    },
+    "brooklet-hill": {
+     "zh": "潺潺之丘",
+     "kind": "area",
+     "order": 170,
+     "tier": 2,
+     "next": [
+      "alola-route-5",
+      "melemele-sea"
+     ],
+     "hub": false
+    },
+    "melemele-sea": {
+     "zh": "美樂美樂海",
+     "kind": "area",
      "order": 180,
      "tier": 2,
      "next": [
-      "alola-route-4",
+      "brooklet-hill",
+      "alola-route-6"
+     ],
+     "hub": false
+    },
+    "alola-route-6": {
+     "zh": "6号道路",
+     "kind": "route",
+     "order": 190,
+     "tier": 2,
+     "next": [
+      "melemele-sea",
       "kalae-bay",
       "konikoni-city"
      ],
@@ -5116,10 +5061,10 @@
     "kalae-bay": {
      "zh": "卡拉蔚灣",
      "kind": "area",
-     "order": 190,
+     "order": 200,
      "tier": 2,
      "next": [
-      "alola-route-5",
+      "alola-route-6",
       "ten-carat-hill"
      ],
      "hub": false
@@ -5127,65 +5072,10 @@
     "ten-carat-hill": {
      "zh": "十克拉山丘",
      "kind": "area",
-     "order": 200,
-     "tier": 2,
-     "next": [
-      "kalae-bay",
-      "dividing-peak-tunnel"
-     ],
-     "hub": false
-    },
-    "dividing-peak-tunnel": {
-     "zh": "分隔嶺隧道",
-     "kind": "area",
      "order": 210,
      "tier": 3,
      "next": [
-      "ten-carat-hill",
-      "wela-volcano-park"
-     ],
-     "hub": false
-    },
-    "wela-volcano-park": {
-     "zh": "維拉火山公園",
-     "kind": "area",
-     "order": 220,
-     "tier": 3,
-     "next": [
-      "dividing-peak-tunnel",
-      "verdant-cavern"
-     ],
-     "hub": false
-    },
-    "verdant-cavern": {
-     "zh": "蔥鬱洞窟",
-     "kind": "area",
-     "order": 230,
-     "tier": 3,
-     "next": [
-      "wela-volcano-park",
-      "akala-outskirts"
-     ],
-     "hub": false
-    },
-    "akala-outskirts": {
-     "zh": "阿卡拉島郊外",
-     "kind": "area",
-     "order": 240,
-     "tier": 3,
-     "next": [
-      "verdant-cavern",
-      "royal-avenue"
-     ],
-     "hub": false
-    },
-    "royal-avenue": {
-     "zh": "皇家大道",
-     "kind": "area",
-     "order": 250,
-     "tier": 3,
-     "next": [
-      "akala-outskirts",
+      "kalae-bay",
       "konikoni-city"
      ],
      "hub": false
@@ -5193,111 +5083,22 @@
     "konikoni-city": {
      "zh": "可霓可市",
      "kind": "town",
-     "order": 260,
+     "order": 220,
      "tier": 3,
      "next": [
-      "alola-route-5",
-      "royal-avenue",
-      "alola-route-6"
-     ],
-     "hub": true
-    },
-    "alola-route-6": {
-     "zh": "6号道路",
-     "kind": "route",
-     "order": 270,
-     "tier": 3,
-     "next": [
-      "konikoni-city",
+      "alola-route-6",
+      "ten-carat-hill",
       "alola-route-7"
      ],
-     "hub": false
+     "hub": true
     },
     "alola-route-7": {
      "zh": "7号道路",
      "kind": "route",
-     "order": 280,
+     "order": 230,
      "tier": 3,
      "next": [
-      "alola-route-6",
-      "hano-beach",
-      "paniola-town"
-     ],
-     "hub": false
-    },
-    "hano-beach": {
-     "zh": "豪諾豪諾海灘",
-     "kind": "area",
-     "order": 290,
-     "tier": 3,
-     "next": [
-      "alola-route-7",
-      "secluded-shore"
-     ],
-     "hub": false
-    },
-    "secluded-shore": {
-     "zh": "烏拉烏拉海灘",
-     "kind": "area",
-     "order": 300,
-     "tier": 3,
-     "next": [
-      "hano-beach",
-      "lush-jungle"
-     ],
-     "hub": false
-    },
-    "lush-jungle": {
-     "zh": "樹蔭叢林",
-     "kind": "area",
-     "order": 310,
-     "tier": 4,
-     "next": [
-      "secluded-shore",
-      "malie-garden"
-     ],
-     "hub": false
-    },
-    "malie-garden": {
-     "zh": "馬利埃庭園",
-     "kind": "area",
-     "order": 320,
-     "tier": 4,
-     "next": [
-      "lush-jungle",
-      "memorial-hill"
-     ],
-     "hub": false
-    },
-    "memorial-hill": {
-     "zh": "回憶之丘",
-     "kind": "area",
-     "order": 330,
-     "tier": 4,
-     "next": [
-      "malie-garden",
-      "mount-hokulani"
-     ],
-     "hub": false
-    },
-    "mount-hokulani": {
-     "zh": "輝克拉尼山",
-     "kind": "area",
-     "order": 340,
-     "tier": 4,
-     "next": [
-      "memorial-hill",
-      "digletts-tunnel"
-     ],
-     "hub": false
-    },
-    "digletts-tunnel": {
-     "zh": "地鼠隧道",
-     "kind": "area",
-     "order": 350,
-     "tier": 4,
-     "next": [
-      "mount-hokulani",
+      "konikoni-city",
       "paniola-town"
      ],
      "hub": false
@@ -5305,11 +5106,10 @@
     "paniola-town": {
      "zh": "歐哈納鎮",
      "kind": "town",
-     "order": 360,
-     "tier": 4,
+     "order": 240,
+     "tier": 3,
      "next": [
       "alola-route-7",
-      "digletts-tunnel",
       "alola-route-8"
      ],
      "hub": true
@@ -5317,8 +5117,8 @@
     "alola-route-8": {
      "zh": "8号道路",
      "kind": "route",
-     "order": 370,
-     "tier": 4,
+     "order": 250,
+     "tier": 3,
      "next": [
       "paniola-town",
       "alola-route-9"
@@ -5328,22 +5128,98 @@
     "alola-route-9": {
      "zh": "9号道路",
      "kind": "route",
-     "order": 380,
-     "tier": 4,
+     "order": 260,
+     "tier": 3,
      "next": [
       "alola-route-8",
-      "blush-mountain",
+      "dividing-peak-tunnel"
+     ],
+     "hub": false
+    },
+    "dividing-peak-tunnel": {
+     "zh": "分隔嶺隧道",
+     "kind": "area",
+     "order": 270,
+     "tier": 3,
+     "next": [
+      "alola-route-9",
+      "alola-route-10"
+     ],
+     "hub": false
+    },
+    "alola-route-10": {
+     "zh": "10号道路",
+     "kind": "route",
+     "order": 280,
+     "tier": 3,
+     "next": [
+      "dividing-peak-tunnel",
       "malie-city"
+     ],
+     "hub": false
+    },
+    "malie-city": {
+     "zh": "馬利埃靜市",
+     "kind": "town",
+     "order": 290,
+     "tier": 3,
+     "next": [
+      "alola-route-10",
+      "alola-route-11"
+     ],
+     "hub": true
+    },
+    "alola-route-11": {
+     "zh": "11号道路",
+     "kind": "route",
+     "order": 300,
+     "tier": 3,
+     "next": [
+      "malie-city",
+      "tapu-village"
+     ],
+     "hub": false
+    },
+    "tapu-village": {
+     "zh": "卡璞村",
+     "kind": "town",
+     "order": 310,
+     "tier": 4,
+     "next": [
+      "alola-route-11",
+      "alola-route-12"
+     ],
+     "hub": true
+    },
+    "alola-route-12": {
+     "zh": "12号道路",
+     "kind": "route",
+     "order": 320,
+     "tier": 4,
+     "next": [
+      "tapu-village",
+      "digletts-tunnel"
+     ],
+     "hub": false
+    },
+    "digletts-tunnel": {
+     "zh": "地鼠隧道",
+     "kind": "area",
+     "order": 330,
+     "tier": 4,
+     "next": [
+      "alola-route-12",
+      "blush-mountain"
      ],
      "hub": false
     },
     "blush-mountain": {
      "zh": "火特力山",
      "kind": "area",
-     "order": 390,
+     "order": 340,
      "tier": 4,
      "next": [
-      "alola-route-9",
+      "digletts-tunnel",
       "ulaula-beach"
      ],
      "hub": false
@@ -5351,10 +5227,191 @@
     "ulaula-beach": {
      "zh": "烏拉烏拉海灘",
      "kind": "area",
-     "order": 400,
+     "order": 350,
      "tier": 4,
      "next": [
       "blush-mountain",
+      "alola-route-13"
+     ],
+     "hub": false
+    },
+    "alola-route-13": {
+     "zh": "13号道路",
+     "kind": "route",
+     "order": 360,
+     "tier": 4,
+     "next": [
+      "ulaula-beach",
+      "wela-volcano-park"
+     ],
+     "hub": false
+    },
+    "wela-volcano-park": {
+     "zh": "維拉火山公園",
+     "kind": "area",
+     "order": 370,
+     "tier": 4,
+     "next": [
+      "alola-route-13",
+      "verdant-cavern"
+     ],
+     "hub": false
+    },
+    "verdant-cavern": {
+     "zh": "蔥鬱洞窟",
+     "kind": "area",
+     "order": 380,
+     "tier": 4,
+     "next": [
+      "wela-volcano-park",
+      "akala-outskirts"
+     ],
+     "hub": false
+    },
+    "akala-outskirts": {
+     "zh": "阿卡拉島郊外",
+     "kind": "area",
+     "order": 390,
+     "tier": 4,
+     "next": [
+      "verdant-cavern",
+      "royal-avenue"
+     ],
+     "hub": false
+    },
+    "royal-avenue": {
+     "zh": "皇家大道",
+     "kind": "area",
+     "order": 400,
+     "tier": 4,
+     "next": [
+      "akala-outskirts",
+      "hano-beach"
+     ],
+     "hub": false
+    },
+    "hano-beach": {
+     "zh": "豪諾豪諾海灘",
+     "kind": "area",
+     "order": 410,
+     "tier": 5,
+     "next": [
+      "royal-avenue",
+      "alola-route-14"
+     ],
+     "hub": false
+    },
+    "alola-route-14": {
+     "zh": "14号道路",
+     "kind": "route",
+     "order": 420,
+     "tier": 5,
+     "next": [
+      "hano-beach",
+      "secluded-shore",
+      "seafolk-village"
+     ],
+     "hub": false
+    },
+    "secluded-shore": {
+     "zh": "烏拉烏拉海灘",
+     "kind": "area",
+     "order": 430,
+     "tier": 5,
+     "next": [
+      "alola-route-14",
+      "lush-jungle"
+     ],
+     "hub": false
+    },
+    "lush-jungle": {
+     "zh": "樹蔭叢林",
+     "kind": "area",
+     "order": 440,
+     "tier": 5,
+     "next": [
+      "secluded-shore",
+      "malie-garden"
+     ],
+     "hub": false
+    },
+    "malie-garden": {
+     "zh": "馬利埃庭園",
+     "kind": "area",
+     "order": 450,
+     "tier": 5,
+     "next": [
+      "lush-jungle",
+      "seafolk-village"
+     ],
+     "hub": false
+    },
+    "seafolk-village": {
+     "zh": "海洋居民之村",
+     "kind": "town",
+     "order": 460,
+     "tier": 5,
+     "next": [
+      "alola-route-14",
+      "malie-garden",
+      "alola-route-15"
+     ],
+     "hub": true
+    },
+    "alola-route-15": {
+     "zh": "15号道路",
+     "kind": "route",
+     "order": 470,
+     "tier": 5,
+     "next": [
+      "seafolk-village",
+      "memorial-hill",
+      "exeggutor-island"
+     ],
+     "hub": false
+    },
+    "memorial-hill": {
+     "zh": "回憶之丘",
+     "kind": "area",
+     "order": 480,
+     "tier": 5,
+     "next": [
+      "alola-route-15",
+      "mount-hokulani"
+     ],
+     "hub": false
+    },
+    "mount-hokulani": {
+     "zh": "輝克拉尼山",
+     "kind": "area",
+     "order": 490,
+     "tier": 5,
+     "next": [
+      "memorial-hill",
+      "exeggutor-island"
+     ],
+     "hub": false
+    },
+    "exeggutor-island": {
+     "zh": "椰蛋樹島",
+     "kind": "town",
+     "order": 500,
+     "tier": 5,
+     "next": [
+      "alola-route-15",
+      "mount-hokulani",
+      "alola-route-16",
+      "alola-pokemon-league"
+     ],
+     "hub": true
+    },
+    "alola-route-16": {
+     "zh": "16号道路",
+     "kind": "route",
+     "order": 510,
+     "tier": 6,
+     "next": [
+      "exeggutor-island",
       "thrifty-megamart"
      ],
      "hub": false
@@ -5362,10 +5419,10 @@
     "thrifty-megamart": {
      "zh": "皇家大道",
      "kind": "area",
-     "order": 410,
-     "tier": 5,
+     "order": 520,
+     "tier": 6,
      "next": [
-      "ulaula-beach",
+      "alola-route-16",
       "poni-breaker-coast"
      ],
      "hub": false
@@ -5373,8 +5430,8 @@
     "poni-breaker-coast": {
      "zh": "波尼鼓浪岩岸",
      "kind": "area",
-     "order": 420,
-     "tier": 5,
+     "order": 530,
+     "tier": 6,
      "next": [
       "thrifty-megamart",
       "heahea-beach"
@@ -5384,8 +5441,8 @@
     "heahea-beach": {
      "zh": "慷待海灘",
      "kind": "area",
-     "order": 430,
-     "tier": 5,
+     "order": 540,
+     "tier": 6,
      "next": [
       "poni-breaker-coast",
       "ulaula-meadow"
@@ -5395,293 +5452,10 @@
     "ulaula-meadow": {
      "zh": "烏拉烏拉花園",
      "kind": "area",
-     "order": 440,
-     "tier": 5,
-     "next": [
-      "heahea-beach",
-      "haina-desert"
-     ],
-     "hub": false
-    },
-    "haina-desert": {
-     "zh": "哈伊納沙漠",
-     "kind": "area",
-     "order": 450,
-     "tier": 5,
-     "next": [
-      "ulaula-meadow",
-      "vast-poni-canyon"
-     ],
-     "hub": false
-    },
-    "vast-poni-canyon": {
-     "zh": "波尼大峽谷",
-     "kind": "area",
-     "order": 460,
-     "tier": 5,
-     "next": [
-      "haina-desert",
-      "malie-city"
-     ],
-     "hub": false
-    },
-    "malie-city": {
-     "zh": "馬利埃靜市",
-     "kind": "town",
-     "order": 470,
-     "tier": 5,
-     "next": [
-      "alola-route-9",
-      "vast-poni-canyon",
-      "alola-route-10"
-     ],
-     "hub": true
-    },
-    "alola-route-10": {
-     "zh": "10号道路",
-     "kind": "route",
-     "order": 480,
-     "tier": 5,
-     "next": [
-      "malie-city",
-      "alola-route-11"
-     ],
-     "hub": false
-    },
-    "alola-route-11": {
-     "zh": "11号道路",
-     "kind": "route",
-     "order": 490,
-     "tier": 5,
-     "next": [
-      "alola-route-10",
-      "ancient-poni-path",
-      "tapu-village"
-     ],
-     "hub": false
-    },
-    "ancient-poni-path": {
-     "zh": "波尼古道",
-     "kind": "area",
-     "order": 500,
-     "tier": 5,
-     "next": [
-      "alola-route-11",
-      "poni-wilds"
-     ],
-     "hub": false
-    },
-    "poni-wilds": {
-     "zh": "波尼原野",
-     "kind": "area",
-     "order": 510,
-     "tier": 6,
-     "next": [
-      "ancient-poni-path",
-      "aether-paradise"
-     ],
-     "hub": false
-    },
-    "aether-paradise": {
-     "zh": "以太樂園",
-     "kind": "area",
-     "order": 520,
-     "tier": 6,
-     "next": [
-      "poni-wilds",
-      "ultra-megalopolis"
-     ],
-     "hub": false
-    },
-    "ultra-megalopolis": {
-     "zh": "究極大都會",
-     "kind": "area",
-     "order": 530,
-     "tier": 6,
-     "next": [
-      "aether-paradise",
-      "poni-meadow"
-     ],
-     "hub": false
-    },
-    "poni-meadow": {
-     "zh": "波尼花園",
-     "kind": "area",
-     "order": 540,
-     "tier": 6,
-     "next": [
-      "ultra-megalopolis",
-      "poke-pelago"
-     ],
-     "hub": false
-    },
-    "poke-pelago": {
-     "zh": "寶可度假地",
-     "kind": "area",
      "order": 550,
      "tier": 6,
      "next": [
-      "poni-meadow",
-      "tapu-village"
-     ],
-     "hub": false
-    },
-    "tapu-village": {
-     "zh": "卡璞村",
-     "kind": "town",
-     "order": 560,
-     "tier": 6,
-     "next": [
-      "alola-route-11",
-      "poke-pelago",
-      "alola-route-12"
-     ],
-     "hub": true
-    },
-    "alola-route-12": {
-     "zh": "12号道路",
-     "kind": "route",
-     "order": 570,
-     "tier": 6,
-     "next": [
-      "tapu-village",
-      "alola-route-13"
-     ],
-     "hub": false
-    },
-    "alola-route-13": {
-     "zh": "13号道路",
-     "kind": "route",
-     "order": 580,
-     "tier": 6,
-     "next": [
-      "alola-route-12",
-      "poni-gauntlet",
-      "seafolk-village"
-     ],
-     "hub": false
-    },
-    "poni-gauntlet": {
-     "zh": "波尼險路",
-     "kind": "area",
-     "order": 590,
-     "tier": 6,
-     "next": [
-      "alola-route-13",
-      "mount-lanakila"
-     ],
-     "hub": false
-    },
-    "mount-lanakila": {
-     "zh": "拉納基拉山",
-     "kind": "area",
-     "order": 600,
-     "tier": 6,
-     "next": [
-      "poni-gauntlet",
-      "seafolk-village"
-     ],
-     "hub": false
-    },
-    "seafolk-village": {
-     "zh": "海洋居民之村",
-     "kind": "town",
-     "order": 610,
-     "tier": 7,
-     "next": [
-      "alola-route-13",
-      "mount-lanakila",
-      "alola-route-14"
-     ],
-     "hub": true
-    },
-    "alola-route-14": {
-     "zh": "14号道路",
-     "kind": "route",
-     "order": 620,
-     "tier": 7,
-     "next": [
-      "seafolk-village",
-      "alola-route-15"
-     ],
-     "hub": false
-    },
-    "alola-route-15": {
-     "zh": "15号道路",
-     "kind": "route",
-     "order": 630,
-     "tier": 7,
-     "next": [
-      "alola-route-14",
-      "altar-of-the-moone",
-      "exeggutor-island"
-     ],
-     "hub": false
-    },
-    "altar-of-the-moone": {
-     "zh": "月輪祭壇",
-     "kind": "area",
-     "order": 640,
-     "tier": 7,
-     "next": [
-      "alola-route-15",
-      "altar-of-the-sunne"
-     ],
-     "hub": false
-    },
-    "altar-of-the-sunne": {
-     "zh": "日輪祭壇",
-     "kind": "area",
-     "order": 650,
-     "tier": 7,
-     "next": [
-      "altar-of-the-moone",
-      "poni-grove"
-     ],
-     "hub": false
-    },
-    "poni-grove": {
-     "zh": "波尼樹林",
-     "kind": "area",
-     "order": 660,
-     "tier": 7,
-     "next": [
-      "altar-of-the-sunne",
-      "poni-plains"
-     ],
-     "hub": false
-    },
-    "poni-plains": {
-     "zh": "波尼曠野",
-     "kind": "area",
-     "order": 670,
-     "tier": 7,
-     "next": [
-      "poni-grove",
-      "exeggutor-island"
-     ],
-     "hub": false
-    },
-    "exeggutor-island": {
-     "zh": "椰蛋樹島",
-     "kind": "town",
-     "order": 680,
-     "tier": 7,
-     "next": [
-      "alola-route-15",
-      "poni-plains",
-      "alola-route-16",
-      "alola-pokemon-league"
-     ],
-     "hub": true
-    },
-    "alola-route-16": {
-     "zh": "16号道路",
-     "kind": "route",
-     "order": 690,
-     "tier": 7,
-     "next": [
-      "exeggutor-island",
+      "heahea-beach",
       "alola-route-17"
      ],
      "hub": false
@@ -5689,10 +5463,175 @@
     "alola-route-17": {
      "zh": "17号道路",
      "kind": "route",
+     "order": 560,
+     "tier": 6,
+     "next": [
+      "ulaula-meadow",
+      "haina-desert"
+     ],
+     "hub": false
+    },
+    "haina-desert": {
+     "zh": "哈伊納沙漠",
+     "kind": "area",
+     "order": 570,
+     "tier": 6,
+     "next": [
+      "alola-route-17",
+      "vast-poni-canyon"
+     ],
+     "hub": false
+    },
+    "vast-poni-canyon": {
+     "zh": "波尼大峽谷",
+     "kind": "area",
+     "order": 580,
+     "tier": 6,
+     "next": [
+      "haina-desert",
+      "ancient-poni-path"
+     ],
+     "hub": false
+    },
+    "ancient-poni-path": {
+     "zh": "波尼古道",
+     "kind": "area",
+     "order": 590,
+     "tier": 6,
+     "next": [
+      "vast-poni-canyon",
+      "poni-wilds"
+     ],
+     "hub": false
+    },
+    "poni-wilds": {
+     "zh": "波尼原野",
+     "kind": "area",
+     "order": 600,
+     "tier": 6,
+     "next": [
+      "ancient-poni-path",
+      "ultra-megalopolis"
+     ],
+     "hub": false
+    },
+    "ultra-megalopolis": {
+     "zh": "究極大都會",
+     "kind": "area",
+     "order": 610,
+     "tier": 7,
+     "next": [
+      "poni-wilds",
+      "poni-meadow"
+     ],
+     "hub": false
+    },
+    "poni-meadow": {
+     "zh": "波尼花園",
+     "kind": "area",
+     "order": 620,
+     "tier": 7,
+     "next": [
+      "ultra-megalopolis",
+      "poni-gauntlet"
+     ],
+     "hub": false
+    },
+    "poni-gauntlet": {
+     "zh": "波尼險路",
+     "kind": "area",
+     "order": 630,
+     "tier": 7,
+     "next": [
+      "poni-meadow",
+      "mount-lanakila"
+     ],
+     "hub": false
+    },
+    "mount-lanakila": {
+     "zh": "拉納基拉山",
+     "kind": "area",
+     "order": 640,
+     "tier": 7,
+     "next": [
+      "poni-gauntlet",
+      "poni-grove"
+     ],
+     "hub": false
+    },
+    "poni-grove": {
+     "zh": "波尼樹林",
+     "kind": "area",
+     "order": 650,
+     "tier": 7,
+     "next": [
+      "mount-lanakila",
+      "poni-plains"
+     ],
+     "hub": false
+    },
+    "poni-plains": {
+     "zh": "波尼曠野",
+     "kind": "area",
+     "order": 660,
+     "tier": 7,
+     "next": [
+      "poni-grove",
+      "verdant-cavern--trial-site"
+     ],
+     "hub": false
+    },
+    "verdant-cavern--trial-site": {
+     "zh": "蔥鬱洞窟",
+     "kind": "area",
+     "order": 670,
+     "tier": 7,
+     "next": [
+      "poni-plains",
+      "aether-paradise"
+     ],
+     "hub": false
+    },
+    "aether-paradise": {
+     "zh": "以太樂園",
+     "kind": "area",
+     "order": 680,
+     "tier": 7,
+     "next": [
+      "verdant-cavern--trial-site",
+      "poke-pelago"
+     ],
+     "hub": false
+    },
+    "poke-pelago": {
+     "zh": "寶可度假地",
+     "kind": "area",
+     "order": 690,
+     "tier": 7,
+     "next": [
+      "aether-paradise",
+      "altar-of-the-moone"
+     ],
+     "hub": false
+    },
+    "altar-of-the-moone": {
+     "zh": "月輪祭壇",
+     "kind": "area",
      "order": 700,
      "tier": 7,
      "next": [
-      "alola-route-16",
+      "poke-pelago",
+      "altar-of-the-sunne"
+     ],
+     "hub": false
+    },
+    "altar-of-the-sunne": {
+     "zh": "日輪祭壇",
+     "kind": "area",
+     "order": 710,
+     "tier": 8,
+     "next": [
+      "altar-of-the-moone",
       "resolution-cave"
      ],
      "hub": false
@@ -5700,10 +5639,10 @@
     "resolution-cave": {
      "zh": "終結洞窟(阿羅拉)",
      "kind": "area",
-     "order": 710,
+     "order": 720,
      "tier": 8,
      "next": [
-      "alola-route-17",
+      "altar-of-the-sunne",
       "mahalo-trail"
      ],
      "hub": false
@@ -5711,7 +5650,7 @@
     "mahalo-trail": {
      "zh": "馬哈羅山路",
      "kind": "area",
-     "order": 720,
+     "order": 730,
      "tier": 8,
      "next": [
       "resolution-cave",
@@ -5722,7 +5661,7 @@
     "ruins-of-abundance": {
      "zh": "豐收遺跡",
      "kind": "area",
-     "order": 730,
+     "order": 740,
      "tier": 8,
      "next": [
       "mahalo-trail",
@@ -5733,7 +5672,7 @@
     "ruins-of-conflict": {
      "zh": "戰爭遺跡",
      "kind": "area",
-     "order": 740,
+     "order": 750,
      "tier": 8,
      "next": [
       "ruins-of-abundance",
@@ -5744,7 +5683,7 @@
     "ruins-of-hope": {
      "zh": "彼岸遺跡",
      "kind": "area",
-     "order": 750,
+     "order": 760,
      "tier": 8,
      "next": [
       "ruins-of-conflict",
@@ -5755,7 +5694,7 @@
     "ruins-of-life": {
      "zh": "生命遺跡",
      "kind": "area",
-     "order": 760,
+     "order": 770,
      "tier": 8,
      "next": [
       "ruins-of-hope",
@@ -5766,7 +5705,7 @@
     "team-rockets-castle": {
      "zh": "火箭隊城堡",
      "kind": "area",
-     "order": 770,
+     "order": 780,
      "tier": 8,
      "next": [
       "ruins-of-life",
@@ -5777,7 +5716,7 @@
     "ultra-space": {
      "zh": "究極空間",
      "kind": "area",
-     "order": 780,
+     "order": 790,
      "tier": 8,
      "next": [
       "team-rockets-castle",
@@ -5788,21 +5727,10 @@
     "ultra-space-wilds": {
      "zh": "究極空間零地帶",
      "kind": "area",
-     "order": 790,
-     "tier": 8,
-     "next": [
-      "ultra-space",
-      "verdant-cavern--trial-site"
-     ],
-     "hub": false
-    },
-    "verdant-cavern--trial-site": {
-     "zh": "蔥鬱洞窟",
-     "kind": "area",
      "order": 800,
      "tier": 8,
      "next": [
-      "ultra-space-wilds",
+      "ultra-space",
       "alola-pokemon-league"
      ],
      "hub": false
@@ -5814,7 +5742,7 @@
      "tier": 8,
      "next": [
       "exeggutor-island",
-      "verdant-cavern--trial-site"
+      "ultra-space-wilds"
      ],
      "hub": true
     }
@@ -5832,29 +5760,6 @@
      "order": 10,
      "tier": 1,
      "next": [
-      "freezington",
-      "galar-route-1"
-     ],
-     "hub": true
-    },
-    "freezington": {
-     "zh": "凍凝村",
-     "kind": "area",
-     "order": 20,
-     "tier": 1,
-     "next": [
-      "postwick",
-      "motostoke"
-     ],
-     "hub": false
-    },
-    "motostoke": {
-     "zh": "機擎市",
-     "kind": "town",
-     "order": 30,
-     "tier": 1,
-     "next": [
-      "freezington",
       "galar-route-1"
      ],
      "hub": true
@@ -5862,56 +5767,79 @@
     "galar-route-1": {
      "zh": "1号道路",
      "kind": "route",
-     "order": 40,
+     "order": 20,
      "tier": 1,
      "next": [
       "postwick",
+      "freezington",
+      "motostoke"
+     ],
+     "hub": false
+    },
+    "freezington": {
+     "zh": "凍凝村",
+     "kind": "area",
+     "order": 30,
+     "tier": 1,
+     "next": [
+      "galar-route-1",
+      "motostoke"
+     ],
+     "hub": false
+    },
+    "motostoke": {
+     "zh": "機擎市",
+     "kind": "town",
+     "order": 40,
+     "tier": 1,
+     "next": [
+      "galar-route-1",
+      "freezington",
+      "galar-route-2"
+     ],
+     "hub": true
+    },
+    "galar-route-2": {
+     "zh": "2号道路",
+     "kind": "route",
+     "order": 50,
+     "tier": 1,
+     "next": [
       "motostoke",
-      "meetup-spot",
+      "motostoke-outskirts",
       "turffield"
      ],
      "hub": false
     },
-    "meetup-spot": {
-     "zh": "集匯空地",
-     "kind": "area",
-     "order": 50,
-     "tier": 1,
-     "next": [
-      "galar-route-1",
-      "master-dojo"
-     ],
-     "hub": false
-    },
-    "master-dojo": {
-     "zh": "馬師傅武館",
+    "motostoke-outskirts": {
+     "zh": "機擎市郊外",
      "kind": "area",
      "order": 60,
      "tier": 1,
      "next": [
-      "meetup-spot",
-      "galar-mine"
+      "galar-route-2",
+      "galar-mine-no-2"
      ],
      "hub": false
     },
-    "galar-mine": {
-     "zh": "伽勒爾礦山",
+    "galar-mine-no-2": {
+     "zh": "第二礦山",
      "kind": "area",
      "order": 70,
      "tier": 1,
      "next": [
-      "master-dojo",
-      "isle-of-armor-caves"
+      "motostoke-outskirts",
+      "slumbering-weald"
      ],
      "hub": false
     },
-    "isle-of-armor-caves": {
-     "zh": "Random caves across the Isle of Armor",
+    "slumbering-weald": {
+     "zh": "微寐森林",
      "kind": "area",
      "order": 80,
      "tier": 1,
      "next": [
-      "galar-mine",
+      "galar-mine-no-2",
       "turffield"
      ],
      "hub": false
@@ -5922,53 +5850,42 @@
      "order": 90,
      "tier": 1,
      "next": [
-      "galar-route-1",
-      "isle-of-armor-caves",
-      "galar-route-2"
+      "galar-route-2",
+      "slumbering-weald",
+      "galar-route-3"
      ],
      "hub": true
     },
-    "galar-route-2": {
-     "zh": "2号道路",
+    "galar-route-3": {
+     "zh": "3号道路",
      "kind": "route",
      "order": 100,
      "tier": 1,
      "next": [
       "turffield",
-      "galar-route-3"
-     ],
-     "hub": false
-    },
-    "galar-route-3": {
-     "zh": "3号道路",
-     "kind": "route",
-     "order": 110,
-     "tier": 2,
-     "next": [
-      "galar-route-2",
-      "motostoke-outskirts",
+      "meetup-spot",
       "hulbury"
      ],
      "hub": false
     },
-    "motostoke-outskirts": {
-     "zh": "機擎市郊外",
+    "meetup-spot": {
+     "zh": "集匯空地",
+     "kind": "area",
+     "order": 110,
+     "tier": 2,
+     "next": [
+      "galar-route-3",
+      "master-dojo"
+     ],
+     "hub": false
+    },
+    "master-dojo": {
+     "zh": "馬師傅武館",
      "kind": "area",
      "order": 120,
      "tier": 2,
      "next": [
-      "galar-route-3",
-      "galar-mine-no-2"
-     ],
-     "hub": false
-    },
-    "galar-mine-no-2": {
-     "zh": "第二礦山",
-     "kind": "area",
-     "order": 130,
-     "tier": 2,
-     "next": [
-      "motostoke-outskirts",
+      "meetup-spot",
       "hulbury"
      ],
      "hub": false
@@ -5976,11 +5893,11 @@
     "hulbury": {
      "zh": "水舟鎮",
      "kind": "town",
-     "order": 140,
+     "order": 130,
      "tier": 2,
      "next": [
       "galar-route-3",
-      "galar-mine-no-2",
+      "master-dojo",
       "galar-route-4"
      ],
      "hub": true
@@ -5988,19 +5905,19 @@
     "galar-route-4": {
      "zh": "4号道路",
      "kind": "route",
-     "order": 150,
+     "order": 140,
      "tier": 2,
      "next": [
       "hulbury",
-      "slumbering-weald",
+      "galar-mine",
       "hammerlocke"
      ],
      "hub": false
     },
-    "slumbering-weald": {
-     "zh": "微寐森林",
+    "galar-mine": {
+     "zh": "伽勒爾礦山",
      "kind": "area",
-     "order": 160,
+     "order": 150,
      "tier": 2,
      "next": [
       "galar-route-4",
@@ -6011,11 +5928,11 @@
     "hammerlocke": {
      "zh": "拳關市",
      "kind": "town",
-     "order": 170,
+     "order": 160,
      "tier": 2,
      "next": [
       "galar-route-4",
-      "slumbering-weald",
+      "galar-mine",
       "galar-route-5"
      ],
      "hub": true
@@ -6023,22 +5940,55 @@
     "galar-route-5": {
      "zh": "5号道路",
      "kind": "route",
-     "order": 180,
+     "order": 170,
      "tier": 2,
      "next": [
       "hammerlocke",
-      "galar-wild-area-max-dens",
+      "galar-route-6"
+     ],
+     "hub": false
+    },
+    "galar-route-6": {
+     "zh": "6号道路",
+     "kind": "route",
+     "order": 180,
+     "tier": 2,
+     "next": [
+      "galar-route-5",
       "stow-on-side"
+     ],
+     "hub": false
+    },
+    "stow-on-side": {
+     "zh": "溯傳鎮",
+     "kind": "town",
+     "order": 190,
+     "tier": 2,
+     "next": [
+      "galar-route-6",
+      "galar-route-7"
+     ],
+     "hub": true
+    },
+    "galar-route-7": {
+     "zh": "7号道路",
+     "kind": "route",
+     "order": 200,
+     "tier": 2,
+     "next": [
+      "stow-on-side",
+      "galar-wild-area-max-dens",
+      "circhester"
      ],
      "hub": false
     },
     "galar-wild-area-max-dens": {
      "zh": "Max Dens in the Galar Wild Area",
      "kind": "area",
-     "order": 190,
+     "order": 210,
      "tier": 2,
      "next": [
-      "galar-route-5",
+      "galar-route-7",
       "glimwood-tangle"
      ],
      "hub": false
@@ -6046,8 +5996,8 @@
     "glimwood-tangle": {
      "zh": "迷光森林",
      "kind": "area",
-     "order": 200,
-     "tier": 2,
+     "order": 220,
+     "tier": 3,
      "next": [
       "galar-wild-area-max-dens",
       "ballonlea"
@@ -6057,8 +6007,8 @@
     "ballonlea": {
      "zh": "舞姿鎮",
      "kind": "area",
-     "order": 210,
-     "tier": 2,
+     "order": 230,
+     "tier": 3,
      "next": [
       "glimwood-tangle",
       "warm-up-tunnel"
@@ -6068,7 +6018,7 @@
     "warm-up-tunnel": {
      "zh": "熱身洞穴",
      "kind": "area",
-     "order": 220,
+     "order": 240,
      "tier": 3,
      "next": [
       "ballonlea",
@@ -6079,7 +6029,7 @@
     "dappled-grove": {
      "zh": "沐光森林",
      "kind": "area",
-     "order": 230,
+     "order": 250,
      "tier": 3,
      "next": [
       "warm-up-tunnel",
@@ -6090,7 +6040,7 @@
     "rolling-fields": {
      "zh": "煦麗草原",
      "kind": "area",
-     "order": 240,
+     "order": 260,
      "tier": 3,
      "next": [
       "dappled-grove",
@@ -6101,7 +6051,7 @@
     "west-lake-axewell": {
      "zh": "牙牙湖西岸",
      "kind": "area",
-     "order": 250,
+     "order": 270,
      "tier": 3,
      "next": [
       "rolling-fields",
@@ -6112,21 +6062,45 @@
     "east-lake-axewell": {
      "zh": "牙牙湖東岸",
      "kind": "area",
-     "order": 260,
+     "order": 280,
      "tier": 3,
      "next": [
       "west-lake-axewell",
-      "watchtower-ruins"
+      "circhester"
+     ],
+     "hub": false
+    },
+    "circhester": {
+     "zh": "戰競鎮",
+     "kind": "town",
+     "order": 290,
+     "tier": 3,
+     "next": [
+      "galar-route-7",
+      "east-lake-axewell",
+      "galar-route-8"
+     ],
+     "hub": true
+    },
+    "galar-route-8": {
+     "zh": "8号道路",
+     "kind": "route",
+     "order": 300,
+     "tier": 3,
+     "next": [
+      "circhester",
+      "watchtower-ruins",
+      "spikemuth"
      ],
      "hub": false
     },
     "watchtower-ruins": {
      "zh": "瞭望塔舊址",
      "kind": "area",
-     "order": 270,
+     "order": 310,
      "tier": 3,
      "next": [
-      "east-lake-axewell",
+      "galar-route-8",
       "fields-of-honor"
      ],
      "hub": false
@@ -6134,7 +6108,7 @@
     "fields-of-honor": {
      "zh": "揖礼原野",
      "kind": "area",
-     "order": 280,
+     "order": 320,
      "tier": 3,
      "next": [
       "watchtower-ruins",
@@ -6145,8 +6119,8 @@
     "south-lake-miloch": {
      "zh": "美纳斯湖南岸",
      "kind": "area",
-     "order": 290,
-     "tier": 3,
+     "order": 330,
+     "tier": 4,
      "next": [
       "fields-of-honor",
       "hammerlocke-hills"
@@ -6156,8 +6130,8 @@
     "hammerlocke-hills": {
      "zh": "拳關丘陵",
      "kind": "area",
-     "order": 300,
-     "tier": 3,
+     "order": 340,
+     "tier": 4,
      "next": [
       "south-lake-miloch",
       "soothing-wetlands"
@@ -6167,8 +6141,8 @@
     "soothing-wetlands": {
      "zh": "清涼濕原",
      "kind": "area",
-     "order": 310,
-     "tier": 3,
+     "order": 350,
+     "tier": 4,
      "next": [
       "hammerlocke-hills",
       "north-lake-miloch"
@@ -6178,8 +6152,8 @@
     "north-lake-miloch": {
      "zh": "美納斯湖北岸",
      "kind": "area",
-     "order": 320,
-     "tier": 3,
+     "order": 360,
+     "tier": 4,
      "next": [
       "soothing-wetlands",
       "forest-of-focus"
@@ -6189,7 +6163,7 @@
     "forest-of-focus": {
      "zh": "专注森林",
      "kind": "area",
-     "order": 330,
+     "order": 370,
      "tier": 4,
      "next": [
       "north-lake-miloch",
@@ -6200,7 +6174,7 @@
     "stony-wilderness": {
      "zh": "巨石原野",
      "kind": "area",
-     "order": 340,
+     "order": 380,
      "tier": 4,
      "next": [
       "forest-of-focus",
@@ -6211,45 +6185,45 @@
     "challenge-road": {
      "zh": "挑戰之路",
      "kind": "area",
-     "order": 350,
+     "order": 390,
      "tier": 4,
      "next": [
       "stony-wilderness",
-      "stow-on-side"
+      "spikemuth"
      ],
      "hub": false
     },
-    "stow-on-side": {
-     "zh": "溯傳鎮",
+    "spikemuth": {
+     "zh": "尖釘鎮",
      "kind": "town",
-     "order": 360,
+     "order": 400,
      "tier": 4,
      "next": [
-      "galar-route-5",
+      "galar-route-8",
       "challenge-road",
-      "galar-route-6"
+      "galar-route-9"
      ],
      "hub": true
     },
-    "galar-route-6": {
-     "zh": "6号道路",
+    "galar-route-9": {
+     "zh": "9号道路",
      "kind": "route",
-     "order": 370,
+     "order": 410,
      "tier": 4,
      "next": [
-      "stow-on-side",
+      "spikemuth",
       "giants-cap",
-      "circhester"
+      "wyndon"
      ],
      "hub": false
     },
     "giants-cap": {
      "zh": "巨人帽岩",
      "kind": "area",
-     "order": 380,
+     "order": 420,
      "tier": 4,
      "next": [
-      "galar-route-6",
+      "galar-route-9",
       "motostoke-riverbank"
      ],
      "hub": false
@@ -6257,7 +6231,7 @@
     "motostoke-riverbank": {
      "zh": "機擎河岸",
      "kind": "area",
-     "order": 390,
+     "order": 430,
      "tier": 4,
      "next": [
       "giants-cap",
@@ -6268,8 +6242,8 @@
     "bridge-field": {
      "zh": "橋間空地",
      "kind": "area",
-     "order": 400,
-     "tier": 4,
+     "order": 440,
+     "tier": 5,
      "next": [
       "motostoke-riverbank",
       "training-lowlands"
@@ -6279,8 +6253,8 @@
     "training-lowlands": {
      "zh": "鍛鍊平原",
      "kind": "area",
-     "order": 410,
-     "tier": 4,
+     "order": 450,
+     "tier": 5,
      "next": [
       "bridge-field",
       "courageous-cavern"
@@ -6290,8 +6264,8 @@
     "courageous-cavern": {
      "zh": "鬥志洞窟",
      "kind": "area",
-     "order": 420,
-     "tier": 4,
+     "order": 460,
+     "tier": 5,
      "next": [
       "training-lowlands",
       "challenge-beach"
@@ -6301,8 +6275,8 @@
     "challenge-beach": {
      "zh": "挑戰海灘",
      "kind": "area",
-     "order": 430,
-     "tier": 4,
+     "order": 470,
+     "tier": 5,
      "next": [
       "courageous-cavern",
       "loop-lagoon"
@@ -6312,7 +6286,7 @@
     "loop-lagoon": {
      "zh": "圓環海灣",
      "kind": "area",
-     "order": 440,
+     "order": 480,
      "tier": 5,
      "next": [
       "challenge-beach",
@@ -6323,7 +6297,7 @@
     "dyna-tree-hill": {
      "zh": "巨樹丘陵",
      "kind": "area",
-     "order": 450,
+     "order": 490,
      "tier": 5,
      "next": [
       "loop-lagoon",
@@ -6334,7 +6308,7 @@
     "potbottom-desert": {
      "zh": "鍋底沙漠",
      "kind": "area",
-     "order": 460,
+     "order": 500,
      "tier": 5,
      "next": [
       "dyna-tree-hill",
@@ -6345,7 +6319,7 @@
     "brawlers-cave": {
      "zh": "戰鬥洞窟",
      "kind": "area",
-     "order": 470,
+     "order": 510,
      "tier": 5,
      "next": [
       "potbottom-desert",
@@ -6356,7 +6330,7 @@
     "dusty-bowl": {
      "zh": "沙塵窪地",
      "kind": "area",
-     "order": 480,
+     "order": 520,
      "tier": 5,
      "next": [
       "brawlers-cave",
@@ -6367,7 +6341,7 @@
     "giants-mirror": {
      "zh": "巨人鏡池",
      "kind": "area",
-     "order": 490,
+     "order": 530,
      "tier": 5,
      "next": [
       "dusty-bowl",
@@ -6378,8 +6352,8 @@
     "stepping-stone-sea": {
      "zh": "列島海域",
      "kind": "area",
-     "order": 500,
-     "tier": 5,
+     "order": 540,
+     "tier": 6,
      "next": [
       "giants-mirror",
       "honeycalm-sea"
@@ -6389,8 +6363,8 @@
     "honeycalm-sea": {
      "zh": "蜂巢海",
      "kind": "area",
-     "order": 510,
-     "tier": 5,
+     "order": 550,
+     "tier": 6,
      "next": [
       "stepping-stone-sea",
       "giants-seat"
@@ -6400,10 +6374,34 @@
     "giants-seat": {
      "zh": "巨人凳岩",
      "kind": "area",
-     "order": 520,
-     "tier": 5,
+     "order": 560,
+     "tier": 6,
      "next": [
       "honeycalm-sea",
+      "wyndon"
+     ],
+     "hub": false
+    },
+    "wyndon": {
+     "zh": "宮門市",
+     "kind": "town",
+     "order": 570,
+     "tier": 6,
+     "next": [
+      "galar-route-9",
+      "giants-seat",
+      "galar-route-10",
+      "galar-pokemon-league"
+     ],
+     "hub": true
+    },
+    "galar-route-10": {
+     "zh": "10号道路",
+     "kind": "route",
+     "order": 580,
+     "tier": 6,
+     "next": [
+      "wyndon",
       "workout-sea"
      ],
      "hub": false
@@ -6411,10 +6409,10 @@
     "workout-sea": {
      "zh": "健身之海",
      "kind": "area",
-     "order": 530,
-     "tier": 5,
+     "order": 590,
+     "tier": 6,
      "next": [
-      "giants-seat",
+      "galar-route-10",
       "insular-sea"
      ],
      "hub": false
@@ -6422,7 +6420,7 @@
     "insular-sea": {
      "zh": "離島海域",
      "kind": "area",
-     "order": 540,
+     "order": 600,
      "tier": 6,
      "next": [
       "workout-sea",
@@ -6433,7 +6431,7 @@
     "axews-eye": {
      "zh": "牙牙湖之眼",
      "kind": "area",
-     "order": 550,
+     "order": 610,
      "tier": 6,
      "next": [
       "insular-sea",
@@ -6444,7 +6442,7 @@
     "path-to-the-peak": {
      "zh": "通頂雪道",
      "kind": "area",
-     "order": 560,
+     "order": 620,
      "tier": 6,
      "next": [
       "axews-eye",
@@ -6455,7 +6453,7 @@
     "frigid-sea": {
      "zh": "凍海",
      "kind": "area",
-     "order": 570,
+     "order": 630,
      "tier": 6,
      "next": [
       "path-to-the-peak",
@@ -6466,7 +6464,7 @@
     "snowslide-slope": {
      "zh": "雪中溪谷",
      "kind": "area",
-     "order": 580,
+     "order": 640,
      "tier": 6,
      "next": [
       "frigid-sea",
@@ -6477,56 +6475,21 @@
     "lake-of-outrage": {
      "zh": "逆鱗湖",
      "kind": "area",
-     "order": 590,
-     "tier": 6,
+     "order": 650,
+     "tier": 7,
      "next": [
       "snowslide-slope",
-      "circhester"
-     ],
-     "hub": false
-    },
-    "circhester": {
-     "zh": "戰競鎮",
-     "kind": "town",
-     "order": 600,
-     "tier": 6,
-     "next": [
-      "galar-route-6",
-      "lake-of-outrage",
-      "galar-route-7"
-     ],
-     "hub": true
-    },
-    "galar-route-7": {
-     "zh": "7号道路",
-     "kind": "route",
-     "order": 610,
-     "tier": 6,
-     "next": [
-      "circhester",
-      "galar-route-8"
-     ],
-     "hub": false
-    },
-    "galar-route-8": {
-     "zh": "8号道路",
-     "kind": "route",
-     "order": 620,
-     "tier": 6,
-     "next": [
-      "galar-route-7",
-      "ballimere-lake",
-      "spikemuth"
+      "ballimere-lake"
      ],
      "hub": false
     },
     "ballimere-lake": {
      "zh": "球湖湖畔",
      "kind": "area",
-     "order": 630,
-     "tier": 6,
+     "order": 660,
+     "tier": 7,
      "next": [
-      "galar-route-8",
+      "lake-of-outrage",
       "giants-bed"
      ],
      "hub": false
@@ -6534,32 +6497,10 @@
     "giants-bed": {
      "zh": "巨人睡榻",
      "kind": "area",
-     "order": 640,
-     "tier": 6,
+     "order": 670,
+     "tier": 7,
      "next": [
       "ballimere-lake",
-      "honeycalm-island"
-     ],
-     "hub": false
-    },
-    "honeycalm-island": {
-     "zh": "蜂巢島",
-     "kind": "area",
-     "order": 650,
-     "tier": 7,
-     "next": [
-      "giants-bed",
-      "galar-battle-tower"
-     ],
-     "hub": false
-    },
-    "galar-battle-tower": {
-     "zh": "对战塔(剑／盾)",
-     "kind": "area",
-     "order": 660,
-     "tier": 7,
-     "next": [
-      "honeycalm-island",
       "frostpoint-field"
      ],
      "hub": false
@@ -6567,21 +6508,10 @@
     "frostpoint-field": {
      "zh": "冰點雪原",
      "kind": "area",
-     "order": 670,
-     "tier": 7,
-     "next": [
-      "galar-battle-tower",
-      "crown-shrine"
-     ],
-     "hub": false
-    },
-    "crown-shrine": {
-     "zh": "王冠神殿",
-     "kind": "area",
      "order": 680,
      "tier": 7,
      "next": [
-      "frostpoint-field",
+      "giants-bed",
       "slippery-slope"
      ],
      "hub": false
@@ -6592,7 +6522,7 @@
      "order": 690,
      "tier": 7,
      "next": [
-      "crown-shrine",
+      "frostpoint-field",
       "three-point-pass"
      ],
      "hub": false
@@ -6626,41 +6556,61 @@
      "tier": 7,
      "next": [
       "giants-foot",
-      "spikemuth"
+      "isle-of-armor-caves"
      ],
      "hub": false
     },
-    "spikemuth": {
-     "zh": "尖釘鎮",
-     "kind": "town",
+    "isle-of-armor-caves": {
+     "zh": "Random caves across the Isle of Armor",
+     "kind": "area",
      "order": 730,
      "tier": 7,
      "next": [
-      "galar-route-8",
       "old-cemetery",
-      "galar-route-9"
+      "honeycalm-island"
      ],
-     "hub": true
+     "hub": false
     },
-    "galar-route-9": {
-     "zh": "9号道路",
-     "kind": "route",
+    "honeycalm-island": {
+     "zh": "蜂巢島",
+     "kind": "area",
      "order": 740,
      "tier": 7,
      "next": [
-      "spikemuth",
-      "roaring-sea-caves",
-      "wyndon"
+      "isle-of-armor-caves",
+      "galar-battle-tower"
+     ],
+     "hub": false
+    },
+    "galar-battle-tower": {
+     "zh": "对战塔(剑／盾)",
+     "kind": "area",
+     "order": 750,
+     "tier": 7,
+     "next": [
+      "honeycalm-island",
+      "crown-shrine"
+     ],
+     "hub": false
+    },
+    "crown-shrine": {
+     "zh": "王冠神殿",
+     "kind": "area",
+     "order": 760,
+     "tier": 8,
+     "next": [
+      "galar-battle-tower",
+      "roaring-sea-caves"
      ],
      "hub": false
     },
     "roaring-sea-caves": {
      "zh": "海鳴洞窟",
      "kind": "area",
-     "order": 750,
-     "tier": 7,
+     "order": 770,
+     "tier": 8,
      "next": [
-      "galar-route-9",
+      "crown-shrine",
       "tunnel-to-the-top"
      ],
      "hub": false
@@ -6668,7 +6618,7 @@
     "tunnel-to-the-top": {
      "zh": "登頂隧道",
      "kind": "area",
-     "order": 760,
+     "order": 780,
      "tier": 8,
      "next": [
       "roaring-sea-caves",
@@ -6679,7 +6629,7 @@
     "lakeside-cave": {
      "zh": "湖畔洞窟",
      "kind": "area",
-     "order": 770,
+     "order": 790,
      "tier": 8,
      "next": [
       "tunnel-to-the-top",
@@ -6690,34 +6640,10 @@
     "max-lair": {
      "zh": "極巨巢穴",
      "kind": "area",
-     "order": 780,
-     "tier": 8,
-     "next": [
-      "lakeside-cave",
-      "wyndon"
-     ],
-     "hub": false
-    },
-    "wyndon": {
-     "zh": "宮門市",
-     "kind": "town",
-     "order": 790,
-     "tier": 8,
-     "next": [
-      "galar-route-9",
-      "max-lair",
-      "galar-route-10",
-      "galar-pokemon-league"
-     ],
-     "hub": true
-    },
-    "galar-route-10": {
-     "zh": "10号道路",
-     "kind": "route",
      "order": 800,
      "tier": 8,
      "next": [
-      "wyndon",
+      "lakeside-cave",
       "energy-plant"
      ],
      "hub": false
@@ -6728,7 +6654,7 @@
      "order": 810,
      "tier": 8,
      "next": [
-      "galar-route-10",
+      "max-lair",
       "galar-iceberg-ruins"
      ],
      "hub": false

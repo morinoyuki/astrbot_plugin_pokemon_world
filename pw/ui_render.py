@@ -1459,12 +1459,17 @@ class Screen:
     # ── 精灵图 ──
     def sprite(self, species: str, *, ground: tuple[float, float], factor: float = 1.0,
                bounds: tuple[int, int] = (64, 64), back: bool = False,
-               dim: bool = False, silhouette: bool = False) -> None:
-        """按"脚底对齐"贴图:水平居中于 ground[0],底边压在 ground[1]。"""
+               dim: bool = False, silhouette: bool = False,
+               shiny: bool = False) -> None:
+        """按"脚底对齐"贴图:水平居中于 ground[0],底边压在 ground[1]。
+
+        shiny=True 用闪光图(缺图自动回退普通图)。
+        """
         from PIL import Image, ImageEnhance, ImageOps
 
         cx, base_y = ground
-        path = back_sprite_path(species) if back else sprite_path(species)
+        path = (back_sprite_path(species, shiny=shiny) if back
+                else sprite_path(species, shiny=shiny))
         img = _trimmed(path, factor, bounds, mirror=back)
         if img is None:
             img = _blob(bounds)
@@ -1577,10 +1582,13 @@ def render_party(
             if sprites:
                 sc.sprite(str(mon.get("species") or ""), ground=(22, y0 + row_h - 4),
                           factor=0.62, bounds=(20, row_h - 8), back=False,
-                          dim=_ratio(mon.get("cur_hp"), mon.get("max_hp")) <= 0)
+                          dim=_ratio(mon.get("cur_hp"), mon.get("max_hp")) <= 0,
+                          shiny=bool(mon.get("shiny")))
             else:
                 x_name = 14.0
             name = str(mon.get("name") or "?")
+            if mon.get("shiny"):
+                name = "✨" + name
             # 第一行:名字 / 性别 / Lv(名字行下移 1px,把下方空间让给血条)
             sc.text(x_name, y0 + 3.5, name, size=8.6, fill=TEXT)
             w = sc.tw(name, 8.6) + x_name + 2
@@ -1791,6 +1799,7 @@ def render_dex(
     *,
     caught: bool = False,
     seen: bool = False,
+    shiny: bool = False,
     locations: list[dict] | None = None,
     scale: int = SCALE_DEFAULT,
 ) -> bytes:
@@ -1803,8 +1812,11 @@ def render_dex(
         name = entry.get("zh") or entry.get("name") or "?"
         sc.title_bar(f"No.{num:04d} " + (name if known else "???"), right=mark)
         sc.window((5, 19, 112, 112), radius=3)
+        # 抓过闪光形态:图鉴页直接给出异色立绘 + 金色角标
         sc.sprite(str(entry.get("_key") or ""), ground=(58, 108), factor=1.0,
-                  bounds=(84, 82), silhouette=not known)
+                  bounds=(84, 82), silhouette=not known, shiny=shiny)
+        if shiny:
+            sc.text(11, 22, "✨闪光", size=7.4, fill=(196, 156, 24))
         sc.window((116, 19, 235, 112), radius=3)
         y = 23
         sc.text(121, y, "分类", size=7.6, fill=TEXT_DIM)
@@ -1887,8 +1899,11 @@ def render_mon_summary(mon: dict, *, index: int = 1, party_size: int = 1,
     try:
         sc = Screen(scale=scale)
         name = str(mon.get("name") or "?")
+        if mon.get("shiny"):
+            name = "✨" + name
         lv = int(mon.get("level") or 1)
-        sc.title_bar("宝可梦资料", right=f"{int(index)}/{max(1, int(party_size))}")
+        sc.title_bar("宝可梦资料" + (" · ✨闪光" if mon.get("shiny") else ""),
+                     right=f"{int(index)}/{max(1, int(party_size))}")
 
         # ── 左上:名字 / 属性 / 立绘 ──
         sc.window((5, 19, 96, 92), radius=2)
@@ -1902,7 +1917,7 @@ def render_mon_summary(mon: dict, *, index: int = 1, party_size: int = 1,
                 cx += w + 2
         # 立绘贴底,上边缘在属性标签之下(bounds 会按比例钳制,不会溢出)
         sc.sprite(str(mon.get("species") or ""), ground=(50, 89), factor=1.0,
-                  bounds=(62, 46))
+                  bounds=(62, 46), shiny=bool(mon.get("shiny")))
 
         # ── 右上:等级 / HP / 经验 / 能力值 ──
         sc.window((100, 19, 235, 92), radius=2)
@@ -2000,8 +2015,12 @@ def render_box(mons: list[dict], *, capacity: int = 0, money: int = 0,
             sc.window((cx, cy, cx + cw - 1, cy + ch - 1), radius=2)
             sc.sprite(str(mon.get("species") or ""), ground=(cx + 14, cy + ch - 3),
                       factor=0.5, bounds=(24, ch - 6),
-                      dim=_ratio(mon.get("cur_hp"), mon.get("max_hp")) <= 0)
-            sc.text(cx + 27, cy + 2, _fit(sc, str(mon.get("name") or "?"), 58, 7.6),
+                      dim=_ratio(mon.get("cur_hp"), mon.get("max_hp")) <= 0,
+                      shiny=bool(mon.get("shiny")))
+            nm = str(mon.get("name") or "?")
+            if mon.get("shiny"):
+                nm = "✨" + nm
+            sc.text(cx + 27, cy + 2, _fit(sc, nm, 58, 7.6),
                     size=7.6, fill=TEXT)
             lv = f"Lv{int(mon.get('level') or 1)}"
             g = str(mon.get("gender") or "")

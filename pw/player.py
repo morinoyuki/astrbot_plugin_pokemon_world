@@ -61,6 +61,8 @@ class Trainer:
         d.setdefault("badges", [])
         d.setdefault("dex_seen", [])
         d.setdefault("dex_caught", [])
+        # 闪光(异色)图鉴:记录哪些物种抓过闪光形态(与普通捕获分开)
+        d.setdefault("shiny_caught", [])
         d.setdefault("region", "kanto")
         d.setdefault("location", "")
         d.setdefault("visited", [])
@@ -354,6 +356,22 @@ class Trainer:
 
     def caught(self, species: str) -> bool:
         return species in self.data["dex_caught"]
+
+    def mark_shiny(self, species: str) -> bool:
+        """记录抓到了闪光形态;返回是否是新纪录(第一次抓到这只的闪光)。"""
+        if not species:
+            return False
+        shiny = self.data.setdefault("shiny_caught", [])
+        if species in shiny:
+            return False
+        shiny.append(species)
+        return True
+
+    def shiny_caught(self, species: str) -> bool:
+        return species in (self.data.get("shiny_caught") or [])
+
+    def shiny_count(self) -> int:
+        return len(self.data.get("shiny_caught") or [])
 
     # ── 治疗 ──
     def heal_party(self) -> int:

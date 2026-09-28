@@ -294,6 +294,53 @@ def test_map_last_row_does_not_overflow_panel():
     )
 
 
+def test_chain_window_follows_current_position():
+    """地图窗口以当前位置为锚:前留 4 个、其余给前方,并夹在边界内。"""
+    from pw.ui_menu import _chain_window
+
+    order = [f"n{i}" for i in range(40)]
+    assert _chain_window(order, "n0", 15) == (0, order[:15])
+    start, shown = _chain_window(order, "n20", 15)
+    assert start == 16 and shown == order[16:31] and "n20" in shown
+    start, shown = _chain_window(order, "n14", 15)
+    assert start == 10 and "n14" in shown
+    assert _chain_window(order, "n39", 15)[0] == 25
+    assert _chain_window(order, "不在链上", 15) == (0, order[:15])
+    assert _chain_window(order[:5], "n2", 15) == (0, order[:5])
+    assert _chain_window([], "", 15) == (0, [])
+
+
+def test_map_window_shows_the_nodes_ahead():
+    """地图必须随进度滚动:走到 7 号道路时要能看到 8 号道路 ——
+    之前的实现固定只画 order[:15] 再把当前位置塞进最后一格,
+    导致玩家以为“关都就这么大、道馆只有两个”(用户实测反馈)。"""
+    from pw import ui_menu as M
+    from pw.world import WorldMap
+
+    world = WorldMap()
+    nodes = [{**v, "key": k} for k, v in world.nodes("kanto").items()]
+
+    def labels(current: str) -> list[str]:
+        with _PanelSpy() as spy:
+            M.render_map(world.region_zh("kanto"), nodes, current=current,
+                         visited=["pallet-town", "kanto-route-1"],
+                         gyms=world.gyms("kanto"),
+                         next_goal="挑战枯叶市道馆:马志士", badge_count=2,
+                         scale=SCALE)
+        return [s for _x, _y, s, _kw in spy.texts]
+
+    late = labels("kanto-route-7")
+    assert "8号道路" in late, late
+    assert "真新镇" not in late, late
+    # 标题栏报出总道馆数,避免"只看到两个道馆城镇 = 地区只有两个道馆"
+    assert any("徽章 2/8" in s for s in late), late
+    early = labels("pallet-town")
+    assert "1号道路" in early, early
+    # 地区后段(冠军之路/联盟)不该出现在开头窗口里 —— 窗口确实跟着玩家走
+    assert "冠军之路" not in early, early
+    assert set(late) != set(early)
+
+
 def test_clamp_text_handles_stroke_and_overwide_text():
     """文字钳制必须算上描边宽度,并且超宽文字要截断而不是画到画布外。"""
     from pw.ui_render import LOGICAL_W, Screen

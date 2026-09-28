@@ -90,14 +90,26 @@ def build_enemy(specs) -> list[Pokemon]:
                 item=str(s.get("item") or ""),
                 ability=str(s.get("ability") or ""),
                 gender=str(s.get("gender") or ""),
+                shiny=bool(s.get("shiny")),
             )
         )
     return out
 
 
 # ── 野生遭遇 ─────────────────────────────────────────────────────
-def roll_wild(trainer: Trainer, *, rng=None, environment: str = "") -> dict | None:
-    """按当前地点的真实分布抽一只野生宝可梦。"""
+# 闪光(异色)宝可梦的默认概率分母:1/512。正作是 1/4096,
+# 那是为“刷一整天”设计的单机节奏;聊天群里一场野生能见到的次数有限,
+# 万分之一会被玩家当故障。可在配置里改(shiny_rate,0 = 关闭)。
+DEFAULT_SHINY_RATE = 512
+
+
+def roll_wild(trainer: Trainer, *, rng=None, environment: str = "",
+              shiny_rate: int = DEFAULT_SHINY_RATE) -> dict | None:
+    """按当前地点的真实分布抽一只野生宝可梦。
+
+    最后额外掷一次闪光判定(放在物种/等级都定下来之后,
+    保证原有随机序列不变):hit["shiny"] 为 True 时是异色个体。
+    """
     dex = get_dex()
     loc = trainer.location
     if not loc:
@@ -132,6 +144,8 @@ def roll_wild(trainer: Trainer, *, rng=None, environment: str = "") -> dict | No
     elif not hit.get("level"):
         hit["level"] = roll_level(dex, trainer.party, rng=r) or 5
     hit["level"] = int(clamp(hit["level"], 2, 100))
+    rate = int(shiny_rate or 0)
+    hit["shiny"] = bool(rate > 0 and r.random() < 1.0 / rate)
     return hit
 
 
@@ -496,10 +510,15 @@ def _finish_catch(trainer: Trainer, battle, res: TurnResult, *, day: int = 0) ->
     # (满 6 只时它进电脑,靠 party[-1] 或 box 增量都会定位到错的宝可梦)
     res.caught = dict(entry)
     res.caught_where = where
-    res.rewards.append(
-        f"🎉 捕获成功!{dex.species.get(mon.species, {}).get('zh', mon.species)} "
-        f"Lv{mon.level} 已加入你的{where}。"
-    )
+    zh_sp = dex.species.get(mon.species, {}).get("zh", mon.species)
+    if mon.shiny:
+        # 闪光要在“捕获成功”之前报喜,而不是埋在奖励列表里
+        first = trainer.mark_shiny(mon.species)
+        res.rewards.append(
+            f"✨ 这是一只稀有的闪光(异色)宝可梦!{zh_sp}闪耀着特别的光芒!"
+            + ("(闪光图鉴新纪录!)" if first else "")
+        )
+    res.rewards.append(f"🎉 捕获成功!{zh_sp} Lv{mon.level} 已加入你的{where}。")
     res.rewards.append(f"📖 图鉴已记录:{len(trainer.data['dex_caught'])} 种。")
     trainer.data["steps"] = int(trainer.data.get("steps", 0)) + 30
 
@@ -736,8 +755,9 @@ def status_text(trainer: Trainer) -> str:
             return [f"{tag}:—"]
         zt = "/".join(dex.type_label(t) for t in mon.types)
         st = _status_zh(mon.status)
+        mark = "✨" if mon.shiny else ""
         return [
-            f"{tag}:{mon.display} Lv{mon.level} [{zt}]"
+            f"{tag}:{mark}{mon.display} Lv{mon.level} [{zt}]"
             f"{' ' + st if st else ''}",
             f"　HP {mon.cur_hp}/{mon.max_hp} "
             f"[{growth_move_bar(mon.cur_hp, mon.max_hp)}]",
@@ -799,8 +819,9 @@ def team_status(trainer: Trainer) -> str:
         mon = dict_to_mon(p)
         zt = "/".join(dex.type_label(t) for t in mon.types)
         nick = f"「{mon.nickname}」" if mon.nickname else ""
+        mark = "✨" if mon.shiny else ""
         lines.append(
-            f"{i}. {mon.display}{nick} Lv{mon.level} [{zt}] "
+            f"{i}. {mark}{mon.display}{nick} Lv{mon.level} [{zt}] "
             f"HP {mon.cur_hp}/{mon.max_hp} {_status_zh(mon.status)}"
         )
         lines.append(
@@ -819,7 +840,8 @@ def _mon_view(mon: Pokemon | None, *, exp_pct: float = 0.0) -> dict:
     dex = get_dex()
     return {
         "species": mon.species,
-        "name": mon.display,
+        "name": ("✨" + mon.display) if mon.shiny else mon.display,
+        "shiny": bool(mon.shiny),
         "level": int(mon.level),
         "cur_hp": int(mon.cur_hp),
         "max_hp": int(max(1, mon.max_hp)),

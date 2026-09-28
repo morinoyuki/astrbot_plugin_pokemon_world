@@ -95,6 +95,41 @@ CANONICAL_TOWNS: dict[str, list[str]] = {
 TOWN_RE = re.compile(r"(city|town|village|plateau|league|ranch|resort|safari)")
 ROUTE_NUM_RE = re.compile(r"(\d+)")
 
+# 主线之外的可选/二周目区域:七之岛、对战区、DLC 岛、幻影地点等。
+# 它们不该按“遭遇等级”插在城镇之间 —— 七之岛的野怪等级只有 17~25,
+# 结果全被塞到深灰市前,玩家在主线上就会发现路线里冒出一串海岛。
+# 这些节点统一排到最后一个城镇之后、联盟之前(只影响游学顺序,不影响连通)。
+SIDE_AREA_MARKERS: tuple[str, ...] = (
+    "-island", "-islands", "-islet", "isle-", "sevii",
+    "water-labyrinth", "altering-cave", "memorial-pillar", "tanoby", "chamber",
+    "navel-rock", "faraway-island", "outcast-island", "birth-island",
+    "resort", "trainer-tower", "ruin-valley", "green-path", "pattern-bush",
+    "cerulean-cave", "power-plant", "sevault",
+    "treasure-beach", "kindle-road", "bond-bridge", "cape-brink", "berry-forest",
+    "water-path", "lost-cave", "mt-ember",
+    "mirage", "battle-", "sky-pillar", "crescent-isle", "trackless-forest",
+    "nameless-cavern", "soaring", "pathless-plain", "fabled-cave", "gnarled-den",
+    "terra-cave", "marine-cave", "desert-ruins", "ancient-tomb",
+    "newmoon", "distortion-world", "stark-mountain", "sendoff-spring",
+    "hall-of-origin", "flower-paradise",
+    "ultra-space", "poke-pelago", "aether-paradise", "resolution-cave",
+    "mahalo-trail", "ruins-of-", "altar-of-the", "team-rockets-castle",
+    "max-lair", "crown-shrine", "energy-plant", "lakeside-cave",
+    "roaring-sea-caves", "tunnel-to-the-top", "isle-of-armor",
+    "rock-peak-ruins", "iron-ruins", "iceberg-ruins", "decision-ruins",
+    "sea-spirits-den", "friend-safari", "pokemon-village",
+)
+
+
+def is_side_area(identifier: str) -> bool:
+    """是否是“主线之外”的支线区域(七之岛/对战设施/二周目地图)。"""
+    name = identifier
+    for region in REGION_ORDER:
+        if name.startswith(f"{region}-"):
+            name = name[len(region) + 1:]
+            break
+    return any(marker in name for marker in SIDE_AREA_MARKERS)
+
 
 def kind_of(identifier: str, region: str = "") -> str:
     """判定节点类型:优先用"真实城镇名单",其次按命名约定。
@@ -200,31 +235,52 @@ def build_region(
 
     # Assign every non-anchor node to an anchor slot (0 .. len(anchors)-1).
     assigned: dict[int, list[str]] = {i: [] for i in range(len(anchors))}
+    area_sort: dict[str, tuple] = {}   # 主线地区 → 它挂靠的路线(决定插队位置)
+    side_areas = [i for i in areas if is_side_area(i)]
+    main_areas = [i for i in areas if i not in set(side_areas)]
     if anchors:
         last = len(anchors) - 1
-        if len(routes) > 1:
-            top = route_number(routes[-1]) or 1
-            for ident in routes:
-                frac = route_number(ident) / top if top else 0.0
-                assigned[round(frac * last)].append(ident)
-        elif routes:
-            assigned[last].append(routes[0])
-        lo, hi = region_level_range(list(non_anchor), locs)
-        for ident in areas:
-            frac = (avg_level(locs[ident]) - lo) / (hi - lo)
-            assigned[round(frac * last)].append(ident)
+        if routes:
+            # 路线按**位次**均分到各城镇段。按号码值取比例会让前几号路线
+            # 全挤在第一段(2~5 号道路挤在深灰市前),位次分配能把它们摊开。
+            top = len(routes) - 1
+            for rank, ident in enumerate(routes):
+                assigned[round(rank * last / top) if top else 0].append(ident)
+            route_slot = {r: slot for slot, group in assigned.items() for r in group}
+            # 主线地区(洞窟/森林/大楼)按遭遇等级挂到“等级最接近的路线”身后:
+            # 月见山跟着 3~4 号道路、宝可梦塔跟着玉虹一带、冠军之路排最后。
+            levels = [(avg_level(locs[r]), r) for r in routes]
+            for ident in main_areas:
+                lv = avg_level(locs[ident])
+                near = min(levels, key=lambda t: (abs(t[0] - lv), t[1]))[1]
+                assigned[route_slot[near]].append(ident)
+                area_sort[ident] = (route_number(near), 0.0, lv, ident)
+        else:
+            # 有城镇但完全没有路线数据的地区(如阿罗拉):按等级位次均分
+            top = len(main_areas) - 1
+            for rank, ident in enumerate(main_areas):
+                assigned[round(rank * last / top) if top else 0].append(ident)
     else:
         # Degenerate region without canonical anchors: fall back to a plain sort.
         leftovers = sorted(non_anchor, key=lambda i: (route_number(i), avg_level(locs[i]), i))
         anchors = leftovers
         assigned = {i: [] for i in range(len(anchors))}
+        side_areas = []
+
+    def _slot_key(i: str) -> tuple:
+        """同一城镇段内的排序:路线按号码,地区紧跟挂靠的路线。"""
+        if nodes[i] == "route":
+            return (route_number(i), 0, 0.0, i)
+        return area_sort.get(i, (0, 1.0, avg_level(locs[i]), i))
 
     ordered: list[str] = []
     for idx, town in enumerate(anchors):
         ordered.append(town)
         group = assigned.get(idx, [])
-        group.sort(key=lambda i: (nodes[i] != "route", route_number(i), avg_level(locs[i]), i))
+        group.sort(key=_slot_key)
         ordered.extend(group)
+    # 支线区域统一排到主线城镇之后、联盟之前
+    ordered.extend(sorted(side_areas, key=lambda i: (avg_level(locs[i]), i)))
 
     # Guarantee uniqueness in case of overlap.
     seen: set[str] = set()

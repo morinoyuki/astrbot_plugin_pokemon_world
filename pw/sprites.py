@@ -20,6 +20,14 @@ SPRITES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static",
 BACK_SPRITES_DIR = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "static", "sprites_back"
 )
+# 闪光(异色)图:官方配色,必须是独立文件,tools/build_shiny_sprites.py 生成。
+# 缺图时回退普通精灵图(所以官方没出闪光的形态也不会开天窗)。
+SHINY_SPRITES_DIR = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "static", "sprites_shiny"
+)
+SHINY_BACK_SPRITES_DIR = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "static", "sprites_shiny_back"
+)
 
 # 说话人标签:<d name="角色名" ...>
 _SPEAKER_RE = re.compile(r'name\s*=\s*"([^"]*)"', re.IGNORECASE)
@@ -38,6 +46,16 @@ def available_count() -> int:
     return len(_available())
 
 
+@lru_cache(maxsize=1)
+def _available_shiny() -> frozenset[str]:
+    try:
+        return frozenset(
+            f[:-4] for f in os.listdir(SHINY_SPRITES_DIR) if f.endswith(".png")
+        )
+    except OSError:
+        return frozenset()
+
+
 def _base_of(species_key: str) -> str:
     """取该形态的基础物种 key(拿不到就返回空串)。"""
     try:
@@ -53,24 +71,39 @@ def _base_of(species_key: str) -> str:
     return ""
 
 
-def sprite_path(species_key: str, base_species: str = "") -> str:
-    """宝可梦 key → 本地缩略图路径(没有则空串)。
-
-    缺图时**退到基础形态**(与背面图一致):数据源里极少数形态没有官方像素图
-    (例如 PokeAPI 完全没有超级基格尔德,所有候选 URL 都是 404),
-    旧实现直接返回空串 → 界面里那一只**完全没有图**;背面却走 baseSpecies 回退,
-    前后不一致。
-    """
+def _candidates(species_key: str, base_species: str = "") -> list[str]:
+    """找图时的候选 key 顺序:自身 → 调用方给的基础形态 → 数据里的 baseSpecies。"""
     if not species_key:
-        return ""
+        return []
     candidates = [species_key]
     if base_species:
         candidates.append(base_species)
     base = _base_of(species_key)
     if base:
         candidates.append(base)
+    return candidates
+
+
+def sprite_path(species_key: str, base_species: str = "", *, shiny: bool = False) -> str:
+    """宝可梦 key → 本地缩略图路径(没有则空串)。
+
+    缺图时**退到基础形态**(与背面图一致):数据源里极少数形态没有官方像素图
+    (例如 PokeAPI 完全没有超级基格尔德,所有候选 URL 都是 404),
+    旧实现直接返回空串 → 界面里那一只**完全没有图**;背面却走 baseSpecies 回退,
+    前后不一致。
+
+    shiny=True 时先找 `sprites_shiny/`,找不到就回退普通图 ——
+    官方的异色图并不全(个别形态没有),不能让「闪光」二字把图弄丢。
+    """
+    candidates = _candidates(species_key, base_species)
+    if shiny:
+        avail = _available_shiny()
+        for key in candidates:
+            if key in avail:
+                return os.path.join(SHINY_SPRITES_DIR, f"{key}.png")
+    avail = _available()
     for key in candidates:
-        if key in _available():
+        if key in avail:
             return os.path.join(SPRITES_DIR, f"{key}.png")
     return ""
 
@@ -85,19 +118,49 @@ def _available_back() -> frozenset[str]:
         return frozenset()
 
 
-def back_sprite_path(species_key: str, base_species: str = "") -> str:
+@lru_cache(maxsize=1)
+def _available_shiny_back() -> frozenset[str]:
+    try:
+        return frozenset(
+            f[:-4] for f in os.listdir(SHINY_BACK_SPRITES_DIR) if f.endswith(".png")
+        )
+    except OSError:
+        return frozenset()
+
+
+def back_sprite_path(species_key: str, base_species: str = "", *,
+                     shiny: bool = False) -> str:
     """宝可梦 key → 本地**背面**图路径(战斗界面我方用)。
 
     没有背面图时退回正面图(渲染层会再水平翻转),再没有就返回空串。
+    shiny=True 时优先闪光背面 → 闪光正面 → 普通背面 → 普通正面。
     """
-    for key in (species_key, base_species):
-        if key and key in _available_back():
+    candidates = _candidates(species_key, base_species)
+    if shiny:
+        avail = _available_shiny_back()
+        for key in candidates:
+            if key in avail:
+                return os.path.join(SHINY_BACK_SPRITES_DIR, f"{key}.png")
+        front = sprite_path(species_key, base_species, shiny=True)
+        if front and os.path.basename(os.path.dirname(front)) == "sprites_shiny":
+            return front
+    avail = _available_back()
+    for key in candidates:
+        if key in avail:
             return os.path.join(BACK_SPRITES_DIR, f"{key}.png")
     return sprite_path(species_key) or sprite_path(base_species)
 
 
 def back_available_count() -> int:
     return len(_available_back())
+
+
+def shiny_available_count() -> int:
+    return len(_available_shiny())
+
+
+def shiny_back_available_count() -> int:
+    return len(_available_shiny_back())
 
 
 def clean_speaker_name(name: str) -> str:
@@ -159,12 +222,16 @@ def pokemon_avatars_for_text(text: str, existing: dict | None = None) -> dict:
 
 __all__ = [
     "BACK_SPRITES_DIR",
+    "SHINY_BACK_SPRITES_DIR",
+    "SHINY_SPRITES_DIR",
     "SPRITES_DIR",
     "available_count",
     "back_available_count",
     "back_sprite_path",
     "clean_speaker_name",
     "pokemon_avatars_for_text",
+    "shiny_available_count",
+    "shiny_back_available_count",
     "speaker_names",
     "sprite_for_name",
     "sprite_path",

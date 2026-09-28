@@ -144,6 +144,9 @@ class Pokemon:
     mega_from: str = ""
     mega_base_ability: str = ""
     gender: str = ""
+    # 闪光(异色)宝可梦:稀有变异体,野生遭遇时按概率抽取,
+    # 存档里持久保存(不影响数值,只影响配色与展示)。
+    shiny: bool = False
     friendship: int = 70
     ivs: dict = field(default_factory=dict)
     evs: dict = field(default_factory=dict)
@@ -240,6 +243,7 @@ class Pokemon:
             "mega_from": self.mega_from,
             "mega_base_ability": self.mega_base_ability,
             "gender": self.gender,
+            "shiny": bool(self.shiny),
             "friendship": self.friendship,
             "ivs": dict(self.ivs),
             "evs": dict(self.evs),
@@ -275,6 +279,7 @@ class Pokemon:
             "mega_from",
             "mega_base_ability",
             "gender",
+            "shiny",
             "friendship",
             "max_hp",
             "cur_hp",
@@ -2551,9 +2556,13 @@ def create_pokemon(
     ivs: dict | None = None,
     evs: dict | None = None,
     gender: str = "",
+    shiny: bool = False,
     friendship: int = 70,
 ) -> Pokemon:
-    """按图鉴数据创建一只宝可梦。species 支持中英文名或标识。"""
+    """按图鉴数据创建一只宝可梦。species 支持中英文名或标识。
+
+    shiny=True 生成闪光(异色)宝可梦 —— 数值与普通个体完全一致。
+    """
     dex = get_dex()
     resolved = dex.resolve_species(species)
     if resolved is None:
@@ -2631,6 +2640,7 @@ def create_pokemon(
         moves=move_keys,
         tera_type=tera,
         gender=gen,
+        shiny=bool(shiny),
         friendship=max(0, min(255, int(friendship))),
         ivs=ivs,
         evs=evs,

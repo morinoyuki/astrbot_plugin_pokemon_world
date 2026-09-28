@@ -58,8 +58,14 @@
   "sprite_enable": {
     "description": "队伍显示宝可梦缩略图",
     "type": "bool",
-    "hint": "内置 1379 张 96×96 缩略图,不联网",
+    "hint": "内置 1379 张 96×96 缩略图 + 闪光(异色)图,不联网",
     "default": true
+  },
+  "shiny_rate": {
+    "description": "闪光(异色)宝可梦概率分母",
+    "type": "int",
+    "hint": "1/N:512 表示野生遭遇约 1/512 概率出闪光,0 = 关闭。闪光图鉴与闪光精灵图会同步生效",
+    "default": 512
   },
   "starter_choices": {
     "description": "可选御三家(逗号分隔)",

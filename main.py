@@ -1305,6 +1305,19 @@ class PokemonWorldPlugin(Star):
             return
         world = WorldMap()
         arg = self._args(event, ("地图", "map", "地区", "地点")).strip()
+        if arg.lower() in ("世界", "世界地图", "全球", "world", "worldmap"):
+            async with self._lock(t.scope):
+                await self._ensure_day(event, t)
+            async for r in self._emit_ui(
+                event, "worldmap",
+                lambda: UIM.render_world_map(self._world_entries(t, world),
+                                             scale=self._img_scale()),
+                text=self._world_text(t, world),
+                hint="出发:`/前往 <城镇>`;通关一个地区(8 徽章 → `/联盟 挑战`)"
+                     "会自动解锁下一个地区",
+            ):
+                yield r
+            return
         region = world.resolve_region(arg) if arg else t.region
         if arg and not region:
             yield event.plain_result(f"❌ 没有「{arg}」这个地区。")
@@ -1320,6 +1333,7 @@ class PokemonWorldPlugin(Star):
                 current=t.location, visited=t.data.get("visited") or [],
                 gyms=world.gyms(region), next_goal=self._next_goal(t),
                 region_order=int(world.regions.get(region, {}).get("order") or 0),
+                badge_count=t.badge_count(region),
                 scale=self._img_scale(),
             ),
             text=text,
@@ -1327,10 +1341,60 @@ class PokemonWorldPlugin(Star):
         ):
             yield r
 
+    def _world_entries(self, t: Trainer, world: WorldMap) -> list[dict]:
+        """世界地图每一行的数据:开放/通关/徽章/下一站。"""
+        regions = sorted(world.regions_with_data(),
+                         key=lambda r: int(world.regions.get(r, {}).get("order") or 0))
+        unlocked = list(t.data.get("unlocked_regions") or [])
+        out: list[dict] = []
+        for region in regions:
+            gyms = world.gyms(region)
+            total = len(gyms) or 8
+            badges = t.badge_count(region)
+            champion = bool(t.flag(f"champion:{region}", False))
+            is_unlocked = region in unlocked
+            nxt = world.next_gym(region, t.badges)
+            next_zh = (world.node_zh(str(nxt.get("location") or ""))
+                       if nxt else "联盟(四天王/冠军)")
+            out.append({
+                "key": region,
+                "zh": world.region_zh(region),
+                "order": int(world.regions.get(region, {}).get("order") or len(out) + 1),
+                "unlocked": is_unlocked,
+                "champion": champion,
+                "badges": badges,
+                "gyms": total,
+                "current": region == t.region,
+                "next_zh": next_zh,
+                "prev_zh": out[-1]["zh"] if out else "",
+            })
+        return out
+
+    def _world_text(self, t: Trainer, world: WorldMap) -> str:
+        """世界地图的文本回退:地区解锁/通关一览 + 怎么走。"""
+        rows = self._world_entries(t, world)
+        lines = [f"🌍 世界地图(共 {len(rows)} 个地区,按顺序解锁)"]
+        for e in rows:
+            if e["champion"]:
+                mark = f"🏆 已通关({e['gyms']}/{e['gyms']} 徽章,冠军)"
+            elif e["unlocked"]:
+                mark = f"🟢 已开放 · 徽章 {e['badges']}/{e['gyms']}"
+            else:
+                mark = f"🔒 未开放(需先成为{e['prev_zh']}冠军)"
+            here = " ← 你在这里" if e["current"] else ""
+            lines.append(f"第{e['order']}地区 {e['zh']} —— {mark}{here}")
+            if e["unlocked"] and not e["champion"]:
+                lines.append(f"　🎯 下一目标:{e['next_zh']}")
+        lines.append(
+            "通关流程:集齐本地区徽章 → `/联盟 挑战` 四天王与冠军 → 首胜自动解锁下一个地区。\n"
+            "查看单个地区:`/地图 <地区>`;出发:`/前往 <城镇>`。"
+        )
+        return "\n".join(lines)
+
     def _map_hint(self, t: Trainer) -> str:
         """地图图片附带的文本:相邻地点(带危险度)+ 本地服务 + 操作方式。
 
-        图片画的是"整张地区图 + 当前位置 + 下一目标",**没有**相邻地点清单和
+        图片画的是"地区图窗口(随当前位置滚动)+ 下一目标",**没有**相邻地点清单和
         城镇服务 —— 之前为了去掉重复文本把这两项一起删了(用户反馈
         "地图的城镇 服务 ... 额外的信息也给弄没了")。
         """
@@ -1459,7 +1523,9 @@ class PokemonWorldPlugin(Star):
             if mode in ("all", "wild"):
                 site = (legendary.ready(t, world=world, day=state.day) or [None])[0]
                 if site:
-                    meta = legendary.legendary_meta(t, site)
+                    meta = self._maybe_shiny_legend(
+                        t, site, legendary.legendary_meta(t, site), state.day, notice
+                    )
                     log = B.start(
                         t, meta["team"], kind="legend", wild=True, meta=meta,
                         weather=_battle_weather(state, t.region), day=state.day,
@@ -1554,7 +1620,9 @@ class PokemonWorldPlugin(Star):
             # ── 只想找野生 ──
             if mode == "wild":
                 env = _environment_of(world, loc)
-                hit = B.roll_wild(t, rng=rng, environment=env) if roll < wild_p else None
+                hit = (B.roll_wild(t, rng=rng, environment=env,
+                                   shiny_rate=self._shiny_rate())
+                       if roll < wild_p else None)
                 if hit is None:
                     self._save(t)
                     yield event.plain_result(
@@ -1573,7 +1641,8 @@ class PokemonWorldPlugin(Star):
             # ── 默认:什么都可能碰上(与以前完全一致) ──
             if roll < wild_p:
                 env = _environment_of(world, loc)
-                hit = B.roll_wild(t, rng=rng, environment=env)
+                hit = B.roll_wild(t, rng=rng, environment=env,
+                                  shiny_rate=self._shiny_rate())
                 if not hit:
                     self._save(t)
                     yield event.plain_result(
@@ -1665,10 +1734,15 @@ class PokemonWorldPlugin(Star):
                          loc: str, hit: dict, notice: list[str]):
         """野生遭遇开战(并把结构化信息交给委托系统)。"""
         level = hit["level"]
+        shiny = bool(hit.get("shiny"))
+        if shiny:
+            notice.append("✨ 这只宝可梦的颜色不太一样 —— 是稀有的闪光(异色)宝可梦!")
         _entry = get_dex().species.get(str(hit.get("species")) or "") or {}
         meta = {
             "kind": "wild",
-            "title": f"野生的{hit['zh']}",
+            "title": (f"✨ 野生的{hit['zh']}(闪光!)" if shiny
+                      else f"野生的{hit['zh']}"),
+            "shiny": shiny,
             "location": loc,
             "region": t.region,
             # 任务系统/结算卡需要的结构化信息。
@@ -1681,7 +1755,7 @@ class PokemonWorldPlugin(Star):
         }
         log = B.start(
             t,
-            [{"species": hit["species"], "level": level}],
+            [{"species": hit["species"], "level": level, "shiny": shiny}],
             kind="wild",
             wild=True,
             meta=meta,
@@ -3445,9 +3519,12 @@ class PokemonWorldPlugin(Star):
         dex = get_dex()
         name = self._args(event, ("图鉴", "dex", "宝可梦图鉴")).strip()
         if not name:
+            shiny_line = (
+                f" ✨ 其中闪光(异色){t.shiny_count()} 种。" if t.shiny_count() else ""
+            )
             yield event.plain_result(
                 f"📖 图鉴进度:已见到 {len(t.data['dex_seen'])} 种,"
-                f"已捕获 {len(t.data['dex_caught'])} 种。"
+                f"已捕获 {len(t.data['dex_caught'])} 种。{shiny_line}"
             )
             return
         r = dex.resolve_species(name)
@@ -3485,7 +3562,7 @@ class PokemonWorldPlugin(Star):
         # 获取途径:野外没有的(御三家/化石/神兽)要明确告诉玩家**怎么才能拿到**
         lines.append("获取途径:" + "、".join(_obtain_paths(key, locs, entry)))
         if t.caught(key):
-            lines.append("✅ 已捕获")
+            lines.append("✅ 已捕获" + ("(含闪光形态 ✨)" if t.shiny_caught(key) else ""))
         elif t.seen(key):
             lines.append("👁️ 已见到")
         else:
@@ -3496,6 +3573,7 @@ class PokemonWorldPlugin(Star):
             event, "dex",
             lambda: UI.render_dex(
                 dex_entry, caught=t.caught(key), seen=t.seen(key),
+                shiny=t.shiny_caught(key),
                 locations=locs, scale=self._img_scale(),
             ),
             text="\n".join(lines),
@@ -4126,17 +4204,21 @@ class PokemonWorldPlugin(Star):
                 if B.in_battle(t):
                     yield event.plain_result("⚠️ 先结束当前对战。")
                     return
-                meta = legendary.legendary_meta(t, site)
+                _lnotice: list[str] = []
+                meta = self._maybe_shiny_legend(
+                    t, site, legendary.legendary_meta(t, site), state.day, _lnotice
+                )
                 log = B.start(
                     t, meta["team"], kind="legend", wild=True, meta=meta,
                     weather=_battle_weather(state, t.region), day=state.day,
                 )
                 self._save(t)
                 _hint = self._battle_hint(t)
+                _intro = "\n".join([*_lnotice, self._battle_intro(meta, log)])
                 async for r in self._emit_battle(
                     event, t, meta, log,
-                    text=self._battle_intro(meta, log) + f"\n\n{_hint}",
-                    keep=self._battle_intro(meta, log) + f"\n{_hint}",
+                    text=_intro + f"\n\n{_hint}",
+                    keep=_intro + f"\n{_hint}",
                     status=True,
                 ):
                     yield r
@@ -4375,6 +4457,39 @@ class PokemonWorldPlugin(Star):
     def _img_scale(self) -> int:
         return int(coerce_int(self._cfg("battle_image_scale", 3), 3) or 3)
 
+    def _shiny_rate(self) -> int:
+        """闪光概率分母(1/N,0 = 关闭)。默认 512 —— 正作的 1/4096 在群里
+        一局游戏内基本看不到,但也不能烂大街;服主可在配置里调。"""
+        from .pw.battle import DEFAULT_SHINY_RATE
+
+        return max(0, coerce_int(self._cfg("shiny_rate", DEFAULT_SHINY_RATE),
+                                 DEFAULT_SHINY_RATE))
+
+    def _maybe_shiny_legend(self, t: Trainer, site: dict, meta: dict, day: int,
+                            notice: list[str]) -> dict:
+        """传说宝可梦的闪光判定:按(玩家, 物种, 游戏日)确定性掷一次。
+
+        确定性有两个好处:① 同一天反复逃跑/重进不会刷出不同的闪/非闪
+        (不能“roll 闪光”);② 存档重登后结果一致。
+        """
+        rate = self._shiny_rate()
+        if rate <= 0:
+            return meta
+        shiny = stable_rng(
+            "legend-shiny", t.uid, str(site.get("species") or ""), int(day)
+        ).random() < 1.0 / rate
+        if not shiny:
+            return meta
+        meta["shiny"] = True
+        for spec in meta.get("team") or []:
+            if isinstance(spec, dict):
+                spec["shiny"] = True
+        meta["title"] = "✨ " + str(meta.get("title") or "传说的宝可梦")
+        notice.append(
+            f"✨ 这只{site.get('zh') or ''}是闪光(异色)个体!一生难遇的景象!"
+        )
+        return meta
+
     async def _emit_ui(self, event: AstrMessageEvent, label: str, builder, *,
                        text: str = "", hint: str = ""):
         """按配置输出界面图片(仿 GBA 菜单);失败或未开启则回退文本。
@@ -4468,6 +4583,7 @@ class PokemonWorldPlugin(Star):
             "index": int(index),                       # 给"待学招式"提示里的 /学招 用
             "pending": list(d.get("pending") or []),    # 招式已满、还没决定替换的
             "name": mon.nickname or entry.get("zh") or mon.species,
+            "shiny": bool(mon.shiny),
             "level": int(mon.level),
             "gender": str(mon.gender or ""),
             "types": [dex.type_label(x) for x in (mon.types or [])],
@@ -4493,7 +4609,7 @@ class PokemonWorldPlugin(Star):
     def _mon_text(self, t: Trainer, p: dict, *, where: str = "party") -> str:
         """资料页的文本回退(图片渲染失败时用)。"""
         dex = get_dex()
-        head = f"{p.get('name')} Lv{p.get('level')}"
+        head = f"{'✨' if p.get('shiny') else ''}{p.get('name')} Lv{p.get('level')}"
         if p.get("gender") in ("M", "F"):
             head += " " + ("♂" if p["gender"] == "M" else "♀")
         stats = p.get("stats") or {}
@@ -4548,6 +4664,7 @@ class PokemonWorldPlugin(Star):
                     or mon.species,
                     "level": int(mon.level),
                     "gender": str(mon.gender or ""),
+                    "shiny": bool(mon.shiny),
                     "cur_hp": int(mon.cur_hp),
                     "max_hp": int(mon.max_hp),
                     "status": str(mon.status or ""),
@@ -4562,7 +4679,7 @@ class PokemonWorldPlugin(Star):
         for i, m in enumerate(mons, 1):
             g = m.get("gender")
             lines.append(
-                f"{i}. {m.get('name')} Lv{m.get('level')}"
+                f"{i}. {'✨' if m.get('shiny') else ''}{m.get('name')} Lv{m.get('level')}"
                 + ("♂" if g == "M" else "♀" if g == "F" else "")
                 + f" HP {m.get('cur_hp')}/{m.get('max_hp')}"
                 + (f" [{m.get('status')}]" if m.get("status") else "")
@@ -4587,6 +4704,7 @@ class PokemonWorldPlugin(Star):
                     "status": mon.status,
                     "gender": mon.gender,
                     "item": mon.item,
+                    "shiny": bool(mon.shiny),
                     "exp_pct": B.exp_progress(mon),
                 }
             )
@@ -5066,7 +5184,9 @@ class PokemonWorldPlugin(Star):
                 return {}, []
             return (
                 {
-                    "species": mon.species, "name": mon.display,
+                    "species": mon.species,
+                    "name": ("✨" + mon.display) if mon.shiny else mon.display,
+                    "shiny": bool(mon.shiny),
                     "level": int(mon.level), "gender": str(mon.gender or ""),
                     "cur_hp": int(mon.cur_hp), "max_hp": int(max(1, mon.max_hp)),
                     "status": str(mon.status or ""),
@@ -5520,6 +5640,7 @@ class PokemonWorldPlugin(Star):
                 "regions": len(REGION_ORDER),
                 "nodes": nodes,
                 "sprites": _sprite_count(),
+                "shiny_sprites": _shiny_sprite_count(),
             },
         }
 
@@ -5822,6 +5943,7 @@ class PokemonWorldPlugin(Star):
             "db": self.trainers.scope_stats(),
             "temp": self._tmp_stats(),
             "sprites": _sprite_count(),
+            "shiny_sprites": _shiny_sprite_count(),
         }
 
     @_web_handler
@@ -5867,6 +5989,12 @@ def _sprite_count() -> int:
     from .pw.sprites import available_count
 
     return available_count()
+
+
+def _shiny_sprite_count() -> int:
+    from .pw.sprites import shiny_available_count
+
+    return shiny_available_count()
 
 
 def _service_zh(services: list[str]) -> list[str]:
@@ -6291,15 +6419,19 @@ def _run_selfcheck() -> list[dict]:
         f"{len(bad_sprite)} 个形态缺正面图:{bad_sprite[:6]}"
         + (f"(已知例外:{sorted(set(missing) & known)})" if set(missing) & known else ""))
 
-    # ⑦ 道馆按顺序可达(危险度门槛不能把主线卡死)
+    # ⑦ 道馆按顺序可达 + 联盟可达(危险度门槛不能把主线卡死)
     stuck: list[str] = []
+    cleared = 0
     for region in REGION_ORDER:
         cur = world.start_location(region)
         badges: list[str] = []
         gyms = world.gyms(region)
         if not gyms:
             continue          # 占位地区(如 paldea 还没做地图)不算失败
-        for order in range(1, 9):
+        if not cur or cur not in world.nodes(region):
+            stuck.append(f"{region} 起点不在图中")
+            continue
+        for order in range(1, len(gyms) + 1):
             gym = next((g for g in gyms if int(g.get("order", 0)) == order), None)
             if not gym:
                 stuck.append(f"{region} 缺第 {order} 道馆")
@@ -6311,9 +6443,19 @@ def _run_selfcheck() -> list[dict]:
                 break
             badges = [*badges, f"{region}:{order}"]
             cur = dest
+        else:
+            # 拿满徽章后必须走得到联盟,否则“通关→解锁下一地区”这条路是断的
+            gateway = world.gateway(region)
+            cap = world._route_cap(region, cur, badges)
+            if not _reachable_within(world, cur, gateway,
+                                     max(cap, world.tier(gateway))):
+                stuck.append(f"{region} 联盟走不到({cur}→{gateway})")
+            else:
+                cleared += 1
     have_gyms = [r for r in REGION_ORDER if world.gyms(r)]
     add("道馆可达", not stuck,
-        "; ".join(stuck[:4]) or f"{len(have_gyms)} 个地区都能按顺序拿满 8 枚" +
+        "; ".join(stuck[:4]) or
+        f"{cleared}/{len(have_gyms)} 个地区都能按顺序拿满徽章并走到联盟" +
         (f"(另有 {len(REGION_ORDER) - len(have_gyms)} 个占位地区暂无地图)"
          if len(have_gyms) < len(REGION_ORDER) else ""))
 
@@ -6345,11 +6487,22 @@ def _run_selfcheck() -> list[dict]:
     add("Mega 进化数据", not bad_mega,
         f"{len(bad_mega)} 处不一致:{bad_mega[:6]}")
 
+    # ⑩ 闪光精灵图覆盖(闪光不是换色而是独立图;缺图会静默回退普通图,
+    #    但覆盖率太低就说明 `tools/build_shiny_sprites.py` 没跑过)。
+    from .pw.battle import DEFAULT_SHINY_RATE
+    from .pw.sprites import shiny_available_count
+
+    total_sp = len(dex.species)
+    shiny_n = shiny_available_count()
+    add("闪光精灵图", shiny_n >= total_sp * 0.9,
+        f"{shiny_n}/{total_sp} 张(缺失的自动回退普通图);"
+        f"野生闪光概率默认 1/{DEFAULT_SHINY_RATE},配置项 shiny_rate 可调")
+
     return out
 
 
 def _web_edit_mon(d: dict, act: dict) -> str:
-    """改单只宝可梦:等级/经验/亲密度/昵称/HP/携带物/招式。
+    """改单只宝可梦:等级/经验/亲密度/昵称/HP/携带物/招式/闪光。
 
     写成**模块级函数**:测试宿主 `_Cmd` 会把类上的 `@staticmethod` 重绑成实例方法,
     多传一个 self(`_web_edit_mon() takes 2 positional arguments but 3 were given`)。
@@ -6388,6 +6541,8 @@ def _web_edit_mon(d: dict, act: dict) -> str:
         mon.item = "" if not item else (_resolve_stock(item, set(BAG_ITEMS)) or item)
     if "hp" in st:
         mon.cur_hp = min(int(mon.max_hp), max(0, coerce_int(st["hp"], mon.cur_hp)))
+    if "shiny" in st:
+        mon.shiny = coerce_bool(st["shiny"], mon.shiny)
     if "moves" in st and isinstance(st["moves"], list):
         dex = get_dex()
         moves = []
@@ -6401,7 +6556,8 @@ def _web_edit_mon(d: dict, act: dict) -> str:
                 if k not in moves:
                     mon.pp.pop(k, None)
     rows[idx - 1] = B.mon_to_dict(mon, raw)
-    return f"修改{where}[{idx}] {_sp_zh(mon.species)} → Lv{mon.level}"
+    return (f"修改{where}[{idx}] {_sp_zh(mon.species)} → Lv{mon.level}"
+            + ("(闪光 ✨)" if mon.shiny else ""))
 
 
 def _web_mon_row(raw: dict, index: int) -> dict:
@@ -6419,6 +6575,7 @@ def _web_mon_row(raw: dict, index: int) -> dict:
         "cur_hp": int(mon.cur_hp),
         "max_hp": int(mon.max_hp),
         "friendship": int(mon.friendship),
+        "shiny": bool(mon.shiny),
         "item": mon.item,
         "item_zh": _item_zh(mon.item),
         "moves": [{"key": k, "zh": (dex.moves.get(k) or {}).get("zh", k)}
