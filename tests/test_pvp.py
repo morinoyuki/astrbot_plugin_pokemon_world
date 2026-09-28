@@ -94,6 +94,29 @@ def test_turns_need_both_sides():
         assert "使用了" in second or "结束" in second, second
 
 
+def test_pvp_image_path_hint_shows_both_sides_moves():
+    """画面开启时,提示必须含**双方**参战宝可梦的招式。
+
+    以前 ui_image 开启后 _emit_pvp 只附 _pvp_hint(仅"你的招式"),
+    对方出战宝可梦的招式完全看不到;文本回退路径 _pvp_text 反而两边都列。
+    图片对话框画不出招式表,提示必须补齐。
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        p = setup(tmp)
+        p.config = {"ui_image": True, "battle_image_scale": 2}
+        # 接受 → 开局画面走图片路径(_emit_pvp:图片 + 提示)
+        challenge(p)
+        acc = act(p, "/对战 接受", second=True)
+        assert "<chain:" in acc, f"图片路径没出画面:{acc[:200]}"
+        assert acc.count("招式:") >= 2, f"提示里没有双方招式:{acc[:400]}"
+        assert "水枪" in acc and "火花" in acc, (
+            f"双方招式不全(杰尼龟水枪 / 小火龙火花):{acc[:400]}"
+        )
+        # 出招后另一方的回合提示也带双方招式
+        shot = act(p, "/对战 1")
+        assert "等对方出招" in shot, shot[:200]
+
+
 def test_other_commands_are_locked_during_pvp():
     with tempfile.TemporaryDirectory() as tmp:
         p = setup(tmp)

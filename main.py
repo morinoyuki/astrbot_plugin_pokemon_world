@@ -5001,21 +5001,29 @@ class PokemonWorldPlugin(Star):
         return str(row.get("place") or "")
 
     def _pvp_hint(self, row: dict, uid: str) -> str:
-        """每个玩家看到的一行提示(自己的招式 + 怎么出招)。"""
+        """每个玩家看到的一行提示:**双方**参战宝可梦的招式 + 怎么出招。
+
+        图片对话框里只有战报日志,招式表画不下;以前提示只列"你的招式",
+        画面开启时对方出战宝可梦的招式完全看不到 —— 而文本回退路径
+        `_pvp_text` 本来就两边都列(群聊画面是广播的,对方也能看到你的)。
+        这里补齐,两条路径保持一致。
+        """
         from .pw.pvp import battle_of, move_list
 
         battle = battle_of(row)
-        first = str(uid) == str(row.get("from"))
-        mine = move_list(battle, first)
+        a_uid, b_uid = PVP.side_names(row)
+        a_name = str(row.get("from_name") or "") or self._player_name(a_uid)
+        b_name = str(row.get("to_name") or "") or self._player_name(b_uid)
+        mine = f"🔵 {a_name} 招式:{move_list(battle, True) or '无'}"
+        theirs = f"🔴 {b_name} 招式:{move_list(battle, False) or '无'}"
         waiting = PVP.pending_side(row)
-        head = f"🔵 你的招式:{mine or '无'}"
         if waiting == str(uid):
             return (
-                f"{head}\n轮到你了:`/对战 <招式序号>`、`/对战 switch <序号>`、"
+                f"{mine}\n{theirs}\n轮到你了:`/对战 <招式序号>`、`/对战 switch <序号>`、"
                 "`/对战 item <道具>`;投降 `/对战 弃权`。\n"
                 "(私聊我出招也行 —— 群里发也可以)"
             )
-        return f"{head}\n⏳ 等对方出招…(90 秒不动会自动出招)"
+        return f"{mine}\n{theirs}\n⏳ 等对方出招…(90 秒不动会自动出招)"
 
     async def _emit_pvp(self, event, row: dict, uid: str, *, lines=None,
                         fallback: str = ""):
