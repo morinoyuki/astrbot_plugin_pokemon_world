@@ -3345,7 +3345,9 @@ class Battle:
                 return bool(_owner) and 0 <= i < len(side.owners) and side.owners[i] == _owner
 
             pool = [i for i in side.healthy() if i not in busy]
-            nxt = [i for i in pool if same_owner(i)] or pool
+            # 合作双打:绝不能拿别人的宝可梦顶位 —— 某个玩家打光了,
+            # 他的位置就**空着**(否则会出现“一个人场上两只”的情况)
+            nxt = [i for i in pool if same_owner(i)] if owner else pool
             if not nxt:
                 continue
             busy.add(nxt[0])

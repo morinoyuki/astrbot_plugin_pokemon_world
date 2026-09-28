@@ -1000,7 +1000,22 @@ def start_doubles(
     coop["host_len"] = host_len
     data["meta"] = {**(data.get("meta") or {}), "coop": coop}
     extra: list[str] = []
+    # 合作双打:玩家侧的副位必须放**搭档的首发**(owners 里第一个 "ally"),
+    # 不能按“队伍第 2 只”来挑 —— 否则场上两只都是自己的宝可梦(实测反馈)。
+    coop_owner = "ally" if any(o == "ally" for o in battle.player.owners) else ""
     for side in (battle.enemy, battle.player):
+        if side is battle.player and coop_owner:
+            ally_idx = next(
+                (j for j, o in enumerate(battle.player.owners)
+                 if o == coop_owner and j < len(battle.player.party)
+                 and not battle.player.party[j].fainted),
+                -1,
+            )
+            if ally_idx >= 0:
+                battle._send_out(battle.player, ally_idx, slot="ally")
+                extra.append(battle.log[-1])
+            # 搭档没有能出场的宝可梦 → 副位留空(不拿主办方的宝可梦顶位)
+            continue
         nxt = [i for i, p in enumerate(side.party) if not p.fainted and i != side.active]
         if nxt:
             battle._send_out(side, nxt[0], slot="ally")

@@ -1937,6 +1937,13 @@ class PokemonWorldPlugin(Star):
         if B.in_battle(t):
             yield event.plain_result("⚠️ 先结束当前对战。")
             return
+        # 组队中:训练家战默认升级成合作双打(每人只出场一只)
+        _pair = COOP.pair_for(self._state(t.scope), t.uid)
+        if _pair is not None and str(_pair.get("a")) == t.uid and not COOP.battle_of(_pair):
+            _idx = coerce_int(self._args(event, ("训练家战", "npc战", "训练家对战")).strip(), 1) or 1
+            async for r in self._coop_start(event, t, self._state(t.scope), first_idx=_idx):
+                yield r
+            return
         async with self._lock(t.scope):
             state = self._state(t.scope)
             npcs = npc.route_trainers(t, t.location, day=state.day)
@@ -5164,6 +5171,11 @@ class PokemonWorldPlugin(Star):
         if arg:
             yield event.plain_result("❌ 现在没有进行中的合作双打。")
             return
+        async for r in self._coop_start(event, t, state):
+            yield r
+
+    async def _coop_start(self, event, t: Trainer, state, first_idx: int = 1):
+        """由邀请方发起合作双打:附近训练家优先,**每人只出场一只**。"""
         pair = COOP.pair_for(state, t.uid)
         if pair is None or str(pair.get("a")) != t.uid:
             yield event.plain_result(
@@ -5185,16 +5197,15 @@ class PokemonWorldPlugin(Star):
         npcs = npc.route_trainers(t, t.location, day=state.day)
         specs: list[dict] = []
         names: list[str] = []
-        for n in npcs[:2]:
+        pick = list(npcs[max(0, int(first_idx) - 1):])[:2]
+        for n in pick:
             team = list((npc.build_route_battle(t, n, day=state.day) or {}).get("team") or [])
             if team:
-                specs.append(team[0])
+                specs.append(team[0])      # 每位训练家只派出首发一只
                 names.append(str(n.get("name") or "训练家"))
-        if len(specs) < 2 and npcs:
-            team = list((npc.build_route_battle(t, npcs[0], day=state.day) or {}).get("team") or [])
-            specs = team[:2]
-            names = [str(npcs[0].get("name") or "训练家")] * len(specs)
+        _ally_ready = any(int(x.get("cur_hp") or 0) > 0 for x in ally.party)
         _wild = False
+        _why = "" if _ally_ready else "\n· 搭档现在没有能出场的宝可梦,TA 的位置先空着"
         if len(specs) < 2:
             # 没有训练家就改成**野生双打**(正作里也有):现抽两只当地的野生宝可梦
             specs, names = [], []
@@ -5210,6 +5221,8 @@ class PokemonWorldPlugin(Star):
                               "shiny": bool(hit.get("shiny"))})
                 names.append(dex.species_zh(str(hit.get("species"))))
             _wild = bool(specs)
+            if _wild:
+                _why = "\n· 今天这里没有训练家(用 `/探索 训练家` 查),先打野生双打"
         if len(specs) < 2:
             yield event.plain_result("❌ 这附近找不到愿意和你们俩对战的对手。")
             return
@@ -5236,7 +5249,7 @@ class PokemonWorldPlugin(Star):
             event, t, view, [],
             hint="各打各的:`/双打 <招式序号>`(对第二只用 `/双打 <序号> 2`,对队友用 "
                  "`/双打 <序号> 队友`)、`/双打 switch <你队伍序号>`、`/双打 run`",
-            text=f"⚔️ 合作双打开始!{meta['title']}\n双方都交出行动后就会推进一回合。",
+            text=f"⚔️ 合作双打开始!{meta['title']}{_why}\n双方都交出行动后就会推进一回合。",
         ):
             yield r
 
