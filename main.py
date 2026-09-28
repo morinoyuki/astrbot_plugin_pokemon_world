@@ -5238,7 +5238,6 @@ class PokemonWorldPlugin(Star):
         if len(specs) < 2:
             # 没有训练家就改成**野生双打**(正作里也有):现抽两只当地的野生宝可梦
             specs, names = [], []
-            dex = get_dex()
             for i in range(2):
                 hit = B.roll_wild(t, rng=stable_rng("coop-wild", t.scope, t.uid, state.day, i),
                                   shiny_rate=self._shiny_rate())
@@ -5248,7 +5247,7 @@ class PokemonWorldPlugin(Star):
                 specs.append({"species": str(hit.get("species")),
                               "level": int(hit.get("level") or 5),
                               "shiny": bool(hit.get("shiny"))})
-                names.append(dex.species_zh(str(hit.get("species"))))
+                names.append(growth.species_zh(str(hit.get("species"))))
             _wild = bool(specs)
             if _wild:
                 _why = "\n· 今天这里没有训练家(用 `/探索 训练家` 查),先打野生双打"

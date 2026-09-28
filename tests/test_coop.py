@@ -136,3 +136,37 @@ def test_spread_moves_hit_partner_but_skip_empty_slot():
     assert not [x for x in b.log if "皮卡丘" in x and "击中" in x], b.log
     # 也不会把主办方后排顶到搭档的位置上
     assert [m.species for m in b.player.mons][1] == "pikachu", b.log
+
+
+def test_no_npc_today_falls_back_to_a_wild_double_battle():
+    """线上崩过的那条路:今天这里没有训练家 → 野生双打(不能抛异常)。"""
+    import tempfile
+
+    from test_commands import _Event, run_cmd
+
+    import pw.npc as NPC
+    from pw import battle as B
+
+    with tempfile.TemporaryDirectory() as tmp:
+        p, scope, _t1 = _setup(tmp)
+        # 两人站到同一地点,并把训练家生成清空(=今天这里没人)
+        for who in ("u1", "u2"):
+            d = p.trainers.load(scope, who)
+            d["location"] = "kanto-route-3"
+            p.trainers.save(scope, who, d)
+        orig = NPC.route_trainers
+        NPC.route_trainers = lambda *a, **k: []
+        try:
+            ev = _Event("/双打")
+            run_cmd(p, ev, p.cmd_coop)
+        finally:
+            NPC.route_trainers = orig
+        out = "\n".join(ev.outputs)
+        assert "Traceback" not in out and "AttributeError" not in out, out[:300]
+        host = p.trainers.load(scope, "u1")
+        assert host.get("battle"), f"应该已经开起野生双打:{out[:300]}"
+        from pw.player import Trainer
+
+        v = B.view(Trainer(host, uid="u1", scope=scope))
+        assert v["doubles"] is True
+        assert len(v["foes"]) == 2, "野生双打要有两只对手"
