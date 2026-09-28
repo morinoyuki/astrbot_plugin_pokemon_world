@@ -5304,7 +5304,52 @@ class PokemonWorldPlugin(Star):
         ):
             yield r
 
+    def _coop_field_hint(self, t: Trainer) -> str:
+        """双打:把场上**两位玩家**各自的宝可梦与招式都列出来,方便互相配合。
+
+        以前只提示"用 /双打 <序号>",玩家看不到自己和搭档场上那只的招式 ——
+        想帮队友加 buff、或者要改目标都无从下手。
+        """
+        row = COOP.pair_for(self._state(t.scope), t.uid) or {}
+        bmeta = COOP.battle_of(row) or {}
+        names = dict(row.get("names") or {})
+        host_uid = str(bmeta.get("host") or t.uid)
+        ally_uid = str(bmeta.get("ally") or "")
+        uid_of = {"host": host_uid, "ally": ally_uid}
+        host_data = self.trainers.load(t.scope, host_uid) or {}
+        snap = ((host_data.get("battle") or {}).get("battle") or {}).get("player") or {}
+        party = list(snap.get("party") or [])
+        owners = list(snap.get("owners") or [])
+        lines: list[str] = []
+        for key, slot_zh in (("active", "主位"), ("ally_active", "副位")):
+            try:
+                idx = int(snap.get(key, -1) if snap.get(key) is not None else -1)
+            except (TypeError, ValueError):
+                idx = -1
+            if idx < 0 or idx >= len(party):
+                continue
+            md = party[idx] or {}
+            owner = owners[idx] if idx < len(owners) else "host"
+            who = names.get(uid_of.get(owner, "")) or ("你" if owner == "host" else "搭档")
+            mon_zh = str(md.get("nickname")
+                         or growth.species_zh(str(md.get("species") or "")) or "?")
+            if int(md.get("cur_hp") or 0) <= 0:
+                lines.append(f"· {who} 的 {mon_zh}({slot_zh})已倒下")
+                continue
+            pp = md.get("pp") or {}
+            moves = [f"{i}.{growth.move_zh(str(mv))}({int(pp.get(str(mv), 0) or 0)})"
+                     for i, mv in enumerate(list(md.get("moves") or [])[:4], 1)]
+            lines.append(
+                f"· {who} 的 {mon_zh} Lv{int(md.get('level') or 0)}({slot_zh}):"
+                + " ".join(moves)
+            )
+        return ("🧑‍🤝‍🧑 场上两位的宝可梦:\n" + "\n".join(lines)) if lines else ""
+
     async def _coop_turn(self, event, t: Trainer, state, row: dict, arg: str):
+        # 出招前先把场上两位的宝可梦与招式列清楚(以前完全没有)
+        _field = self._coop_field_hint(t)
+        if _field:
+            yield event.plain_result(_field)
         """交自己的行动;两边都交齐(或搭档超时)就推进一回合。"""
         bmeta = COOP.battle_of(row) or {}
         host_uid = str(bmeta.get("host") or "")

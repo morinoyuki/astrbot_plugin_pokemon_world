@@ -170,3 +170,26 @@ def test_no_npc_today_falls_back_to_a_wild_double_battle():
         v = B.view(Trainer(host, uid="u1", scope=scope))
         assert v["doubles"] is True
         assert len(v["foes"]) == 2, "野生双打要有两只对手"
+
+
+def test_turn_shows_both_players_field_moves():
+    """双打出招前要能看到**两位玩家**场上宝可梦的招式(实测反馈:以前没有)。"""
+    import tempfile
+
+    from test_commands import _Event, run_cmd
+
+    with tempfile.TemporaryDirectory() as tmp:
+        p, scope, _t1 = _setup(tmp)
+        for who in ("u1", "u2"):          # 先会合(双打要求同地点)
+            d = p.trainers.load(scope, who)
+            d["location"] = "kanto-route-1"
+            p.trainers.save(scope, who, d)
+        run_cmd(p, _Event("/双打"), p.cmd_coop)
+        ev = _Event("/双打 1")
+        run_cmd(p, ev, p.cmd_coop)
+        out = "\n".join(ev.outputs)
+        assert "场上两位的宝可梦" in out, out[:300]
+        # 两位玩家各自在场上的那只都要点名(主位/副位)
+        assert "主位" in out and "副位" in out, out[:300]
+        # 并且要真的列出招式(带 PP),不只是名字
+        assert "1." in out and "(" in out, out[:300]
