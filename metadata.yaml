@@ -2,7 +2,7 @@ name: astrbot_plugin_pokemon_world
 display_name: 宝可梦世界
 desc: 强规则宝可梦文字冒险。内置 Gen9 全量图鉴、596 处真实地点与确定性对战引擎；主线剧情（道馆 → 击退火箭队等敌对组织 → 联盟 → 冠军）、40 处神兽定点捕获、世界大赛。战斗以仿经典对战界面图片呈现。每天凌晨 4 点由 LLM 生成世界事件、个人事件与支线委托(失败自动回退本地生成器)。
 author: morinoyuki
-version: 1.26.1
+version: 1.27.0
 short_desc: 强规则宝可梦文字冒险(主线/道馆/神兽/世界大赛/每日事件/支线委托)
 repo: https://github.com/morinoyuki/astrbot_plugin_pokemon_world
 license: GPL-3.0

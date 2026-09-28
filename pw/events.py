@@ -27,9 +27,13 @@ WORLD_KINDS = {
     "festival": "庆典/集市(遭遇率与赏金提升)",
     "block": "道路封锁(塌方/施工/检查站)",
     "rumor": "只是传闻与线索,没有数值影响",
+    "harvest": "树果/道具大丰收(该地点拾荒收获变多)",
+    "crowd": "训练家云集(遭遇率与赏金提升)",
+    "shine": "稀有气息弥漫(稀有宝可梦现身概率翻倍)",
 }
 
 EFFECT_RANGES = {
+    "item_bonus": (1.0, 4.0),
     "encounter_mult": (0.5, 3.0),
     "rare_mult": (1.0, 5.0),
     "money_mult": (0.5, 3.0),
@@ -250,6 +254,9 @@ def sanitize_player_event(raw: object, trainer, day: int) -> dict | None:
 # ── 本地兜底事件(LLM 不可用时) ──────────────────────────────────
 FALLBACK_WORLD = [
     ("swarm", "宝可梦大量出现", {"encounter_mult": 1.8}),
+    ("harvest", "树果大丰收", {"item_bonus": 1.8}),
+    ("crowd", "训练家云集", {"money_mult": 1.5, "encounter_mult": 1.3}),
+    ("shine", "稀有气息", {"rare_mult": 2.2}),
     ("rare", "稀有宝可梦的传闻", {"rare_mult": 2.0}),
     ("festival", "小镇庆典", {"encounter_mult": 1.4, "money_mult": 1.3}),
     ("weather", "天气异常", {}),

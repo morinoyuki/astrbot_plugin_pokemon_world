@@ -110,3 +110,34 @@ def test_swarm_event_actually_boosts_the_species():
         battle = B.session(p._load(_Event())) or {}
         assert str((battle.get("meta") or {}).get("species") or "") in ("pikachu", "pidgey")
         assert any("大量出现" in x for x in notice) or notice == []
+
+
+def test_events_with_effects_are_registered_and_trigger():
+    """事件种类必须"真的有效果":注册进目录、效果键合法、且被代码消费。"""
+    from pw import events as EV
+
+    for kind in ("harvest", "crowd", "shine"):
+        assert kind in EV.WORLD_KINDS, f"{kind} 没注册进世界事件目录"
+        assert kind in {k for k, _zh, _eff in EV.FALLBACK_WORLD}
+    for _k, _zh, eff in EV.FALLBACK_WORLD:
+        for key, val in eff.items():
+            lo, hi = EV.EFFECT_RANGES[key]
+            assert lo <= float(val) <= hi, f"{key}={val} 超出 {lo}~{hi}"
+    with tempfile.TemporaryDirectory() as tmp:
+        p = _Cmd(tmp)
+        p.config = {"ui_image": False}
+        run_cmd(p, _Event("/开始 小智 小火龙"), p.cmd_start)
+        t = p._load(_Event())
+        state = p._state(t.scope)
+
+        class _Always:
+            def random(self):
+                return 0.0
+
+        ev = {"kind": "rare", "species": "lapras", "zh": "拉普拉斯"}
+        hit = p._maybe_rare(t, state, ev, _Always(),
+                            {"species": "tentacool", "zh": "玛瑙水母", "level": 22})
+        assert hit["species"] == "lapras" and hit["zh"] == "拉普拉斯", hit
+        hit2 = p._maybe_rare(t, state, {"kind": "rare"}, _Always(),
+                             {"species": "tentacool", "zh": "玛瑙水母", "level": 22})
+        assert hit2.get("species"), hit2

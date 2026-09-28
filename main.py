@@ -1608,6 +1608,11 @@ class PokemonWorldPlugin(Star):
                     return
                 item = rng.choice(EXPLORE_ITEM_POOL)
                 n = rng.randint(1, 2)
+                # 「树果大丰收」这类事件:这个地点的道具收获真的变多
+                _ev_item = state.event_at(loc) or {}
+                _bonus = float((_ev_item.get("effects") or {}).get("item_bonus", 1.0) or 1.0)
+                if _bonus > 1.0:
+                    n = max(n, round(n * _bonus))
                 if cap:
                     n = max(1, min(n, cap - used))     # 不许超过当月上限
                 t.add_item(item, n)
@@ -1748,6 +1753,13 @@ class PokemonWorldPlugin(Star):
         if ev and ev.get("kind") == "rare" and rng.random() < 0.35 * float(
             state.modifiers.get("rare_mult", 1.0)
         ):
+            # 事件点名了物种(「浅葱市海面上有稀有拉普拉斯」)就出它本人;
+            # 没点名才从该地区的传说池里抽一只(旧行为)。
+            want = str(ev.get("species") or "")
+            if want:
+                lv = max(5, min(100, int(hit.get("level") or 5)))
+                return {"species": want, "zh": growth.species_zh(want),
+                        "level": lv, "shiny": False, "rare": True}
             legend = npc.legendary_at(t, ev)
             if legend:
                 return legend
