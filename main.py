@@ -1756,6 +1756,14 @@ class PokemonWorldPlugin(Star):
     async def _emit_wild(self, event: AstrMessageEvent, t: Trainer, state, world,
                          loc: str, hit: dict, notice: list[str]):
         """野生遭遇开战(并把结构化信息交给委托系统)。"""
+        # 「某某大量出现」不能只是好看:今天这个地点在刷 swarm 的话,
+        # 有 60% 概率把刷出来的野生换成它(等级/闪光判定照旧)。
+        swarm = self._swarm_species(state, loc)
+        if (swarm and str(hit.get("species") or "") != swarm
+                and stable_rng("swarm", t.uid, loc, hit.get("species")).random() < 0.6):
+            hit = {**hit, "species": swarm, "zh": growth.species_zh(swarm),
+                   "swarm": True}
+            notice.append(f"🌊 大量出现的 {hit['zh']} 冲到了你面前!")
         level = hit["level"]
         shiny = bool(hit.get("shiny"))
         if shiny:
@@ -5469,6 +5477,21 @@ class PokemonWorldPlugin(Star):
                     yield r
                 B.clear_finished(t)
                 self._save(t)
+
+    def _swarm_species(self, state, loc: str) -> str:
+        """今天在这个地点“大量出现”(swarm)的物种;没有就返回空串。"""
+        if not loc:
+            return ""
+        try:
+            for ev in state.active_events(kind="swarm") or []:
+                if str(ev.get("location") or "") != str(loc):
+                    continue
+                sp = str(ev.get("species") or "")
+                if sp:
+                    return sp
+        except Exception:
+            return ""
+        return ""
 
     def _coop_field_hint(self, t: Trainer) -> str:
         """双打:把场上**两位玩家**各自的宝可梦与招式都列出来,方便互相配合。

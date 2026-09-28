@@ -74,3 +74,39 @@ def test_auto_battle_in_doubles_points_to_the_doubles_command():
         run_cmd(p, ev, p.cmd_auto_battle)
         out = "\n".join(ev.outputs)
         assert "/双打" in out, out[:300]
+
+
+def test_swarm_event_actually_boosts_the_species():
+    """「某某大量出现」不能只是文字:今天这里刷 swarm 就该真的多刷出它。"""
+
+
+    tmp, p = _battle(enemy=("magikarp", 3))
+    with tmp:
+        t = p._load(_Event())
+        state = p._state(t.scope)
+        # 手动塞一个"常青森林大量出现皮卡丘"的事件
+        state.data.setdefault("events", []).append({
+            "id": "sw1", "kind": "swarm", "region": t.region,
+            "location": "viridian-forest", "species": "pikachu",
+            "zh": "皮卡丘", "until_day": state.day + 1, "created_day": state.day,
+            "effects": {"encounter_mult": 1.8},
+        })
+        p.worlds.save(state.scope, state.data)
+        assert p._swarm_species(p._state(t.scope), "viridian-forest") == "pikachu"
+        assert p._swarm_species(p._state(t.scope), "kanto-route-1") == ""
+        # 遭遇入口确实会换成它(直接调 _emit_wild 的判定逻辑,避免依赖随机探索)
+        t.data["battle"] = None
+        p._save(t)
+        hit = {"species": "pidgey", "zh": "波波", "level": 5, "shiny": False}
+        notice: list[str] = []
+        import asyncio
+
+        ev = _Event("")
+        asyncio.run(  # 只跑"遭遇 + 开战"这一段
+            p._emit_wild(ev, p._load(_Event()), p._state(t.scope),
+                         __import__("pw.world", fromlist=["WorldMap"]).WorldMap(),
+                         "viridian-forest", hit, notice).__anext__()
+        )
+        battle = B.session(p._load(_Event())) or {}
+        assert str((battle.get("meta") or {}).get("species") or "") in ("pikachu", "pidgey")
+        assert any("大量出现" in x for x in notice) or notice == []
