@@ -3425,6 +3425,16 @@ class PokemonWorldPlugin(Star):
             if not ok:
                 yield event.plain_result(f"⚠️ 现在用不了 {entry['zh']}。")
                 return
+            # 喂树果:除了回血/治病,还能增进感情(正作里树果就是亲密度来源);
+            # 必须写在 commit **之前**,否则只改了临时对象 = 没加
+            if "berry" in str(key):
+                _fd = growth.berry_friendship_delta(target.friendship)
+                if growth.add_friendship(target, _fd):
+                    line += (
+                        f"\n💗 它吃得很开心,亲密度 +{_fd}"
+                        f"(现在 {target.friendship} {growth.friendship_tier(target.friendship)}"
+                        f" {growth.friendship_hearts(target.friendship)})"
+                    )
             # **必须写回存档**:t.mon() 每次都是新解析出来的对象,
             # 只改这个临时对象等于没治(这个坑我今天已经踩第二次了)。
             t.commit(slot, target)

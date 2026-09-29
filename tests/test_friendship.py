@@ -155,3 +155,35 @@ def test_battle_friendship_rewards_hard_fights_more():
     src = inspect.getsource(B._finish_win)
     assert '"gym", "elite", "champion"' in src
     assert "growth.add_friendship" in src
+
+
+def test_feeding_a_berry_raises_friendship():
+    """喂树果:回血之外还加亲密度,且亲密度越低涨越多(正作规则)。"""
+    assert [growth.berry_friendship_delta(f) for f in (0, 99, 100, 199, 200, 255)] == [
+        10, 10, 5, 5, 2, 2
+    ]
+    with tempfile.TemporaryDirectory() as tmp:
+        p = _Cmd(tmp)
+        p.config = {"ui_image": False}
+        run_cmd(p, _Event("/开始 小智 杰尼龟"), p.cmd_start)
+        t = p._load(_Event())
+        t.add_item("oran-berry", 2)
+        t.party[0]["cur_hp"] = 5
+        t.party[0]["friendship"] = 80
+        p._save(t)
+        ev = _Event("/使用 橙橙果 1")
+        run_cmd(p, ev, p.cmd_use)
+        out = "\n".join(ev.outputs)
+        assert "亲密度 +10" in out, out
+        after = p._load(_Event())
+        assert after.party[0]["friendship"] == 90
+        assert after.party[0]["cur_hp"] > 5          # 回血效果照旧
+        assert after.count("oran-berry") == 1         # 消耗掉一颗
+        # 高亲密度时只 +2(不刷爆)
+        t2 = p._load(_Event())
+        t2.party[0]["friendship"] = 250
+        t2.party[0]["cur_hp"] = 5
+        p._save(t2)
+        ev2 = _Event("/使用 橙橙果 1")
+        run_cmd(p, ev2, p.cmd_use)
+        assert p._load(_Event()).party[0]["friendship"] == 252

@@ -306,3 +306,11 @@ def friend_line(value) -> str:
     """一行亲密度文案(文字回退与资料页共用)。"""
     v = _friend_value(value)
     return f"{v}/255 {friendship_tier(v)} {friendship_hearts(v)}"
+
+
+def berry_friendship_delta(value) -> int:
+    """喂树果的亲密度增量(正作:亲密度越低涨越多)。"""
+    v = _friend_value(value)
+    if v < 100:
+        return 10
+    return 5 if v < 200 else 2
