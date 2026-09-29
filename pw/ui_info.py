@@ -277,9 +277,9 @@ def render_news(day: int, *, world_events: list[str] = (), player_events: list[s
             _mine_rows.extend(_wrap_rows(_meas, f"· {_it}", _aw, size=8))
         _nw, _np = max(1, len(_world_rows)), max(1, len(_mine_rows) + 2)
         _lh = 9.8
-        _wb = 35 + 16.5 + _nw * _lh + 2
+        _wb = 35 + 16.5 + _nw * _lh + 7
         _pbt = _wb + 4
-        _pbb = _pbt + 16.5 + _np * _lh + 2
+        _pbb = _pbt + 16.5 + _np * _lh + 7
         sc = Screen(scale=scale, h=int(max(LOGICAL_H, _pbb + 20)))
         sc.title_bar("早间新闻", right=f"第 {day} 天")
 
