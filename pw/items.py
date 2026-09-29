@@ -819,3 +819,26 @@ def bag_item_label(key: str | None) -> str:
         return ""
     entry = BAG_ITEMS.get(key)
     return entry["zh"] if entry else key
+
+
+# ── 地点主题化的进化石(探索拾荒时按地点 key 判定)──
+STONE_BIOME: tuple[tuple[tuple[str, ...], str], ...] = (
+    (("meteor", "moon", "crater", "ruins"), "moon-stone"),
+    (("cave", "tunnel", "mine", "cavern", "chasm"), "dusk-stone"),
+    (("forest", "woods", "grove", "jungle"), "leaf-stone"),
+    (("peak", "mountain", "volcano", "ember"), "sun-stone"),
+    (("ice", "snow", "glacier", "frost"), "ice-stone"),
+    (("sea", "beach", "island", "ocean", "shore", "bay", "harbor"), "water-stone"),
+    (("power", "plant", "generator", "light"), "thunder-stone"),
+    (("lake", "spring", "shrine", "dawn", "holy"), "dawn-stone"),
+    (("meadow", "plain", "field", "garden"), "shiny-stone"),
+)
+
+
+def stone_for_location(loc_key: str) -> str:
+    """这个地点的主题进化石(没有就空串)。"""
+    low = str(loc_key or "").lower()
+    for keys, stone in STONE_BIOME:
+        if any(k in low for k in keys):
+            return stone
+    return ""

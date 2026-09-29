@@ -62,6 +62,7 @@ from .pw.items import (
     fossil_species,
     max_pp,
     resolve_bag_item,
+    stone_for_location,
 )
 from .pw.narrate import Narrator
 from .pw.player import Trainer, TrainerStore, mon_to_dict, new_trainer
@@ -1660,7 +1661,7 @@ class PokemonWorldPlugin(Star):
                     n = max(1, min(n, cap - used))     # 不许超过当月上限
                 t.add_item(item, n)
                 got = _note_item_finds(t, loc, n)
-                bonus = self._maybe_mega_find(t, rng)
+                bonus = self._maybe_mega_find(t, rng) or self._maybe_stone_find(t, rng)
                 self._save(t)
                 zh = (BAG_ITEMS.get(item) or {}).get("zh", item)
                 tail = f"(本月此地 {got}/{cap})" if cap else ""
@@ -1753,7 +1754,7 @@ class PokemonWorldPlugin(Star):
                 n = max(1, min(n, cap - used))
             t.add_item(item, n)
             got = _note_item_finds(t, loc, n)
-            bonus = self._maybe_mega_find(t, rng)
+            bonus = self._maybe_mega_find(t, rng) or self._maybe_stone_find(t, rng)
             self._save(t)
             zh = (BAG_ITEMS.get(item) or {}).get("zh", item)
             tail = f"(本月此地 {got}/{cap})" if cap else ""
@@ -1762,6 +1763,20 @@ class PokemonWorldPlugin(Star):
                 lines.append(bonus)
             yield event.plain_result("\n".join(lines))
 
+    def _maybe_stone_find(self, t: Trainer, rng) -> str:
+        """探索捡道具时的地点主题掉落:进化石(约 10%)。
+
+        月见山 → 月之石、岩山隧道 → 暗之石、常青森林 → 叶之石……
+        让"只能买"的进化石在对应地貌也能挖到(实测反馈)。
+        """
+        stone = stone_for_location(str(getattr(t, "location", "") or ""))
+        if not stone or rng.random() >= 0.10:
+            return ""
+        zh = (BAG_ITEMS.get(stone) or {}).get("zh") or stone
+        if t.count(stone) > 0:      # 已经有一块就不再刷(别占格子)
+            return ""
+        t.add_item(stone, 1)
+        return f"💎 你在岩缝里挖到了一块「{zh}」!(这里的地貌特产)"
     def _maybe_mega_find(self, t: Trainer, rng) -> str:
         """探索捡道具时的稀有附加:Mega 石(约 8%)。
 
@@ -4792,7 +4807,8 @@ class PokemonWorldPlugin(Star):
             "── 详情 ──",
             f"特性:{p.get('ability_zh') or '?'}",
             f"性格:{p.get('nature_zh') or '?'}",
-            f"亲密:{int(p.get('friendship') or 0)}",
+            f"亲密:{growth.friend_line(p.get('friendship'))}",
+                        f"亲密:{int(p.get('friendship') or 0)}",
             f"持有:{p.get('item_zh') or '无'}",
         ]
         if p.get("ability_desc"):

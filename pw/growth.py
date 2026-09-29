@@ -256,3 +256,53 @@ def gain_exp(
         res.evolved_from = before_species
         res.evolved_to = evolved
     return res
+
+
+# ── 亲密度 ──────────────────────────────────────────────────────
+# 与正作一致:0~255,进化条件多要求 ≥100(见 dex 数据),报恩/迁怒按它算威力。
+FRIEND_TIERS: tuple[tuple[int, str], ...] = (
+    (220, "形影不离"), (180, "挚友"), (100, "亲密"),
+    (60, "熟悉"), (25, "认识"), (0, "陌生"),
+)
+
+
+def _friend_value(value) -> int:
+    try:
+        return max(0, min(255, int(value or 0)))
+    except (TypeError, ValueError):
+        return 0
+
+
+def friendship_tier(value) -> str:
+    """亲密度档位名(0~255 从高到低匹配)。"""
+    v = _friend_value(value)
+    for floor, name in FRIEND_TIERS:
+        if v >= floor:
+            return name
+    return "陌生"
+
+
+def friendship_hearts(value, *, slots: int = 5) -> str:
+    """♥♥♡♡♡ —— 0~255 映射成 0~5 颗心。"""
+    full = round(_friend_value(value) / 255 * slots)
+    return "♥" * full + "♡" * (slots - full)
+
+
+def add_friendship(mon, delta: int) -> int:
+    """增减亲密度(夹在 0~255),返回实际变化量;对象/字典都能用。"""
+    try:
+        cur = int(getattr(mon, "friendship", None) or mon["friendship"])
+    except Exception:
+        cur = 70
+    new = _friend_value(cur + int(delta))
+    try:
+        mon.friendship = new
+    except Exception:
+        mon["friendship"] = new
+    return new - cur
+
+
+def friend_line(value) -> str:
+    """一行亲密度文案(文字回退与资料页共用)。"""
+    v = _friend_value(value)
+    return f"{v}/255 {friendship_tier(v)} {friendship_hearts(v)}"

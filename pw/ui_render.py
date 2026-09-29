@@ -1943,6 +1943,21 @@ def _chip(sc: Screen, x: float, y: float, label: str, *, size: float = 6.6) -> f
     return w
 
 
+_FRIEND_TIERS = ((220, "形影不离"), (180, "挚友"), (100, "亲密"),
+                 (60, "熟悉"), (25, "认识"), (0, "陌生"))
+
+
+def _friend_label(value) -> str:
+    """亲密度:数值 + 档位 + 五颗心(裸数字看不出好坏)。"""
+    try:
+        val = max(0, min(255, int(value or 0)))
+    except (TypeError, ValueError):
+        val = 0
+    tier = next(name for floor, name in _FRIEND_TIERS if val >= floor)
+    full = round(val / 255 * 5)
+    return f"{val} {tier} " + "♥" * full + "♡" * (5 - full)
+
+
 def render_mon_summary(mon: dict, *, index: int = 1, party_size: int = 1,
                        scale: int = SCALE_DEFAULT) -> bytes:
     """单只宝可梦资料页:`/宝可梦 <序号>`(仿 GBA 的"摘要"画面)。
@@ -2015,7 +2030,7 @@ def render_mon_summary(mon: dict, *, index: int = 1, party_size: int = 1,
         for label, value in (
             ("特性", str(mon.get("ability_zh") or "?")),
             ("性格", str(mon.get("nature_zh") or "?")),
-            ("亲密", str(int(mon.get("friendship") or 0))),
+            ("亲密", _friend_label(mon.get("friendship"))),
             ("持有", str(mon.get("item_zh") or "无")),
         ):
             sc.text(10, y, label, size=6.8, fill=TEXT_DIM)

@@ -90,6 +90,12 @@ LLM_OBJECTIVES = (
 REWARD_ITEMS: dict[str, dict] = {
     # 化石也给一条非商店途径(权重低)
     "old-amber": {"zh": "琥珀", "weight": 1, "max": 1},
+    # 进化石:低权重、每种 1 份 —— 让"只能买"多一条委托途径(实测反馈)
+    "moon-stone": {"zh": "月之石", "weight": 2, "max": 1},
+    "sun-stone": {"zh": "日之石", "weight": 2, "max": 1},
+    "dusk-stone": {"zh": "暗之石", "weight": 2, "max": 1},
+    "dawn-stone": {"zh": "觉醒之石", "weight": 2, "max": 1},
+    "leaf-stone": {"zh": "叶之石", "weight": 2, "max": 1},
     "skull-fossil": {"zh": "头盖化石", "weight": 1, "max": 1},
     "poke-ball": {"zh": "精灵球", "weight": 10, "max": 5},
     "great-ball": {"zh": "超级球", "weight": 6, "max": 3},
