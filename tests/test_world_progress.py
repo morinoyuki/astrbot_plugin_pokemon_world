@@ -238,3 +238,33 @@ def test_consecutive_same_weather_events_are_rotated():
     assert got != "sand", "连着两天沙暴应该被轮换成别的"
     assert "沙暴" not in st.data["events"][-1]["desc"], st.data["events"][-1]
     assert st.data["events"][0]["effects"]["battle_weather"] == "sand"
+
+
+def test_weather_move_overrides_event_weather_without_speed_priority():
+    """改天气的招式:直接**覆盖**事件/主场天气,但不抢先手(用户澄清)。"""
+    from pw.engine import Battle, Side, create_pokemon
+
+    # ① 覆盖:开场是事件带来的沙暴,雨舞之后变下雨,且之后一直维持
+    me = create_pokemon("blastoise", 50)
+    me.moves = ["raindance", "surf"]
+    me.pp = {"raindance": 10, "surf": 15}
+    foe = create_pokemon("charizard", 50)
+    foe.moves = ["tackle"]
+    foe.pp = {"tackle": 30}
+    foe.stats["spe"] = 200              # 对手更快,先出手
+    bt = Battle(player=Side("player", [me]), enemy=Side("enemy", [foe]), weather="sand")
+    bt.start()
+    out = bt.step({"type": "move", "move": "raindance"},
+                  {"type": "move", "move": "tackle"})
+    assert bt.weather == "rain", (bt.weather, out)
+    assert any("覆盖了原来的沙暴" in x for x in out), out
+    # 先手顺序不变:对手的攻击在前,改天气在后(说明没有速度优先)
+    i_hit = next(i for i, x in enumerate(out) if "击中" in x)
+    i_weather = next(i for i, x in enumerate(out) if "天气变成了" in x)
+    assert i_hit < i_weather, out
+    # ② 维持:再打 6 回合天气还在
+    for _ in range(6):
+        bt.step({"type": "move", "move": "surf"}, {"type": "move", "move": "tackle"})
+        if bt.finished:
+            break
+    assert bt.weather == "rain", bt.weather

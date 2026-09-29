@@ -994,9 +994,6 @@ class Battle:
             return 0
         mv = get_dex().moves.get(action.get("move", ""), {})
         pri = int(mv.get("priority", 0) or 0)
-        if mv.get("weather"):
-            # 改天气的招式优先度最高 —— 先把天气摆好(用户要求)
-            return 6
         mon = side.slot_mon(slot)
         if mon and mv.get("category") == "Status" and mon.has_ability("prankster"):
             pri += 1
@@ -3140,14 +3137,20 @@ class Battle:
         if kind == "weather":
             value = WEATHER_ALIAS.get(str(value).lower().replace(" ", ""), str(value))
             turns = eff.get("weather_turns", 5) if eff.get("weather") == value else 5
+            prev = str(self.weather or "")
             self.weather = value
             if permanent:
                 turns = 999
             self.weather_permanent = bool(permanent) or self.weather_permanent
             self.weather_turns = turns
+            # 改天气的招式**无视事件/主场天气直接覆盖**(用户澄清:优先 = 覆盖,
+            # 不是抢先手),并维持到战斗结束
+            extra = ""
+            if prev and prev != value:
+                extra = f"(覆盖了原来的{WEATHER_ZH.get(prev, prev)})"
             self.log.append(
                 f"天气变成了{WEATHER_ZH.get(value, value)}!"
-                + ("(这场战斗会一直维持)" if permanent else "")
+                + extra + ("(这场战斗会一直维持)" if permanent else "")
             )
         else:
             turns = eff.get("terrain_turns", 5)
