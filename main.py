@@ -1258,7 +1258,7 @@ class PokemonWorldPlugin(Star):
             yield event.plain_result(
                 _page_note + " —— 翻页:电脑 2 / 电脑 下一页 / 电脑 上一页"
             )
-        text = self._box_text(t, mons)
+        text = self._box_text(t, mons, offset=_per * (_page - 1))
         async for r in self._emit_ui(
             event, "box",
             lambda: UI.render_box(mons, capacity=len(mons) + 0 or 30,
@@ -4855,11 +4855,17 @@ class PokemonWorldPlugin(Star):
             )
         return out
 
-    def _box_text(self, t: Trainer, mons: list[dict]) -> str:
+    def _box_text(self, t: Trainer, mons: list[dict], offset: int = 0) -> str:
         if not mons:
             return "📦 电脑仓库是空的。队伍满 6 只后收服的宝可梦会存到这里。"
-        lines = [f"📦 电脑仓库({len(mons)} 只)"]
-        for i, m in enumerate(mons, 1):
+        _off = int(offset or 0)
+        _total = max(len(mons) + _off, len(getattr(t, "box", []) or []))
+        _lo = _off + 1 if mons else 0
+        _hi = _off + len(mons)
+        lines = [f"📦 电脑仓库(共 {_total} 只 · 本页 {len(mons)} 只:第 {_lo}-{_hi} 只)"]
+        lines.append("💡 下面的序号是**全局编号**(翻页后继续往后数),`/宝可梦 电脑 <序号>`、"
+                     "`/电脑 放生 <序号> 确认` 都用它")
+        for i, m in enumerate(mons, 1 + _off):
             g = m.get("gender")
             lines.append(
                 f"{i}. {'✨' if m.get('shiny') else ''}{m.get('name')} Lv{m.get('level')}"
