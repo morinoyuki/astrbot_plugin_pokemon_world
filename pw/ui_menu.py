@@ -192,10 +192,13 @@ def render_world_map(entries: list[dict], *, scale: int = SCALE_DEFAULT) -> byte
     """
     try:
         rows = [dict(e) for e in (entries or []) if isinstance(e, dict)]
+        # 精确对齐:标题栏窗口是 (4,3,236,16) 且带 2px 阴影 → 视觉底边 18;
+        # 底部提示条占 h-16..h-5(上沿 = h-16)。三段间距都等于 gap,才算真正“统一”。
         panel_h = 16.0
         gap = 2.4
-        top = 15.0 + gap                     # 标题栏占 3..15,下面同样留一个 gap
-        need = top + len(rows) * (panel_h + gap) + 16
+        top = 18.0 + gap
+        last_bottom = top + (len(rows) - 1) * (panel_h + gap) + panel_h
+        need = last_bottom + gap + 16
         sc = Screen(scale=scale, h=max(160, round(need)))
         done = sum(1 for e in rows if e.get("champion"))
         sc.title_bar("世界地图", right=f"通关 {done}/{len(rows)} 地区")
