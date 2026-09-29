@@ -214,3 +214,33 @@ def test_dex_unlocks_on_evolution_and_acquisition():
         run_cmd(p, ev, p.cmd_dex)
         out = "".join(ev.outputs)
         assert "已捕获" in out, out[:200]
+
+
+def test_old_saves_backfill_dex_for_evolved_mons():
+    """修复前就进化好的宝可梦要**补算**进图鉴(旧档自愈,不需玩家操作)。"""
+    import tempfile
+
+    from test_commands import SCOPE, _Cmd, _Event, run_cmd
+
+    from pw.engine import create_pokemon
+    from pw.player import mon_to_dict
+
+    tmp = tempfile.TemporaryDirectory()
+    with tmp:
+        p = _Cmd(tmp.name)
+        p.config = {"ui_image": False}
+        run_cmd(p, _Event("/开始 小智 杰尼龟"), p.cmd_start)
+        t = p._load(_Event())
+        # 模拟"旧档":队伍里有炽焰咆哮虎(闪光),但图鉴里没有它
+        raw = p.trainers.load(SCOPE, t.uid)
+        raw["party"].append(mon_to_dict(create_pokemon("incineroar", 40, shiny=True)))
+        raw["dex_caught"] = [m.get("species") for m in raw["party"][:1]]
+        raw["dex_seen"] = list(raw["dex_caught"])
+        p.trainers.save(SCOPE, t.uid, raw)
+
+        back = p._load(_Event())          # 载入即自愈
+        assert back.caught("incineroar"), "旧档里进化好的宝可梦应该补算"
+        assert back.shiny_caught("incineroar"), "闪光形态也要补算进闪光图鉴"
+        ev = _Event("/图鉴 炽焰咆哮虎")
+        run_cmd(p, ev, p.cmd_dex)
+        assert "已捕获" in "".join(ev.outputs)

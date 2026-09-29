@@ -73,6 +73,18 @@ class Trainer:
         d.setdefault("play_day", 0)
         self._reindex()
 
+        # 旧档补算(1.30.3 之前进化不写图鉴):手上与箱子里的形态都算「得到过」
+        # —— 自愈式迁移,每次载入都会补齐,不用玩家做任何操作
+        for md in (self.data.get("party") or []) + (self.data.get("box") or []):
+            sp = str((md or {}).get("species") or "")
+            if not sp:
+                continue
+            if sp not in self.data["dex_seen"]:
+                self.data["dex_seen"].append(sp)
+            if sp not in self.data["dex_caught"]:
+                self.data["dex_caught"].append(sp)
+            if md.get("shiny") and sp not in self.data["shiny_caught"]:
+                self.data["shiny_caught"].append(sp)
     def _reindex(self) -> None:
         """确保每只都有稳定 id(离线/老存档补齐)。"""
         used = set()
