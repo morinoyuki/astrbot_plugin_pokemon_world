@@ -81,7 +81,11 @@ def test_render_news():
                           player_events=["你击败了短裤小子 小明。", "暴鲤龙 升到了 Lv105。"],
                           weather_zh="晴天", region_zh="关都", location_zh="玉虹市",
                           locks=["世界大赛(需 8 枚徽章)"], scale=SCALE)
-    _check(data)
+    # /今日 的高度是自适应的(按事件行数长高),不能断言固定 160
+    assert data and data.startswith(b"\x89PNG")
+    with Image.open(BytesIO(data)) as im:
+        assert im.size[0] == 240 * SCALE, im.size
+        assert im.size[1] >= 160 * SCALE, f"新闻画布不该比标准还矮:{im.size}"
 
 
 def test_render_tournament():
