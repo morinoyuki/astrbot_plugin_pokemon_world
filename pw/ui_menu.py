@@ -604,7 +604,7 @@ def render_gym(
             y0 = 86 + row_i * 14
             lv = levels[ti]
             sc.sprite(str(mon.get("species") or ""), ground=(21, y0 + 13), factor=0.8,
-                      bounds=(16, 13))
+                      bounds=(16, 13), hires=True)
             name = _fit(sc, str(mon.get("zh") or mon.get("name") or mon.get("species") or "?"),
                         56, 7.8)
             sc.text(34, y0 + 2, name, size=7.8, fill=TEXT)

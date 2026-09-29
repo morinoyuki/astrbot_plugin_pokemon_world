@@ -1641,7 +1641,7 @@ def render_party(
                 sc.sprite(str(mon.get("species") or ""), ground=(22, y0 + row_h - 4),
                           factor=0.62, bounds=(20, row_h - 8), back=False,
                           dim=_ratio(mon.get("cur_hp"), mon.get("max_hp")) <= 0,
-                          shiny=bool(mon.get("shiny")))
+                          shiny=bool(mon.get("shiny")), hires=True)
             else:
                 x_name = 14.0
             name = str(mon.get("name") or "?")
@@ -1872,7 +1872,7 @@ def render_dex(
         sc.window((5, 19, 112, 112), radius=3)
         # 抓过闪光形态:图鉴页直接给出异色立绘 + 金色角标
         sc.sprite(str(entry.get("_key") or ""), ground=(58, 108), factor=1.0,
-                  bounds=(84, 82), silhouette=not known, shiny=shiny)
+                  bounds=(84, 82), silhouette=not known, shiny=shiny, hires=True)
         if shiny:
             sc.text(11, 22, "✨闪光", size=7.4, fill=(196, 156, 24))
         sc.window((116, 19, 235, 112), radius=3)
@@ -1990,7 +1990,7 @@ def render_mon_summary(mon: dict, *, index: int = 1, party_size: int = 1,
                 cx += w + 2
         # 立绘贴底,上边缘在属性标签之下(bounds 会按比例钳制,不会溢出)
         sc.sprite(str(mon.get("species") or ""), ground=(50, 89), factor=1.0,
-                  bounds=(62, 46), shiny=bool(mon.get("shiny")))
+                  bounds=(62, 46), shiny=bool(mon.get("shiny")), hires=True)
 
         # ── 右上:等级 / HP / 经验 / 能力值 ──
         sc.window((100, 19, 235, 92), radius=2)
@@ -2094,7 +2094,7 @@ def render_box(mons: list[dict], *, capacity: int = 0, money: int = 0,
             sc.sprite(str(mon.get("species") or ""), ground=(cx + 14, cy + ch - 3),
                       factor=0.5, bounds=(24, ch - 6),
                       dim=_ratio(mon.get("cur_hp"), mon.get("max_hp")) <= 0,
-                      shiny=bool(mon.get("shiny")))
+                      shiny=bool(mon.get("shiny")), hires=True)
             nm = str(mon.get("name") or "?")
             if mon.get("shiny"):
                 nm = "✨" + nm

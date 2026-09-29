@@ -219,7 +219,7 @@ def render_legendaries(region_zh: str, sites: list[dict], *, caught: list[str] =
             sc.d.rounded_rectangle([8, y0 + 2, 30, y0 + rh - 3], radius=2,
                                    fill=SLOT_FILL, outline=BOX_EDGE)
             sc.sprite(sp, ground=(19, y0 + rh - 4), factor=0.5, bounds=(18, 12),
-                      silhouette=not is_caught)
+                      silhouette=not is_caught, hires=True)
 
             # 名字
             name = "???" if is_locked else _fit(sc, _str(site.get("zh"), "?"), 52, 8.4)
@@ -611,7 +611,7 @@ def render_growth(mon: dict, *, before_level: int = 0, after_level: int = 0,
         # ── 精灵小图 ──
         side = (154, 19, 235, 66)
         sc.window(side, radius=3)
-        sc.sprite(sp, ground=(194, 62), factor=0.72, bounds=(58, 38),
+        sc.sprite(sp, ground=(194, 62), factor=1.18, bounds=(74, 42),
                   shiny=bool(mon.get("shiny")), hires=True)
 
         # ── 学会的招式 ──
@@ -652,10 +652,10 @@ def _growth_evolution(sc: Screen, mon: dict, sp: str, name: str, from_zh: str,
     # 原有的招式信息留在下方
     sc.d.rectangle([4, 44, 236, 122], fill=BG)
     before_sp = _str(mon.get("pre_species")) or _species_key(from_zh) or sp
-    sc.sprite(before_sp, ground=(56, 106), factor=0.85, bounds=(74, 62),
+    sc.sprite(before_sp, ground=(58, 106), factor=1.05, bounds=(84, 70),
               silhouette=True, hires=True)
     # 闪光个体进化后仍然是闪光:进化瞬间也要用异色立绘
-    sc.sprite(sp, ground=(184, 106), factor=1.0, bounds=(82, 62),
+    sc.sprite(sp, ground=(182, 106), factor=1.2, bounds=(94, 70),
               shiny=bool(mon.get("shiny")), hires=True)
     sc.text_center(120, 78, "→", size=22, fill=(96, 94, 80))
     sc.text_center(56, 109, _str(from_zh, "之前"), size=8, fill=TEXT_DIM)
@@ -701,7 +701,7 @@ def render_gotcha(mon: dict, *, ball_zh: str = "精灵球", ball_key: str = "",
         d.ellipse([cx - 52, cy - 52, cx + 52, cy + 52], fill=SPOT_2, outline=BOX_EDGE)
         d.ellipse([cx - 44, cy - 44, cx + 44, cy + 44], fill=SPOT_1)
         sc.sprite(sp, ground=(cx, cy + 32), factor=1.05, bounds=(80, 78),
-                  shiny=shiny)
+                  shiny=shiny, hires=True)
 
         if shiny:
             # 闪光捕获:聚光灯再加一圈金色,标题也好一眼看出与众不同
