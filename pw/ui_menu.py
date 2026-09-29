@@ -194,9 +194,11 @@ def render_world_map(entries: list[dict], *, scale: int = SCALE_DEFAULT) -> byte
         rows = [dict(e) for e in (entries or []) if isinstance(e, dict)]
         # 精确对齐:标题栏窗口是 (4,3,236,16) 且带 2px 阴影 → 视觉底边 18;
         # 底部提示条占 h-16..h-5(上沿 = h-16)。三段间距都等于 gap,才算真正“统一”。
-        panel_h = 16.0
-        gap = 2.4
-        top = 18.0 + gap
+        # 全部用**整数**几何:18.4 / 2.4 这种小数在逐行累加后被各自的取整吃掉,
+        # 会出现“每两三行间距差 1 像素”的循环(用户实测反馈)→ 卡片 16、间隔 3 全整数。
+        panel_h = 16
+        gap = 3
+        top = 18 + gap
         last_bottom = top + (len(rows) - 1) * (panel_h + gap) + panel_h
         need = last_bottom + gap + 16
         sc = Screen(scale=scale, h=max(160, round(need)))
@@ -211,11 +213,11 @@ def render_world_map(entries: list[dict], *, scale: int = SCALE_DEFAULT) -> byte
             # 所有卡片同一套画法(只有边框颜色不同):几何完全一致 → 间距看起来才匀
             sc.window((5, y0, 235, y1), radius=2,
                       edge=PIN_RED if current else BOX_EDGE, shadow=False, hi=False)
-            sc.text(10, y0 + 4.8, f"第{_to_int(e.get('order'), i + 1)}地区",
+            sc.text(10, y0 + 5, f"第{_to_int(e.get('order'), i + 1)}地区",
                     size=6.8, fill=TEXT_DIM)
             if current:
-                sc.d.ellipse([40, y0 + 4.8, 45.6, y0 + 10.4], fill=PIN_RED)
-            sc.text(47, y0 + 3.0, str(e.get("zh") or e.get("key") or "?"), size=9.2,
+                sc.d.ellipse([40, y0 + 5, 45, y0 + 10], fill=PIN_RED)
+            sc.text(47, y0 + 3, str(e.get("zh") or e.get("key") or "?"), size=9.2,
                     fill=PIN_RED if current else (TEXT if unlocked else STATUS_OFF))
             gyms = _to_int(e.get("gyms"), 8)
             if champion:
@@ -226,7 +228,7 @@ def render_world_map(entries: list[dict], *, scale: int = SCALE_DEFAULT) -> byte
                 color = DONE_GREEN
             else:
                 status, color = f"未开放 · 需{_str_prev(e)}冠军", STATUS_OFF
-            sc.text_right(230, y0 + 5.0, _fit(sc, status, 112, 7.0), size=7.0, fill=color)
+            sc.text_right(230, y0 + 5, _fit(sc, status, 112, 7.0), size=7.0, fill=color)
         sc.footer("◆ 红框 = 你在这里 · 通关一个地区解锁下一个")
         return sc.finish()
     except Exception as e:  # 渲染永远不能把游戏搞崩
