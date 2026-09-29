@@ -20,6 +20,9 @@ from .util import (
 from .world import REGION_ORDER
 
 WEATHERS = ["", "", "", "sun", "rain", "sand", "snow"]
+# 天气异常轮换(避免连着几天同一种 —— 实测反馈「老是沙暴」)
+WEATHER_ROTATE = ("sun", "rain", "sand", "snow")
+WEATHER_ZH_LITE = {"sun": "大晴天", "rain": "下雨", "sand": "沙暴", "snow": "下雪"}
 WEATHER_ZH = {
     "": "晴朗",
     "sun": "大晴天",
@@ -117,8 +120,27 @@ class WorldState:
                 return e
         return {}
 
+
     def add_event(self, event: dict) -> None:
         ev = dict(event)
+        # 与上一次「天气异常」相同就轮换一种,并同步改掉标题/描述里的天气名
+        if str(ev.get("kind")) == "weather":
+            eff = ev.setdefault("effects", {})
+            want = str(eff.get("battle_weather") or "")
+            opts = list(WEATHER_ROTATE)
+            if want in opts:
+                prev = [e for e in (self.data.get("events") or [])
+                        if str(e.get("kind")) == "weather"]
+                last = str((prev[-1].get("effects") or {}).get("battle_weather") or "") \
+                    if prev else ""
+                if last == want:
+                    nxt = opts[(opts.index(want) + 1) % len(opts)]
+                    eff["battle_weather"] = nxt
+                    old_zh = WEATHER_ZH_LITE.get(want, "")
+                    new_zh = WEATHER_ZH_LITE.get(nxt, "")
+                    for field in ("title", "desc"):
+                        if old_zh and old_zh in str(ev.get(field) or ""):
+                            ev[field] = str(ev[field]).replace(old_zh, new_zh)
         ev.setdefault("id", f"e{len(self.data.get('events') or []) + 1}")
         ev.setdefault("created_day", self.day)
         ev.setdefault("until_day", self.day)

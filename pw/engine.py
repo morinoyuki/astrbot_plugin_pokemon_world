@@ -1187,7 +1187,9 @@ class Battle:
         if mon.tera_type == "Stellar":
             self.log.append("星晶太晶:保留原属性防御,招式获得星晶之力。")
         if mon.has_ability("teraform-zero"):
+            self.log.append("风停了,天气恢复了平静。")
             self.weather = ""
+            self.log.append("场地恢复了正常。")
             self.terrain = ""
             self.log.append(f"{mon.display} 的归零化境消除了天气与场地!")
 
@@ -3138,6 +3140,7 @@ class Battle:
             self.weather_turns -= 1
             if self.weather_turns <= 0:
                 self.log.append(f"{WEATHER_ZH.get(self.weather, self.weather)}停止了。")
+                self.log.append("风停了,天气恢复了平静。")
                 self.weather = ""
         else:
             self.weather_turns = 0

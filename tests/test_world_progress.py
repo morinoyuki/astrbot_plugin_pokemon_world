@@ -151,3 +151,70 @@ def test_render_world_map_handles_states_and_empty():
     # 空输入不能炸(渲染层约定:失败返回 b"")
     empty = M.render_world_map([], scale=2)
     assert empty == b"" or empty.startswith(b"\x89PNG")
+
+
+def test_weather_change_and_expiry_are_announced():
+    """天气变化/结束必须有提示:开始时的由来、结束时的“风停了”。"""
+    import tempfile
+
+    from test_commands import _Cmd, _Event, run_cmd
+
+    from pw.engine import Battle, Side, create_pokemon
+
+    # ① 开场带异常天气 → 战报第一行说明由来
+    tmp = tempfile.TemporaryDirectory()
+    with tmp:
+        p = _Cmd(tmp.name)
+        p.config = {"ui_image": False}
+        run_cmd(p, _Event("/开始 小智 杰尼龟"), p.cmd_start)
+        t = p._load(_Event())
+        st = p._state(t.scope)
+        st.add_event({
+            "id": "w1", "kind": "weather", "region": t.region, "location": t.location,
+            "effects": {"battle_weather": "sand"},
+            "created_day": st.day, "until_day": st.day + 1,
+        })
+        try:                        # 事件生效要重算一次修正表
+            st._recompute_modifiers()
+        except TypeError:
+            st._recompute_modifiers(st.day)
+        p.worlds.save(st.scope, st.data)
+        # 事件里的 battle_weather 会进 modifiers(插件开战时就是读它)
+        assert p._state(t.scope).modifiers.get("battle_weather") == "sand"
+        weather = "sand"
+        from pw import battle as B
+
+        fresh = p._load(_Event())
+        lines = B.start(fresh, [{"species": "pikachu", "level": 10}],
+                        kind="wild", weather=weather, day=1)
+        assert any("沙暴" in line for line in lines), lines
+    # ② 天气计时归零 → “风停了”
+    bt = Battle(player=Side("player", [create_pokemon("snorlax", 30)]),
+                enemy=Side("enemy", [create_pokemon("snorlax", 30)]), weather="sand")
+    bt.start()
+    logs: list[str] = []
+    for _ in range(8):
+        logs += bt.step({"type": "move", "move": "tackle"}, {"type": "move", "move": "tackle"})
+        if not bt.weather:
+            break
+    assert not bt.weather, "天气应该会到期"
+    assert any("风停了" in x for x in logs), logs[-6:]
+
+
+def test_consecutive_same_weather_events_are_rotated():
+    """连续两天同一种天气异常 → 自动轮换(不再老是沙暴)。"""
+    from pw.worldstate import WorldState
+
+    st = WorldState({}, "g1")
+    ev1 = {"kind": "weather", "region": "kanto", "location": "kanto-route-1",
+           "title": "沙暴来袭", "desc": "沙暴笼罩了这一带。",
+           "effects": {"battle_weather": "sand"}}
+    st.add_event(ev1)
+    ev2 = {"kind": "weather", "region": "kanto", "location": "kanto-route-2",
+           "title": "沙暴来袭", "desc": "沙暴笼罩了这一带。",
+           "effects": {"battle_weather": "sand"}}
+    st.add_event(ev2)
+    got = (st.data["events"][-1]["effects"] or {}).get("battle_weather")
+    assert got != "sand", "连着两天沙暴应该被轮换成别的"
+    assert "沙暴" not in st.data["events"][-1]["desc"], st.data["events"][-1]
+    assert st.data["events"][0]["effects"]["battle_weather"] == "sand"

@@ -200,6 +200,11 @@ def start(
         bag=dict(trainer.bag),
     )
     log = battle.start()
+    # 异常天气/沙暴这类“战场天气”要有明确由来 —— 否则玩家只看到画面变了
+    # 却不知道是谁改的(实测反馈:战斗里天气变化没提示)
+    if weather:
+        _wz = {"sun": "大晴天", "rain": "下雨", "sand": "沙暴", "snow": "下雪"}.get(str(weather), str(weather))
+        log = [f"🌤 战场天气:{_wz}(受异常天气影响)", *list(log)]
     # 开战前的台词(馆主/组织/四天王/冠军/训练家各有各的人设)
     _pre = banter.pre_battle(kind, dict(meta or {}), region=str(trainer.data.get("region") or ""))
     _banter_long = ""
