@@ -474,7 +474,9 @@ def render_battle_result(*, outcome: str, title: str = "", lines: list[str] = ()
             panel = (5, 44, 82, sc.content_bottom)
             sc.window(panel, radius=3)
             sp = _str(mon.get("species"))
-            sc.sprite(sp, ground=(43, 108), factor=0.95, bounds=(66, 60), hires=True)
+            # 结算画面的立绘放大一档(实测反馈太小):几乎占满左侧面板,
+            # 仍在放大层单次重采样,不会糊
+            sc.sprite(sp, ground=(43, 111), factor=1.5, bounds=(66, 58), hires=True)
             name = _fit(sc, _str(mon.get("name"), "?"), 66, 9)
             sc.text(11, 110, name, size=9, fill=TEXT)
             gender, gcolor = gender_symbol(_str(mon.get("gender")))
