@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.29.0
+
+### 帕底亚野生分布:数据源已解决(内容待补,暂不开放)
+
+- 新增 `tools/build_sv_locations.py`:从社区维护、按区域分文件的真实遭遇表
+  (`Pokemon,Frequency,MinLevel,MaxLevel`)抓取**帕底亚**分布,合并进
+  `pw/static/locations.json`;区域中文名走 Bulbapedia zh langlinks,缺失时用
+  「帕底亚·<英文名>」兜底
+- **实测抓取结果**:31 个区域 / 1218 条遭遇(含碧之假面 EP*、蓝之圆盘 NP* 的
+  版本组映射),物种名经 `dex.resolve_species` 归一,传说/幻兽自动剔除
+- **为什么暂不落盘开放**:帕底亚一旦进入 `maps.json` 就算「有数据的地区」,
+  而自检与回归要求**每个地区都要有主线(story stages)与 ≥3 个神兽据点** ——
+  帕底亚这两块内容还没写(结构已定位:`pw/story.py` 的 `STORY[region].stages`、
+  `pw/legendary.py` 的地区列表)。先落数据会让 3 条测试变红,故本轮只交付工具
+  与数据源结论,保持全绿
+- 打开帕底亚的完整步骤(下一轮):
+  1. `python tools/build_sv_locations.py` 落盘(31 区域)
+  2. 在 `pw/story.py` 补帕底亚主线(冠军之路 / 传说之路 / 星尘之路 → 第零区 → 联盟)
+  3. 在 `pw/legendary.py` 补 ≥3 个据点(故勒顿/密勒顿@第零区、四灾厄@祠、厄诡椪@恐洞…)
+  4. `python tools/build_map_graph.py` 重建地图,跑全量测试
+  5. 再按 `_real()/_adopted()` 复核「无真实途径」物种,确认 0 缺失后删叠加层
 ## 1.28.1
 
 ### 勘察结论:PokeAPI 不适合补伽勒尔 DLC / 帕底亚
