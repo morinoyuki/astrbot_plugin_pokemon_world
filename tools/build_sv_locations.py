@@ -123,7 +123,6 @@ def _is_wild(key: str) -> bool:
 def collect() -> dict[str, dict]:
     dex = get_dex()
     out: dict[str, dict] = {}
-    skipped: list[str] = []
     for fname in _files():
         stem = fname[:-4]
         if stem == "SaveData":
@@ -145,12 +144,19 @@ def collect() -> dict[str, dict]:
                 continue                     # 御三家礼物那几行没有等级 → 跳过
             hit = dex.resolve_species(name)          # → (key, entry) | None
             key = str(hit[0]) if hit else ""
-            if not key or not _is_wild(key):
-                # 礼物 / 交换 / 定点:没有等级区间 —— 以前直接丢掉,导致“镇内无池”
+            if not key:
+                continue                          # 归一不出来的名字
+            if not _is_wild(key):
+                # 礼物 / 交换 / 定点行:没有野生等级区间 —— 以前直接丢掉,导致“镇内无池”
                 # 的城镇进不了地图(道馆落点解析失败)。按 Lv5 记成 gift 行,
                 # 让城镇成为 hub(商店/中心)并给道馆一个落点。
-                pool.append([key, 5, 5, "gift", ch])
-            ch = max(1, min(100, int(float(str(row.get("Frequency") or 10)))))
+                pool.append([key, 5, 5, "gift", 100])
+                names += 1
+                continue
+            try:
+                ch = max(1, min(100, int(float(str(row.get("Frequency") or 10)))))
+            except ValueError:
+                ch = 10
             pool.append([key, max(1, lo), max(1, hi), "walk", ch])
             names += 1
         if not pool:
