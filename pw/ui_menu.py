@@ -187,12 +187,15 @@ def render_world_map(entries: list[dict], *, scale: int = SCALE_DEFAULT) -> byte
         {zh, order, unlocked, champion, badges, gyms, current, next_zh, prev_zh}
     """
     try:
-        sc = Screen(scale=scale)
         rows = [dict(e) for e in (entries or []) if isinstance(e, dict)]
+        # 地区多了(第九地区帕底亚)就按行数把画布加高 —— 与战报/早间新闻一样的自适应
+        row_h = 14.6
+        y0 = 19.0
+        need_h = y0 + len(rows) * row_h + 4 + 20      # 内容 + 底部提示条
+        canvas_h = max(160, int(need_h))
+        sc = Screen(scale=scale, h=canvas_h)
         done = sum(1 for e in rows if e.get("champion"))
         sc.title_bar("世界地图", right=f"通关 {done}/{len(rows)} 地区")
-        y0 = 19.0
-        row_h = 14.6
         for i, e in enumerate(rows):
             top = y0 + i * row_h
             bot = top + row_h - 1.6
