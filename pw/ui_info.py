@@ -448,6 +448,21 @@ def _inline_block(sc, top: float, rx0: int, label: str, lcolor, text: str, tcolo
     return top + h + 2
 
 
+def _vcenter_y(sc, box, text_str: str, size: float) -> float:
+    """把一行字在框里**垂直居中**的绘制 y(逻辑坐标)。
+
+    以前胜负横幅是写死的 `24.5` —— 字号 13 时墨迹偏上,看着贴在横幅上半部分。
+    这里用字体墨迹框(`fonts.bbox`)算真实高度,再把它摆到框的正中。
+    """
+    y0, y1 = box[1], box[3]
+    try:
+        from .fonts import bbox as _bbox
+        _x0, by0, _x1, by1 = _bbox(str(text_str), round(size * sc.scale))
+        ink = (by1 - by0) / sc.scale
+        return y0 + (y1 - y0 - ink) / 2 - by0 / sc.scale
+    except Exception:
+        return (y0 + y1) / 2 - size / 2
+
 def render_battle_result(*, outcome: str, title: str = "", lines: list[str] = (),
                          rewards: list[str] = (), growth: list[str] = (),
                          mon: dict | None = None, footer: str = "",
@@ -465,7 +480,8 @@ def render_battle_result(*, outcome: str, title: str = "", lines: list[str] = ()
         d.rounded_rectangle(list(banner), radius=3, fill=color, outline=BOX_EDGE)
         d.rounded_rectangle([banner[0] + 2, banner[1] + 2, banner[2] - 2, banner[3] - 2],
                             radius=2, outline=tuple(min(255, c + 50) for c in color))
-        sc.text_center(120, 24.5, label, size=13, fill=(255, 255, 250), stroke=0.7,
+        sc.text_center(120, _vcenter_y(sc, banner, label, 13), label, size=13,
+                       fill=(255, 255, 250), stroke=0.7,
                        sfill=BOX_SHADOW)
 
         mon = mon if isinstance(mon, dict) else None
