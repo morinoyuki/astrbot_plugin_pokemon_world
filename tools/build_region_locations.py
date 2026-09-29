@@ -13,6 +13,15 @@ python tools/build_region_locations.py --dry-run        # 只统计不写盘
 regions.csv / versions.csv / version_groups.csv / pokemon_species.csv`。
 中文名取 `location_area_prose` 的 `zh-Hans`(南第1区、零区一览…)。
 
+⚠️ 已知限制(1.28.1 实测):
+· 帕底亚:PokeAPI **完全没有**遭遇数据(region/paldea 只有 84 个地点、areas 为空、
+  连中文名都没有)。
+· 伽勒尔 DLC:CSV 里 `the-isle-of-armor-*` / `the-crown-tundra-*` 的行大多是
+  **巢穴/道馆/宝可梦中心**这类区域(`max-den-a…j`),不是真正的野外区域;
+  硬套还会产出重名节点(三处都叫 9 号道路)。
+  → 这两块要落地,得从 **Serebii Pokéarth / Bulbapedia 的区域遭遇表**抓
+  (区域名同样用 Bulbapedia 的 zh langlinks,已在本脚本里实现)。
+
 背景:以前为了"让没有获取途径的宝可梦能抓到",临时做了一层
 `foreign_pools.json` 叠加(把别地区的宝可梦塞进特殊区域)。这里用**真实分布**
 替代它 —— 帕底亚补全后,那一层就可以删掉了。
@@ -25,6 +34,7 @@ import csv
 import json
 import os
 import sys
+import urllib.parse
 import urllib.request
 
 UA = {"User-Agent": "astrbot-plugin-pokemon-world/1.0 (build script)"}
@@ -95,6 +105,47 @@ def _is_wild_species(key: str) -> bool:
     return True
 
 
+BULBA = "https://bulbapedia.bulbagarden.net/w/api.php"
+BULBA_CACHE = os.path.join(os.path.expanduser("~"), ".cache", "pokeapi_zh_names.json")
+
+
+def _bulba_zh(identifier: str) -> str:
+    """区域/地点的官方中文名:PokeAPI 缺名时用 Bulbapedia 的 zh langlinks。
+
+    当年的真实分布就是这么补的名(如 `fields-of-honor` → 「揖礼原野」)。
+    """
+    if not identifier:
+        return ""
+    cache: dict[str, str] = {}
+    if os.path.exists(BULBA_CACHE):
+        try:
+            with open(BULBA_CACHE, encoding="utf-8") as f:
+                cache = json.load(f)
+        except Exception:
+            cache = {}
+    if identifier in cache:
+        return cache[identifier]
+    title = " ".join(w.capitalize() for w in str(identifier).split("-") if w)
+    zh = ""
+    try:
+        url = (BULBA + "?action=query&prop=langlinks&lllang=zh&format=json&redirects=1&titles="
+               + urllib.parse.quote(title))
+        req = urllib.request.Request(url, headers=UA)
+        with urllib.request.urlopen(req, timeout=60) as r:
+            d = json.loads(r.read().decode("utf-8"))
+        for pg in ((d.get("query") or {}).get("pages") or {}).values():
+            for link in (pg.get("langlinks") or []):
+                zh = str(link.get("*") or "")
+                break
+    except Exception as e:      # 查不到不该让整轮挂掉
+        print(f"   ⚠️ Bulbapedia 取「{title}」失败:{e}")
+    cache[identifier] = zh
+    os.makedirs(os.path.dirname(BULBA_CACHE), exist_ok=True)
+    with open(BULBA_CACHE, "w", encoding="utf-8") as f:
+        json.dump(cache, f, ensure_ascii=False)
+    return zh
+
+
 def _has_cjk(text: str) -> bool:
     return any("\u4e00" <= ch <= "\u9fff" for ch in str(text or ""))
 
@@ -140,6 +191,8 @@ def collect(region: str, groups: tuple[str, ...]) -> dict[str, dict]:
             continue
         area_key = areas[aid]["identifier"]
         zh_name = prose.get(aid) or ""
+        if not _has_cjk(zh_name):
+            zh_name = _bulba_zh(area_key)        # ← Bulbapedia 官方中文名
         if not _has_cjk(zh_name):
             # PokeAPI 的 DLC 区域缺中文名 → 用「地点中文名·第N区」合成
             parent = _int(areas[aid]["location_id"])

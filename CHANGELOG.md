@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.28.1
+
+### 勘察结论:PokeAPI 不适合补伽勒尔 DLC / 帕底亚
+
+- 帕底亚:`region/paldea` 只有 84 个地点条目,**areas 全为空**、没有中文名、
+  没有任何遭遇数据 —— PokeAPI 目前不提供朱/紫野生分布
+- 伽勒尔 DLC:`the-isle-of-armor-*` / `the-crown-tundra-*` 的遭遇行大多是
+  **巢穴(max-den-a…j)/道馆/宝可梦中心**这类区域,不是真正的野外区域;
+  按它生成会产出重名节点(三处「9 号道路」)—— 已回退,不采用
+- 结论:这两块要从 **Serebii Pokéarth / Bulbapedia 区域遭遇表**抓;
+  区域中文名继续用 Bulbapedia 的 zh langlinks(工具里已实现,如
+  `fields-of-honor` → 揖礼原野)
+- `tools/build_region_locations.py` 保留(加了对上述坑的注释),叠加层仍未删除
 ## 1.28.0
 
 ### 构建工具:真实野生分布抓取(为删除「外来种叠加层」铺路)
