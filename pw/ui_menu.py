@@ -181,47 +181,49 @@ TOWN_TOP = 105
 
 
 def render_world_map(entries: list[dict], *, scale: int = SCALE_DEFAULT) -> bytes:
-    """世界地图:8 个地区一屏看完 —— 开放/通关状态、徽章进度、下一站。
+    """世界地图:各地区一屏看完 —— 开放/通关状态、徽章进度、下一站。
+
+    版式 = 标题栏 + **等间距**卡片列表 + 底部提示条。卡片高与行间距都是算出来的
+    (行距 = 面板高 + 固定间隔),所以不管几个地区,上下间距完全一致;地区多了
+    就把画布加高,而不是把行挤在一起。
 
     `entries` 每项(由 main.py 组装):
         {zh, order, unlocked, champion, badges, gyms, current, next_zh, prev_zh}
     """
     try:
         rows = [dict(e) for e in (entries or []) if isinstance(e, dict)]
-        # 地区多了(第九地区帕底亚)就按行数把画布加高 —— 与战报/早间新闻一样的自适应
-        row_h = 14.6
-        y0 = 19.0
-        need_h = y0 + len(rows) * row_h + 4 + 20      # 内容 + 底部提示条
-        canvas_h = max(160, int(need_h))
-        sc = Screen(scale=scale, h=canvas_h)
+        panel_h = 16.0
+        gap = 2.4
+        top = 15.0 + gap                     # 标题栏占 3..15,下面同样留一个 gap
+        need = top + len(rows) * (panel_h + gap) + 16
+        sc = Screen(scale=scale, h=max(160, round(need)))
         done = sum(1 for e in rows if e.get("champion"))
         sc.title_bar("世界地图", right=f"通关 {done}/{len(rows)} 地区")
         for i, e in enumerate(rows):
-            top = y0 + i * row_h
-            bot = top + row_h - 1.6
+            y0 = top + i * (panel_h + gap)
+            y1 = y0 + panel_h
             current = bool(e.get("current"))
             unlocked = bool(e.get("unlocked"))
             champion = bool(e.get("champion"))
-            sc.window((5, top, 235, bot), radius=2,
-                      edge=PIN_RED if current else BOX_EDGE,
-                      shadow=(i == 0), hi=False)
-            order = _to_int(e.get("order"), i + 1)
-            sc.text(10, top + 4.2, f"第{order}地区", size=6.4, fill=TEXT_DIM)
+            # 所有卡片同一套画法(只有边框颜色不同):几何完全一致 → 间距看起来才匀
+            sc.window((5, y0, 235, y1), radius=2,
+                      edge=PIN_RED if current else BOX_EDGE, shadow=False, hi=False)
+            sc.text(10, y0 + 4.8, f"第{_to_int(e.get('order'), i + 1)}地区",
+                    size=6.8, fill=TEXT_DIM)
             if current:
-                sc.d.ellipse([40, top + 4.2, 45, top + 9.2], fill=PIN_RED)
-            sc.text(47, top + 2.4, str(e.get("zh") or e.get("key") or "?"),
-                    size=8.4, fill=PIN_RED if current else (TEXT if unlocked else STATUS_OFF))
+                sc.d.ellipse([40, y0 + 4.8, 45.6, y0 + 10.4], fill=PIN_RED)
+            sc.text(47, y0 + 3.0, str(e.get("zh") or e.get("key") or "?"), size=9.2,
+                    fill=PIN_RED if current else (TEXT if unlocked else STATUS_OFF))
+            gyms = _to_int(e.get("gyms"), 8)
             if champion:
-                status, color = f"已通关 {_to_int(e.get('gyms'), 8)}/{_to_int(e.get('gyms'), 8)}", GOLD
+                status, color = f"已通关 {gyms}/{gyms}", GOLD
             elif unlocked:
-                badges = _to_int(e.get("badges"))
-                gyms = _to_int(e.get("gyms"), 8)
-                nxt = str(e.get("next_zh") or "联盟")
-                status, color = f"徽章 {badges}/{gyms} · 下一站 {nxt}", DONE_GREEN
+                status = (f"徽章 {_to_int(e.get('badges'))}/{gyms} · "
+                          f"下一站 {e.get('next_zh') or '联盟'!s}")
+                color = DONE_GREEN
             else:
                 status, color = f"未开放 · 需{_str_prev(e)}冠军", STATUS_OFF
-            sc.text_right(230, top + 4.4, _fit(sc, status, 110, 6.8), size=6.8,
-                          fill=color)
+            sc.text_right(230, y0 + 5.0, _fit(sc, status, 112, 7.0), size=7.0, fill=color)
         sc.footer("◆ 红框 = 你在这里 · 通关一个地区解锁下一个")
         return sc.finish()
     except Exception as e:  # 渲染永远不能把游戏搞崩
