@@ -121,3 +121,24 @@ def test_box_shows_global_index_without_repeating_it_in_text():
         text = _run(p, "2")
         assert _numbers(text) == list(range(PER + 1, 2 * PER + 1)), _numbers(text)
         assert f"第 {PER + 1}-{2 * PER} 只" in text, text.split(chr(10))[1]
+
+
+def test_changelog_and_metadata_version_stay_in_sync():
+    """版本号三处必须一致:CHANGELOG 首段 / metadata.yaml / 本次改动。
+
+    以前用脚本改 CHANGELOG 时锚点写错(`## 1.27.10` 根本不存在),
+    `str.replace` 静默变成空操作 —— 连推了好几个版本 CHANGELOG 却停在 1.27.3。
+    """
+    import re
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1]
+    meta = (root / "metadata.yaml").read_text(encoding="utf-8")
+    ver_meta = re.search(r"^version:\s*([\d.]+)", meta, re.M).group(1)
+    changelog = (root / "CHANGELOG.md").read_text(encoding="utf-8")
+    heads = re.findall(r"^## ([\d.]+)", changelog, re.M)
+    assert heads, "CHANGELOG 里一个版本段都没有"
+    assert heads[0] == ver_meta, f"CHANGELOG 首段 {heads[0]} != metadata {ver_meta}"
+    # 版本段必须严格递减(防止插入位置写错导致乱序)
+    nums = [tuple(int(x) for x in h.split(".")) for h in heads]
+    assert nums == sorted(nums, reverse=True), f"版本段顺序乱了:{heads[:6]}"
