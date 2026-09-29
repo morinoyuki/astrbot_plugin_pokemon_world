@@ -50,5 +50,6 @@ def test_screen_supports_the_hires_pipeline():
 
     sc = Screen(scale=2)
     assert hasattr(sc, "sprite")
-    src = open(os.path.join(_ROOT, "pw", "ui_render.py"), encoding="utf-8").read()
+    with open(os.path.join(_ROOT, "pw", "ui_render.py"), encoding="utf-8") as f:
+        src = f.read()
     assert "hires" in src and "_hires" in src, "Screen 没有 hires 通道"
