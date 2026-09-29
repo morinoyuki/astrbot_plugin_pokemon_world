@@ -99,3 +99,21 @@ def test_every_mon_of_a_page_is_actually_drawn():
                              "cur_hp": 30, "max_hp": 30}],
                             total=29, offset=PER, scale=2)
         assert img.startswith(b"\x89PNG")
+
+
+def test_box_shows_global_index_in_text_and_image():
+    """图旁附带的纯文本要列出本页每只的全局序号(不然取出很难对上)。"""
+    tmp, p = _box_with(29)
+    with tmp:
+        out = _run(p, "2")
+        head = [ln for ln in out.split(chr(10)) if ln.startswith("📋 本页序号")]
+        assert head, out
+        nums = [int(x.split(".")[0]) for x in head[0].split(":", 1)[1].split()]
+        assert nums == list(range(PER + 1, 2 * PER + 1)), nums   # 15..28,不是 14 起
+        # 图片渲染器也接受 offset(真图上每格会印序号)
+        from pw import ui_render as UI
+
+        img = UI.render_box([{"species": "pikachu", "name": "皮卡丘", "level": 10,
+                             "cur_hp": 30, "max_hp": 30}],
+                            total=29, offset=14, scale=2)
+        assert img.startswith(b"\x89PNG")

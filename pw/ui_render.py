@@ -2086,6 +2086,8 @@ def render_box(mons: list[dict], *, capacity: int = 0, money: int = 0,
         # ch×rows 必须让最后一格的下边缘 ≤ 140(footer 在 144..155)
         cols, rows, cw, ch = 2, 7, 116, 17
         for i, mon in enumerate(mons[:cols * rows]):
+            # 格子上印**全局序号**(翻页后接着数):玩家照着填 `/队伍 取出 <序号>`
+            mon = {**mon, "name": (f"{int(offset or 0) + i + 1}." + str(mon.get("name") or mon.get("species") or "?"))}
             cx = 4 + (i % cols) * (cw + 1)
             cy = 19 + (i // cols) * ch
             sc.window((cx, cy, cx + cw - 1, cy + ch - 1), radius=2)
