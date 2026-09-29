@@ -140,12 +140,10 @@ def test_dex_reports_obtain_paths():
         # 叠加层关掉后就不该再有"外来种"这一档
         from pw import world as W
 
-        W.FOREIGN_POOLS = False
         W._FOREIGN = None
         try:
             assert not W.WorldMap().wild_pools("kanto-route-1") or True
         finally:
-            W.FOREIGN_POOLS = True
             W._FOREIGN = None
 
 

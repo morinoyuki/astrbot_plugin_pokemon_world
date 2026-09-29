@@ -1,7 +1,7 @@
 {
  "meta": {
   "source": "locations.json",
-  "region_count": 8
+  "region_count": 9
  },
  "regions": {
   "kanto": {
@@ -6713,6 +6713,353 @@
       "split-decision-ruins"
      ],
      "hub": true
+    }
+   }
+  },
+  "paldea": {
+   "zh": "帕底亚",
+   "gen": 9,
+   "order": 9,
+   "gateway": "paldea-pokemon-league",
+   "nodes": {
+    "paldea-inlet-grotto": {
+     "zh": "海灣洞穴",
+     "kind": "area",
+     "order": 10,
+     "tier": 1,
+     "next": [
+      "paldea-poco-path"
+     ],
+     "hub": false
+    },
+    "paldea-poco-path": {
+     "zh": "小匙小徑",
+     "kind": "area",
+     "order": 20,
+     "tier": 1,
+     "next": [
+      "paldea-inlet-grotto",
+      "paldea-pokemon-league"
+     ],
+     "hub": false
+    },
+    "paldea-pokemon-league": {
+     "zh": "宝可梦联盟",
+     "kind": "town",
+     "order": 30,
+     "tier": 1,
+     "next": [
+      "paldea-poco-path",
+      "paldea-tagtree-thicket"
+     ],
+     "hub": true
+    },
+    "paldea-tagtree-thicket": {
+     "zh": "印記樹林",
+     "kind": "area",
+     "order": 40,
+     "tier": 2,
+     "next": [
+      "paldea-pokemon-league",
+      "paldea-asado-desert"
+     ],
+     "hub": false
+    },
+    "paldea-asado-desert": {
+     "zh": "烘烘沙漠",
+     "kind": "area",
+     "order": 50,
+     "tier": 2,
+     "next": [
+      "paldea-tagtree-thicket",
+      "paldea-south-sea"
+     ],
+     "hub": false
+    },
+    "paldea-south-sea": {
+     "zh": "南之海",
+     "kind": "area",
+     "order": 60,
+     "tier": 2,
+     "next": [
+      "paldea-asado-desert",
+      "paldea-east-sea"
+     ],
+     "hub": false
+    },
+    "paldea-east-sea": {
+     "zh": "东之海",
+     "kind": "area",
+     "order": 70,
+     "tier": 2,
+     "next": [
+      "paldea-south-sea",
+      "paldea-west-sea"
+     ],
+     "hub": false
+    },
+    "paldea-west-sea": {
+     "zh": "西之海",
+     "kind": "area",
+     "order": 80,
+     "tier": 3,
+     "next": [
+      "paldea-east-sea",
+      "paldea-alfornada-cavern"
+     ],
+     "hub": false
+    },
+    "paldea-alfornada-cavern": {
+     "zh": "焙固空洞",
+     "kind": "area",
+     "order": 90,
+     "tier": 3,
+     "next": [
+      "paldea-west-sea",
+      "paldea-dalizapa-passage"
+     ],
+     "hub": false
+    },
+    "paldea-dalizapa-passage": {
+     "zh": "錦穴山道",
+     "kind": "area",
+     "order": 100,
+     "tier": 3,
+     "next": [
+      "paldea-alfornada-cavern",
+      "paldea-north-sea"
+     ],
+     "hub": false
+    },
+    "paldea-north-sea": {
+     "zh": "北之海",
+     "kind": "area",
+     "order": 110,
+     "tier": 3,
+     "next": [
+      "paldea-dalizapa-passage",
+      "paldea-glaseado-mountain"
+     ],
+     "hub": false
+    },
+    "paldea-glaseado-mountain": {
+     "zh": "霜抹山",
+     "kind": "area",
+     "order": 120,
+     "tier": 4,
+     "next": [
+      "paldea-north-sea",
+      "paldea-socarrat-trail"
+     ],
+     "hub": false
+    },
+    "paldea-socarrat-trail": {
+     "zh": "鍋巴林道",
+     "kind": "area",
+     "order": 130,
+     "tier": 4,
+     "next": [
+      "paldea-glaseado-mountain",
+      "paldea-casseroya-lake"
+     ],
+     "hub": false
+    },
+    "paldea-casseroya-lake": {
+     "zh": "大鍋湖",
+     "kind": "area",
+     "order": 140,
+     "tier": 4,
+     "next": [
+      "paldea-socarrat-trail",
+      "paldea-area-zero"
+     ],
+     "hub": false
+    },
+    "paldea-area-zero": {
+     "zh": "第零區",
+     "kind": "area",
+     "order": 150,
+     "tier": 4,
+     "next": [
+      "paldea-casseroya-lake",
+      "paldea-crater"
+     ],
+     "hub": false
+    },
+    "paldea-crater": {
+     "zh": "帕底亚大坑",
+     "kind": "area",
+     "order": 160,
+     "tier": 5,
+     "next": [
+      "paldea-area-zero",
+      "paldea-sp1"
+     ],
+     "hub": false
+    },
+    "paldea-sp1": {
+     "zh": "苍响+藏玛然特收藏箱（TCG）",
+     "kind": "area",
+     "order": 170,
+     "tier": 5,
+     "next": [
+      "paldea-crater",
+      "paldea-wp1"
+     ],
+     "hub": false
+    },
+    "paldea-wp1": {
+     "zh": "帕底亚·WP1",
+     "kind": "area",
+     "order": 180,
+     "tier": 5,
+     "next": [
+      "paldea-sp1",
+      "paldea-ep1"
+     ],
+     "hub": false
+    },
+    "paldea-ep1": {
+     "zh": "北上乡·第1区",
+     "kind": "area",
+     "order": 190,
+     "tier": 5,
+     "next": [
+      "paldea-wp1",
+      "paldea-np1"
+     ],
+     "hub": false
+    },
+    "paldea-np1": {
+     "zh": "蓝莓学园·第1区",
+     "kind": "area",
+     "order": 200,
+     "tier": 6,
+     "next": [
+      "paldea-ep1",
+      "paldea-sp2"
+     ],
+     "hub": false
+    },
+    "paldea-sp2": {
+     "zh": "VMAX特别之组（TCG）",
+     "kind": "area",
+     "order": 210,
+     "tier": 6,
+     "next": [
+      "paldea-np1",
+      "paldea-ep2"
+     ],
+     "hub": false
+    },
+    "paldea-ep2": {
+     "zh": "北上乡·第2区",
+     "kind": "area",
+     "order": 220,
+     "tier": 6,
+     "next": [
+      "paldea-sp2",
+      "paldea-wp2"
+     ],
+     "hub": false
+    },
+    "paldea-wp2": {
+     "zh": "帕底亚·WP2",
+     "kind": "area",
+     "order": 230,
+     "tier": 6,
+     "next": [
+      "paldea-ep2",
+      "paldea-np2"
+     ],
+     "hub": false
+    },
+    "paldea-np2": {
+     "zh": "蓝莓学园·第2区",
+     "kind": "area",
+     "order": 240,
+     "tier": 7,
+     "next": [
+      "paldea-wp2",
+      "paldea-sp3"
+     ],
+     "hub": false
+    },
+    "paldea-sp3": {
+     "zh": "巨型卡包之组 银白战枪＆漆黑幽魂（TCG）",
+     "kind": "area",
+     "order": 250,
+     "tier": 7,
+     "next": [
+      "paldea-np2",
+      "paldea-ep3"
+     ],
+     "hub": false
+    },
+    "paldea-ep3": {
+     "zh": "北上乡·第3区",
+     "kind": "area",
+     "order": 260,
+     "tier": 7,
+     "next": [
+      "paldea-sp3",
+      "paldea-wp3"
+     ],
+     "hub": false
+    },
+    "paldea-wp3": {
+     "zh": "帕底亚·WP3",
+     "kind": "area",
+     "order": 270,
+     "tier": 7,
+     "next": [
+      "paldea-ep3",
+      "paldea-np3"
+     ],
+     "hub": false
+    },
+    "paldea-np3": {
+     "zh": "蓝莓学园·第3区",
+     "kind": "area",
+     "order": 280,
+     "tier": 8,
+     "next": [
+      "paldea-wp3",
+      "paldea-sp4"
+     ],
+     "hub": false
+    },
+    "paldea-sp4": {
+     "zh": "VMAX特别之组 伊布英雄（TCG）",
+     "kind": "area",
+     "order": 290,
+     "tier": 8,
+     "next": [
+      "paldea-np3",
+      "paldea-sp5"
+     ],
+     "hub": false
+    },
+    "paldea-sp5": {
+     "zh": "帕底亚·SP5",
+     "kind": "area",
+     "order": 300,
+     "tier": 8,
+     "next": [
+      "paldea-sp4",
+      "paldea-sp6"
+     ],
+     "hub": false
+    },
+    "paldea-sp6": {
+     "zh": "VSTAR特别组合（TCG）",
+     "kind": "area",
+     "order": 310,
+     "tier": 8,
+     "next": [
+      "paldea-sp5"
+     ],
+     "hub": false
     }
    }
   }

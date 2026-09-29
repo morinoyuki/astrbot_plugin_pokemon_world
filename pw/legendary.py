@@ -69,6 +69,16 @@ _SITES: dict[str, list[dict]] = {
         {"species": "zacian", "location": "slumbering-weald", "need": 0, "champion": True, "level": 70},
         {"species": "zamazenta", "location": "slumbering-weald", "need": 0, "champion": True, "level": 70},
     ],
+    "paldea": [
+        {"species": "koraidon", "location": "paldea-area-zero", "need": 8, "level": 72},
+        {"species": "miraidon", "location": "paldea-area-zero", "need": 8, "level": 72},
+        {"species": "tinglu", "location": "paldea-asado-desert", "need": 6, "level": 60},
+        {"species": "wochien", "location": "paldea-dalizapa-passage", "need": 6, "level": 60},
+        {"species": "chienpao", "location": "paldea-glaseado-mountain", "need": 6, "level": 60},
+        {"species": "chiyu", "location": "paldea-casseroya-lake", "need": 6, "level": 60},
+        {"species": "ogerpon", "location": "paldea-ep1", "need": 8, "level": 65},
+        {"species": "terapagos", "location": "paldea-crater", "need": 8, "level": 70},
+    ],
 }
 
 

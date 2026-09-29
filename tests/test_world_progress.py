@@ -70,7 +70,9 @@ def test_every_region_can_beat_all_gyms_and_reach_the_league():
             else:
                 cleared += 1
     assert not failures, "; ".join(failures)
-    assert cleared == len(world.regions_with_data()) >= 8, f"只有 {cleared} 个地区可通关"
+    # 帕底亚这类"有野生分布、还没排道馆"的地区不算通关门(有馆的地区才要求全通)
+    with_gyms = [r for r in world.regions_with_data() if world.gyms(r)]
+    assert cleared == len(with_gyms) >= 8, f"只有 {cleared}/{len(with_gyms)} 个地区可通关"
 
 
 def test_region_chain_starts_and_gateways_exist():

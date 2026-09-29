@@ -203,6 +203,26 @@ STORY: dict[str, dict] = {
              "desc": "冠军之后,微寐森林的浓雾中浮现出两道身影。"},
         ],
     },
+    "paldea": {
+        "leader": "克拉韦尔校长 / 妮莫",
+        "org": "天星队",
+        "stages": [
+            {"key": "出发", "kind": "badge", "need": 0, "title": "桌台市出发", "desc": "从克拉韦尔校长手中领取御三家,开始寻宝之旅。"},
+            {"key": "岩壁泰坦", "kind": "boss", "need": 2, "location": "paldea-sp1", "title": "传说之路:岩壁泰坦", "desc": "南第1区的洞穴里传来巨响 —— 泰坦宝可梦毛崖蟹挡在路上。"},
+            {"key": "圆模镇道馆", "kind": "badge", "need": 1, "title": "圆模镇道馆:阿枫", "desc": "虫系馆主阿枫 —— 第一枚徽章。"},
+            {"key": "深钵镇道馆", "kind": "badge", "need": 2, "title": "深钵镇道馆:阿芝", "desc": "草系馆主阿芝把道馆布置成了迷宫。"},
+            {"key": "天星队基地", "kind": "boss", "need": 3, "location": "paldea-asado-desert", "title": "天星队基地战", "org": "天星队", "desc": "天星队把基地车开进了沙漠,替被欺负的同学讨个说法。"},
+            {"key": "酿光市道馆", "kind": "badge", "need": 4, "title": "酿光市道馆:奇树", "desc": "电系馆主奇树要把你的挑战全程直播。"},
+            {"key": "玻瓶市道馆", "kind": "badge", "need": 5, "title": "玻瓶市道馆:青木", "desc": "一般系馆主青木一脸疲惫,实力却货真价实。"},
+            {"key": "空中泰坦", "kind": "boss", "need": 4, "location": "paldea-wp1", "title": "传说之路:空中泰坦", "desc": "西第1区的山崖上,下石鸟正俯冲下来。"},
+            {"key": "渍沁镇道馆", "kind": "badge", "need": 6, "title": "渍沁镇道馆:莱姆", "desc": "幽灵系馆主莱姆的说唱对决。"},
+            {"key": "潜行泰坦", "kind": "boss", "need": 6, "location": "paldea-socarrat-trail", "title": "传说之路:潜行泰坦", "desc": "地底传来震动 —— 拖拖蚓把整条路挖塌了。"},
+            {"key": "崎岖山道馆", "kind": "badge", "need": 7, "title": "崎岖山道馆:古鲁夏", "desc": "冰系馆主古鲁夏在雪线上等你。"},
+            {"key": "阿尔佛纳达道馆", "kind": "badge", "need": 8, "title": "阿尔佛纳达道馆:图莉普", "desc": "超能力系馆主图莉普 —— 第八枚徽章。"},
+            {"key": "帕底亚联盟", "kind": "league", "need": 8, "location": "paldea-pokemon-league", "title": "帕底亚联盟:四天王与冠军", "desc": "集齐八枚徽章,挑战四天王与冠军妮莫。"},
+            {"key": "第零区", "kind": "epilogue", "need": 8, "location": "paldea-area-zero", "title": "第零区:时光机器", "desc": "穿过第零区,直面时光机器与传说中的宝可梦。"},
+        ],
+    },
 }
 
 
