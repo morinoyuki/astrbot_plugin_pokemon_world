@@ -661,6 +661,8 @@ class Battle:
     escaped: bool = False
     # 双打:每侧最多 2 只同时上场(单打恒为 False,一切旧流程不变)
     doubles: bool = False
+    # 天气是否维持到战斗结束(开场环境/道馆主场天气,以及改天气的招式 —— 用户要求)
+    weather_permanent: bool = False
     # 当前招式命中的目标数 >1(范围招式),伤害按正作乘 0.75
     _spread_multi: bool = False
     # 每回合重置的随机数调用计数(避免同 salt 的随机数完全相关)
@@ -709,6 +711,7 @@ class Battle:
             "stall_turns": self.stall_turns,
             "stalled": self.stalled,
             "doubles": self.doubles,
+            "weather_permanent": self.weather_permanent,
             "_last_move_any": self._last_move_any,
         }
 
@@ -737,6 +740,7 @@ class Battle:
         b.stall_turns = int(d.get("stall_turns", 0) or 0)
         b.stalled = bool(d.get("stalled", False))
         b.doubles = bool(d.get("doubles", False))
+        b.weather_permanent = bool(d.get("weather_permanent", False))
         return b
 
     # ── 展示 ──
@@ -842,6 +846,14 @@ class Battle:
         self._try_imposter(self.player)
         self._try_imposter(self.enemy)
         self._check_faints()
+        # 开场就有的天气(环境/道馆主场)不受 5 回合限制 —— 维持到战斗结束
+        if self.weather:
+            self.weather_permanent = True
+            self.weather_turns = 999
+        return list(self.log)
+        if self.weather:            # 环境/主场天气:维持到战斗结束
+            self.weather_permanent = True
+            self.weather_turns = 999
         return list(self.log)
 
     def step(self, player_action: dict, enemy_action: dict | str = "auto") -> list[str]:
@@ -982,6 +994,9 @@ class Battle:
             return 0
         mv = get_dex().moves.get(action.get("move", ""), {})
         pri = int(mv.get("priority", 0) or 0)
+        if mv.get("weather"):
+            # 改天气的招式优先度最高 —— 先把天气摆好(用户要求)
+            return 6
         mon = side.slot_mon(slot)
         if mon and mv.get("category") == "Status" and mon.has_ability("prankster"):
             pri += 1
@@ -2789,7 +2804,7 @@ class Battle:
         if entry.get("sideCondition"):
             self._set_side_condition(side, foe_side, mon, entry)
         if entry.get("weather"):
-            self._set_field("weather", entry["weather"], mon)
+            self._set_field("weather", entry["weather"], mon, permanent=True)
         if entry.get("terrain"):
             self._set_field("terrain", entry["terrain"], mon)
         if entry.get("pseudoWeather"):
@@ -3119,14 +3134,21 @@ class Battle:
             tgt.screens["tailwind"] = 4
             self.log.append("顺风吹起了!")
 
-    def _set_field(self, kind: str, value: str, mon: Pokemon) -> None:
+    def _set_field(self, kind: str, value: str, mon: Pokemon, *,
+                   permanent: bool = False) -> None:
         eff = (ITEMS.get(mon.item) or {}).get("effect") or {}
         if kind == "weather":
             value = WEATHER_ALIAS.get(str(value).lower().replace(" ", ""), str(value))
             turns = eff.get("weather_turns", 5) if eff.get("weather") == value else 5
             self.weather = value
+            if permanent:
+                turns = 999
+            self.weather_permanent = bool(permanent) or self.weather_permanent
             self.weather_turns = turns
-            self.log.append(f"天气变成了{WEATHER_ZH.get(value, value)}!")
+            self.log.append(
+                f"天气变成了{WEATHER_ZH.get(value, value)}!"
+                + ("(这场战斗会一直维持)" if permanent else "")
+            )
         else:
             turns = eff.get("terrain_turns", 5)
             self.terrain = value
@@ -3136,13 +3158,13 @@ class Battle:
     # ── 回合结束 ──
     def _tick_end_of_turn(self) -> None:
         # 天气计数
-        if self.weather:
+        if self.weather and not self.weather_permanent:
             self.weather_turns -= 1
             if self.weather_turns <= 0:
                 self.log.append(f"{WEATHER_ZH.get(self.weather, self.weather)}停止了。")
                 self.log.append("风停了,天气恢复了平静。")
                 self.weather = ""
-        else:
+        elif not self.weather:
             self.weather_turns = 0
         if self.terrain:
             self.terrain_turns -= 1

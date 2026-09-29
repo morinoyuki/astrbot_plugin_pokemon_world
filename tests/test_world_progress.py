@@ -188,18 +188,38 @@ def test_weather_change_and_expiry_are_announced():
         lines = B.start(fresh, [{"species": "pikachu", "level": 10}],
                         kind="wild", weather=weather, day=1)
         assert any("沙暴" in line for line in lines), lines
-    # ② 天气计时归零 → “风停了”
+    # ② 永久天气(开场/招式改的)不会自己停;非永久天气到期才报“风停了”
     bt = Battle(player=Side("player", [create_pokemon("snorlax", 30)]),
                 enemy=Side("enemy", [create_pokemon("snorlax", 30)]), weather="sand")
     bt.start()
     logs: list[str] = []
     for _ in range(8):
-        logs += bt.step({"type": "move", "move": "tackle"}, {"type": "move", "move": "tackle"})
-        if not bt.weather:
-            break
-    assert not bt.weather, "天气应该会到期"
-    assert any("风停了" in x for x in logs), logs[-6:]
+        logs += bt.step({"type": "move", "move": "tackle"},
+                        {"type": "move", "move": "tackle"})
+    assert bt.weather == "sand", "开场天气应该一直维持到战斗结束"
+    assert bt.weather_permanent and bt.weather_turns >= 1
+    assert not any("风停了" in x for x in logs), logs[-6:]
 
+    # 招式改天气同样是永久的(用户要求)
+    bt2 = Battle(player=Side("player", [create_pokemon("hippowdon", 30)]),
+                 enemy=Side("enemy", [create_pokemon("pikachu", 30)]))
+    bt2.start()
+    turns = [{"type": "move", "move": "sandstorm"}, {"type": "move", "move": "tackle"}]
+    for _ in range(6):
+        if bt2.finished:
+            break
+        bt2.step(turns[0], turns[1]) if (bt2.player.mon.pp.get("sandstorm") or 0) > 0 \
+            else bt2.step(turns[1], turns[1])
+    assert bt2.weather == "sand" and bt2.weather_permanent, (bt2.weather, bt2.weather_turns)
+
+    # 非永久天气(道具/技能给的临时天气)到期仍有提示
+    bt3 = Battle(player=Side("player", [create_pokemon("snorlax", 30)]),
+                 enemy=Side("enemy", [create_pokemon("snorlax", 30)]))
+    bt3.start()
+    bt3.weather, bt3.weather_turns, bt3.weather_permanent = "rain", 1, False
+    out = bt3.step({"type": "move", "move": "tackle"},
+                   {"type": "move", "move": "tackle"})
+    assert not bt3.weather and any("风停了" in x for x in out), out
 
 def test_consecutive_same_weather_events_are_rotated():
     """连续两天同一种天气异常 → 自动轮换(不再老是沙暴)。"""
