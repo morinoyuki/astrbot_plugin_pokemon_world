@@ -1,5 +1,30 @@
 # Changelog
 
+## 1.28.0
+
+### 构建工具:真实野生分布抓取(为删除「外来种叠加层」铺路)
+
+- 新增 `tools/build_region_locations.py`:从 PokeAPI 抓**真实野生分布**并合并进
+  `pw/static/locations.json`(只新增/补池,不覆盖已有 620 条):
+  - CSV 路径(快):`encounters.csv` + `location_areas.csv` + `location_names.csv` +
+    `location_area_prose.csv`(zh-Hans 中文名)+ `encounter_slots.csv` →
+    `encounter_methods.csv`(注意:encounters.csv 本身没有方法列,必须经 slot 关联)
+  - 实时接口路径(带 UA 与本地缓存):CSV 里缺的地区自动改走 `/region/` `/location/`
+    `/location-area/`
+  - 过滤与自检一致:传说/幻兽不进野生池、非野生方法(礼物/定点)丢弃、
+    无中文名的区域跳过;DLC 区域(铠之孤岛/冠之雪原)额外挂到对应版本组
+  - `--region galar|paldea`(可重复)、`--dry-run`;中文名缺失时可用「地点中文名·第N区」兜底
+- **本轮勘察结论(阻塞点已定位,数据尚未落地)**:
+  - PokeAPI 的 CSV 导出里**没有帕底亚**:`regions.csv` 最高只到 gen 8,
+    遭遇数据最新为 `sword/shield` + 铠之孤岛/冠之雪原
+  - 实时接口里帕底亚只有 84 个**地点**条目、`areas` 为空、且**没有中文名**
+    —— 也就是说 PokeAPI 目前**没有**朱/紫的野生遭遇数据
+  - 伽勒尔 DLC 区域在 CSV 里有 38 个、625 种宝可梦,但 PokeAPI 的
+    `location_names/location_area_prose` 缺这些区域的中文名(原分布当年是用
+    **Bulbapedia 中文 langlinks** 补的名)
+  - 因此:`foreign_pools.json` 叠加层**暂不删除**(帕底亚数据未落地前删掉会让一批
+    9 代宝可梦变成无获取途径、自检 ② 直接红)。下一步:接 Bulbapedia langlinks
+    补中文名 / 换用社区维护的 SV 遭遇数据集,落地后再删叠加层并复核 0 缺失
 ## 1.27.13
 
 ### 修复
