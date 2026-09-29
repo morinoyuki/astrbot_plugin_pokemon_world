@@ -101,19 +101,23 @@ def test_every_mon_of_a_page_is_actually_drawn():
         assert img.startswith(b"\x89PNG")
 
 
-def test_box_shows_global_index_in_text_and_image():
-    """图旁附带的纯文本要列出本页每只的全局序号(不然取出很难对上)。"""
+
+def test_box_shows_global_index_without_repeating_it_in_text():
+    """序号印在图片每格上就够了,纯文本不再重复列;关图时的文字版仍带序号。"""
+    from pw import ui_render as UI
+
+    img = UI.render_box([{"species": "pikachu", "name": "皮卡丘", "level": 10,
+                          "cur_hp": 30, "max_hp": 30}],
+                        total=29, offset=14, scale=2)
+    assert img.startswith(b"\x89PNG")
+
     tmp, p = _box_with(29)
     with tmp:
+        p.config = {"ui_image": True}          # 图片模式:不再有“本页序号”清单
         out = _run(p, "2")
-        head = [ln for ln in out.split(chr(10)) if ln.startswith("📋 本页序号")]
-        assert head, out
-        nums = [int(x.split(".")[0]) for x in head[0].split(":", 1)[1].split()]
-        assert nums == list(range(PER + 1, 2 * PER + 1)), nums   # 15..28,不是 14 起
-        # 图片渲染器也接受 offset(真图上每格会印序号)
-        from pw import ui_render as UI
-
-        img = UI.render_box([{"species": "pikachu", "name": "皮卡丘", "level": 10,
-                             "cur_hp": 30, "max_hp": 30}],
-                            total=29, offset=14, scale=2)
-        assert img.startswith(b"\x89PNG")
+        assert "本页序号" not in out, out
+        assert "取出" in out, out
+        p.config = {"ui_image": False}         # 文字模式:列表本身带全局序号
+        text = _run(p, "2")
+        assert _numbers(text) == list(range(PER + 1, 2 * PER + 1)), _numbers(text)
+        assert f"第 {PER + 1}-{2 * PER} 只" in text, text.split(chr(10))[1]

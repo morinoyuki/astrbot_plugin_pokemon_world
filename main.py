@@ -1261,11 +1261,6 @@ class PokemonWorldPlugin(Star):
                 _page_note + " —— 翻页:电脑 2 / 电脑 下一页 / 电脑 上一页"
             )
         _off = _per * (_page - 1)
-        # 附属纯文本里也写清"本页每只的全局序号",不然 `取出 <序号>` 很难对
-        _idx_line = "\n📋 本页序号:" + " ".join(
-            f"{_off + i + 1}.{md.get('name') or md.get('species') or '?'!s}"
-            for i, md in enumerate(mons)
-        ) if mons else ""
         text = self._box_text(t, mons, offset=_off)
         async for r in self._emit_ui(
             event, "box",
@@ -1273,8 +1268,7 @@ class PokemonWorldPlugin(Star):
                                    total=len(t.box), offset=_off,
                                   money=t.money, scale=self._img_scale()),
             text=text,
-            hint=(f"取出:`/队伍 取出 <序号>`(队伍满 {MAX_PARTY} 只时先存一只)"
-                  + _idx_line),
+            hint=f"取出:`/队伍 取出 <序号>`(队伍满 {MAX_PARTY} 只时先存一只)",
         ):
             yield r
 
