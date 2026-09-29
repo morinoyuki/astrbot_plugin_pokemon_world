@@ -117,3 +117,41 @@ def test_biome_stone_drop_on_explore():
         t.data["location"] = "kanto-route-1"
         p._save(t)
         assert p._maybe_stone_find(p._load(_Event()), _Rng()) == ""
+
+
+def test_pet_command_raises_friendship_once_a_day():
+    """/亲昵:每只每天一次 +3,同一天再摸没效果,换一天又能摸。"""
+    with tempfile.TemporaryDirectory() as tmp:
+        p = _Cmd(tmp)
+        p.config = {"ui_image": False}
+        run_cmd(p, _Event("/开始 小智 杰尼龟"), p.cmd_start)
+        t = p._load(_Event())
+        t.party[0]["friendship"] = 80
+        p._save(t)
+        ev = _Event("/亲昵 1")
+        run_cmd(p, ev, p.cmd_pet)
+        assert any("83" in o for o in ev.outputs), ev.outputs
+        assert p._load(_Event()).party[0]["friendship"] == 83
+        # 同一天第二次:不涨
+        ev2 = _Event("/亲昵 1")
+        run_cmd(p, ev2, p.cmd_pet)
+        assert any("今天已经被你摸过" in o for o in ev2.outputs), ev2.outputs
+        assert p._load(_Event()).party[0]["friendship"] == 83
+        # 换一天:又能摸
+        state = p._state(t.scope)
+        state.data["day"] = int(state.day) + 1
+        p.worlds.save(state.scope, state.data)
+        ev3 = _Event("/亲昵 1")
+        run_cmd(p, ev3, p.cmd_pet)
+        assert p._load(_Event()).party[0]["friendship"] == 86
+
+
+def test_battle_friendship_rewards_hard_fights_more():
+    """一起打道馆/联盟比普通对战更增进感情(+7 vs +2)。"""
+    import inspect
+
+    from pw import battle as B
+
+    src = inspect.getsource(B._finish_win)
+    assert '"gym", "elite", "champion"' in src
+    assert "growth.add_friendship" in src

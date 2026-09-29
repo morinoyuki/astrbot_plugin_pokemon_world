@@ -596,7 +596,11 @@ def _finish_win(
             cur, share, daytime=daytime,
             party=[str(m.species) for m in battle.player.party],
         )
-        cur.friendship = min(255, cur.friendship + 2)
+        # 一起打过硬仗更亲:道馆/四天王/冠军 +7,普通对战 +2
+        growth.add_friendship(
+            cur, 7 if str(meta.get("kind") or "") in ("gym", "elite", "champion")
+            else 2
+        )
         _owner.party[_idx] = mon_to_dict(cur, _owner.party[_idx])
         res.growth.append(
             f"{cur.display}: +{share} EXP"

@@ -5750,6 +5750,46 @@ class PokemonWorldPlugin(Star):
         async for r in self._coop_emit(event, host, view, lines, hint=hint, text=text):
             yield r
 
+    @filter.command("亲昵", alias={"抚摸", "摸头"})
+    async def cmd_pet(self, event: AstrMessageEvent):
+        """/亲昵 <序号> —— 摸摸宝可梦,提升亲密度(每只每天一次)"""
+        t, err = self._require(event)
+        if err:
+            yield event.plain_result(err)
+            return
+        arg = self._args(event, ("亲昵", "抚摸", "摸头")).strip()
+        idx = coerce_int(arg, 0)
+        if not 1 <= idx <= len(t.party):
+            yield event.plain_result(
+                f"用法:`/亲昵 <队伍序号>`(1-{len(t.party)})—— 摸摸它,亲密度 +3(每天每只一次)。"
+            )
+            return
+        state = self._state(t.scope)
+        md = t.party[idx - 1]
+        mon = B.dict_to_mon(md)
+        name = mon.display
+        if int(mon.friendship or 0) >= 255:
+            yield event.plain_result(f"💞 {name} 已经和你形影不离了,不用再撒娇啦。")
+            return
+        if str(md.get("pet_day") or "") == str(state.day):
+            yield event.plain_result(
+                f"💤 {name} 今天已经被你摸过啦(每只每天一次),明天再来吧。"
+            )
+            return
+        before = int(mon.friendship or 0)
+        growth.add_friendship(mon, 3)
+        t.commit(idx - 1, mon)
+        # 记“今天摸过了”必须写在 commit **之后**(commit 会用引擎对象重写这只)
+        t.party[idx - 1]["pet_day"] = state.day
+        self._save(t)
+        now = int(mon.friendship or 0)
+        heart = growth.friendship_hearts(now)
+        yield event.plain_result(
+            f"💗 你摸了摸 {name},它开心地蹭了蹭你的手。"
+            f"\n亲密度 {before} → {now}({growth.friendship_tier(now)} {heart})"
+            + ("\n✨ 亲密度够高了,它好像随时会进化 —— 升一级试试!"
+               if now >= 100 > before else "")
+        )
     async def _pvp_challenge(self, event, t: Trainer, target_uid: str,
                              target_name: str, arg: str):
         """`/对战 @某人 [赌注 N]` —— 发起挑战。"""
