@@ -33,8 +33,9 @@ VERSIONS = {
     "kalos": "XY",
     "galar": "SwSh",
     "alola": "USUM",
+    "paldea": "SV",
 }
-INCLUDED = ["kanto", "johto", "hoenn", "sinnoh", "unova", "kalos", "galar", "alola"]
+INCLUDED = ["kanto", "johto", "hoenn", "sinnoh", "unova", "kalos", "galar", "alola", "paldea"]
 
 
 _MEGA_STONE_CACHE: dict[str, str] | None = None
@@ -504,6 +505,34 @@ DATA = {
     },
 }
 
+
+DATA["paldea"] = {
+    "gyms": [
+        g("paldea-cortondo", "阿枫", "Katy", "圆模道馆", "Bug", "圆模徽章",
+          "Cortondo Badge", [("nymble", 14), ("tarountula", 15)]),
+        g("paldea-artazon", "寇沙", "Brassius", "深钵道馆", "Grass", "深钵徽章",
+          "Artazon Badge", [("smoliv", 16), ("petilil", 17), ("sudowoodo", 18)]),
+        g("paldea-levincia", "奇树", "Iono", "酿光道馆", "Electric", "酿光徽章",
+          "Levincia Badge", [("wattrel", 23), ("luxio", 24), ("mismagius", 25)]),
+        g("paldea-cascarrafa", "海岱", "Kofu", "玻瓶道馆", "Water", "玻瓶徽章",
+          "Cascarrafa Badge", [("veluza", 29), ("wugtrio", 30), ("crabominable", 31)]),
+        g("paldea-medali", "青木", "Larry", "锦汇道馆", "Normal", "锦汇徽章",
+          "Medali Badge", [("komala", 35), ("dudunsparce", 36), ("staraptor", 37)]),
+        g("paldea-montenevera", "莱姆", "Ryme", "冰柜道馆", "Ghost", "冰柜徽章",
+          "Montenevera Badge", [("mimikyu", 41), ("banette", 42), ("toxtricity", 43)]),
+        g("paldea-alfornada", "莉普", "Tulip", "焙固道馆", "Psychic", "焙固徽章",
+          "Alfornada Badge", [("gardevoir", 44), ("espathra", 45), ("farigiraf", 46)]),
+        g("paldea-glaseado-mountain", "古鲁夏", "Grusha", "霜抹山道馆", "Ice", "霜抹山徽章",
+          "Glaseado Badge", [("frosmoth", 47), ("beartic", 48), ("cetitan", 48)]),
+    ],
+    "elite4": [
+        {"name": "辛俐", "name_en": "Rika", "title": "四天王", "type": "Ground", "team": [{"species": "whiscash", "level": 57}, {"species": "camerupt", "level": 57}, {"species": "donphan", "level": 58}, {"species": "dugtrio", "level": 58}, {"species": "clodsire", "level": 59}]},
+        {"name": "波琵", "name_en": "Poppy", "title": "四天王", "type": "Steel", "team": [{"species": "copperajah", "level": 58}, {"species": "bronzong", "level": 58}, {"species": "corviknight", "level": 58}, {"species": "magnezone", "level": 59}, {"species": "tinkaton", "level": 60}]},
+        {"name": "青木", "name_en": "Larry", "title": "四天王", "type": "Flying", "team": [{"species": "tropius", "level": 59}, {"species": "staraptor", "level": 59}, {"species": "altaria", "level": 59}, {"species": "flamigo", "level": 60}, {"species": "dudunsparce", "level": 61}]},
+        {"name": "八朔", "name_en": "Hassel", "title": "四天王", "type": "Dragon", "team": [{"species": "noivern", "level": 60}, {"species": "dragalge", "level": 60}, {"species": "flapple", "level": 60}, {"species": "baxcalibur", "level": 61}, {"species": "dragapult", "level": 62}]},
+    ],
+    "champion": {"name": "也慈", "name_en": "Geeta", "title": "冠军", "team": [{"species": "espathra", "level": 62}, {"species": "avalugg", "level": 62}, {"species": "kingambit", "level": 62}, {"species": "veluza", "level": 62}, {"species": "glimmora", "level": 63}, {"species": "dragapult", "level": 63}]},
+}
 
 def norm_species(value: str) -> str:
     return re.sub(r"[^a-z0-9]", "", value.lower())

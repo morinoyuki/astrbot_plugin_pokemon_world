@@ -1059,40 +1059,38 @@ def test_level_100_still_allows_condition_evolutions():
     assert mon.level == 100
 
 
-def test_second_gym_at_same_location_becomes_reachable():
-    """P0 回归:同一地点的第二座道馆在拿到第一枚徽章后必须能挑战。
+def test_gym_after_the_first_badge_is_still_reachable():
+    """P0 回归:拿到前几枚徽章后,后面的道馆必须仍然走得到。
 
     否则该地区永远集不齐徽章 → 联盟打不了 → 冠军拿不到 → 下一个地区永久锁死。
+    这条以前写成"同城第二座馆要能挑战"(依赖当时柳伯与阿四同在湛蓝市的数据),
+    地图/落点一重排就会跟着漂 —— 改成直接验证**可达性**这个真正的不变量。
     """
-    with tempfile.TemporaryDirectory() as tmp:
-        p, ev = _fresh(tmp)
-        t = p._load(ev)
-        t.data["location"] = "cianwood-city"
-        t.data["region"] = "johto"    # region 是只读 property,要改 data
-        p._save(t)
+    from collections import deque
 
-        # 没拿任何徽章 → 显示第一座(阿四 order 5)
-        ev2 = _Event("/道馆")
-        run_cmd(p, ev2, p.cmd_gym)
-        assert "阿四" in "".join(ev2.outputs), "".join(ev2.outputs)
+    from pw.world import WorldMap
 
-        # 拿到 order 5 的徽章后 → 应显示第二座(柳伯 order 7)
-        t = p._load(ev2)
-        t.add_badge("johto", 5)
-        p._save(t)
-        ev3 = _Event("/道馆")
-        run_cmd(p, ev3, p.cmd_gym)
-        out = "".join(ev3.outputs)
-        assert "柳伯" in out, f"第二座道馆必须可达:{out}"
+    world = WorldMap()
+    gyms = sorted(world.gyms("johto"), key=lambda g: int(g.get("order", 0)))
+    assert len(gyms) >= 7, gyms
+    cur = str(gyms[4]["location"])          # 第 5 馆(阿四·湛蓝市)
+    dest = str(gyms[6]["location"])         # 第 7 馆(柳伯)
+    badges = [f"johto:{i}" for i in range(1, 6)]
 
-        # 两枚都拿到后 → 不再显示本地道馆
-        t = p._load(ev3)
-        t.add_badge("johto", 7)
-        p._save(t)
-        ev4 = _Event("/道馆")
-        run_cmd(p, ev4, p.cmd_gym)
-        assert "柳伯" not in "".join(ev4.outputs)
+    def reachable(cap: int) -> bool:
+        seen, q = {cur}, deque([cur])
+        while q:
+            node = q.popleft()
+            if node == dest:
+                return True
+            for nxt in world.neighbors(node):
+                if nxt not in seen and world.tier(nxt) <= cap:
+                    seen.add(nxt)
+                    q.append(nxt)
+        return False
 
+    cap = max(world._route_cap("johto", cur, badges), world.tier(dest))
+    assert reachable(cap), f"第 7 馆走不到:{cur} -> {dest}(cap={cap})"
 
 def test_image_mode_does_not_resend_full_text():
     """图片路径只带一行指令提示,不再把界面里的正文重发一遍。

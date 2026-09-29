@@ -505,7 +505,7 @@
     },
     {
      "order": 7,
-     "location": "cianwood-city",
+     "location": "safari-zone-gate",
      "leader": "柳伯",
      "leader_en": "Pryce",
      "title": "卡吉道馆",
@@ -1549,7 +1549,7 @@
     },
     {
      "order": 6,
-     "location": "icirrus-city",
+     "location": "village-bridge",
      "leader": "风露",
      "leader_en": "Skyla",
      "title": "吹寄道馆",
@@ -1577,7 +1577,7 @@
     },
     {
      "order": 7,
-     "location": "undella-town",
+     "location": "icirrus-city",
      "leader": "夏卡",
      "leader_en": "Drayden",
      "title": "双龙道馆",
@@ -1830,7 +1830,7 @@
     },
     {
      "order": 4,
-     "location": "pokemon-village",
+     "location": "laverre-city",
      "leader": "福爷",
      "leader_en": "Ramos",
      "title": "香薰道馆",
@@ -1927,7 +1927,7 @@
     },
     {
      "order": 8,
-     "location": "couriway-town",
+     "location": "friend-safari",
      "leader": "得抚",
      "leader_en": "Wulfric",
      "title": "映雪道馆",
@@ -2829,6 +2829,351 @@
      {
       "species": "snorlax",
       "level": 58
+     }
+    ]
+   }
+  },
+  "paldea": {
+   "zh": "帕底亚",
+   "version": "SV",
+   "gyms": [
+    {
+     "order": 1,
+     "location": "paldea-cortondo",
+     "leader": "阿枫",
+     "leader_en": "Katy",
+     "title": "圆模道馆",
+     "type": "Bug",
+     "badge": "圆模徽章",
+     "badge_en": "Cortondo Badge",
+     "team": [
+      {
+       "species": "nymble",
+       "level": 14
+      },
+      {
+       "species": "tarountula",
+       "level": 15
+      }
+     ]
+    },
+    {
+     "order": 2,
+     "location": "paldea-artazon",
+     "leader": "寇沙",
+     "leader_en": "Brassius",
+     "title": "深钵道馆",
+     "type": "Grass",
+     "badge": "深钵徽章",
+     "badge_en": "Artazon Badge",
+     "team": [
+      {
+       "species": "smoliv",
+       "level": 16
+      },
+      {
+       "species": "petilil",
+       "level": 17
+      },
+      {
+       "species": "sudowoodo",
+       "level": 18
+      }
+     ]
+    },
+    {
+     "order": 3,
+     "location": "paldea-levincia",
+     "leader": "奇树",
+     "leader_en": "Iono",
+     "title": "酿光道馆",
+     "type": "Electric",
+     "badge": "酿光徽章",
+     "badge_en": "Levincia Badge",
+     "team": [
+      {
+       "species": "wattrel",
+       "level": 23
+      },
+      {
+       "species": "luxio",
+       "level": 24
+      },
+      {
+       "species": "mismagius",
+       "level": 25
+      }
+     ]
+    },
+    {
+     "order": 4,
+     "location": "paldea-cascarrafa",
+     "leader": "海岱",
+     "leader_en": "Kofu",
+     "title": "玻瓶道馆",
+     "type": "Water",
+     "badge": "玻瓶徽章",
+     "badge_en": "Cascarrafa Badge",
+     "team": [
+      {
+       "species": "veluza",
+       "level": 29
+      },
+      {
+       "species": "wugtrio",
+       "level": 30
+      },
+      {
+       "species": "crabominable",
+       "level": 31,
+       "item": "crabominite"
+      }
+     ]
+    },
+    {
+     "order": 5,
+     "location": "paldea-medali",
+     "leader": "青木",
+     "leader_en": "Larry",
+     "title": "锦汇道馆",
+     "type": "Normal",
+     "badge": "锦汇徽章",
+     "badge_en": "Medali Badge",
+     "team": [
+      {
+       "species": "komala",
+       "level": 35
+      },
+      {
+       "species": "dudunsparce",
+       "level": 36
+      },
+      {
+       "species": "staraptor",
+       "level": 37,
+       "item": "staraptite"
+      }
+     ]
+    },
+    {
+     "order": 6,
+     "location": "paldea-montenevera",
+     "leader": "莱姆",
+     "leader_en": "Ryme",
+     "title": "冰柜道馆",
+     "type": "Ghost",
+     "badge": "冰柜徽章",
+     "badge_en": "Montenevera Badge",
+     "team": [
+      {
+       "species": "mimikyu",
+       "level": 41
+      },
+      {
+       "species": "banette",
+       "level": 42
+      },
+      {
+       "species": "toxtricity",
+       "level": 43
+      }
+     ]
+    },
+    {
+     "order": 7,
+     "location": "paldea-alfornada",
+     "leader": "莉普",
+     "leader_en": "Tulip",
+     "title": "焙固道馆",
+     "type": "Psychic",
+     "badge": "焙固徽章",
+     "badge_en": "Alfornada Badge",
+     "team": [
+      {
+       "species": "gardevoir",
+       "level": 44
+      },
+      {
+       "species": "espathra",
+       "level": 45
+      },
+      {
+       "species": "farigiraf",
+       "level": 46
+      }
+     ]
+    },
+    {
+     "order": 8,
+     "location": "paldea-glaseado-mountain",
+     "leader": "古鲁夏",
+     "leader_en": "Grusha",
+     "title": "霜抹山道馆",
+     "type": "Ice",
+     "badge": "霜抹山徽章",
+     "badge_en": "Glaseado Badge",
+     "team": [
+      {
+       "species": "frosmoth",
+       "level": 47
+      },
+      {
+       "species": "beartic",
+       "level": 48
+      },
+      {
+       "species": "cetitan",
+       "level": 48
+      }
+     ]
+    }
+   ],
+   "elite4": [
+    {
+     "order": 1,
+     "name": "辛俐",
+     "name_en": "Rika",
+     "title": "四天王",
+     "type": "Ground",
+     "team": [
+      {
+       "species": "whiscash",
+       "level": 57
+      },
+      {
+       "species": "camerupt",
+       "level": 57
+      },
+      {
+       "species": "donphan",
+       "level": 58
+      },
+      {
+       "species": "dugtrio",
+       "level": 58
+      },
+      {
+       "species": "clodsire",
+       "level": 59
+      }
+     ]
+    },
+    {
+     "order": 2,
+     "name": "波琵",
+     "name_en": "Poppy",
+     "title": "四天王",
+     "type": "Steel",
+     "team": [
+      {
+       "species": "copperajah",
+       "level": 58
+      },
+      {
+       "species": "bronzong",
+       "level": 58
+      },
+      {
+       "species": "corviknight",
+       "level": 58
+      },
+      {
+       "species": "magnezone",
+       "level": 59
+      },
+      {
+       "species": "tinkaton",
+       "level": 60
+      }
+     ]
+    },
+    {
+     "order": 3,
+     "name": "青木",
+     "name_en": "Larry",
+     "title": "四天王",
+     "type": "Flying",
+     "team": [
+      {
+       "species": "tropius",
+       "level": 59
+      },
+      {
+       "species": "staraptor",
+       "level": 59
+      },
+      {
+       "species": "altaria",
+       "level": 59
+      },
+      {
+       "species": "flamigo",
+       "level": 60
+      },
+      {
+       "species": "dudunsparce",
+       "level": 61
+      }
+     ]
+    },
+    {
+     "order": 4,
+     "name": "八朔",
+     "name_en": "Hassel",
+     "title": "四天王",
+     "type": "Dragon",
+     "team": [
+      {
+       "species": "noivern",
+       "level": 60
+      },
+      {
+       "species": "dragalge",
+       "level": 60
+      },
+      {
+       "species": "flapple",
+       "level": 60
+      },
+      {
+       "species": "baxcalibur",
+       "level": 61
+      },
+      {
+       "species": "dragapult",
+       "level": 62
+      }
+     ]
+    }
+   ],
+   "champion": {
+    "name": "也慈",
+    "name_en": "Geeta",
+    "title": "冠军",
+    "team": [
+     {
+      "species": "espathra",
+      "level": 62
+     },
+     {
+      "species": "avalugg",
+      "level": 62
+     },
+     {
+      "species": "kingambit",
+      "level": 62
+     },
+     {
+      "species": "veluza",
+      "level": 62
+     },
+     {
+      "species": "glimmora",
+      "level": 63
+     },
+     {
+      "species": "dragapult",
+      "level": 63
      }
     ]
    }

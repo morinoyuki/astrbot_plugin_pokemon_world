@@ -85,11 +85,7 @@ CANONICAL_TOWNS: dict[str, list[str]] = {
         "postwick", "wedgehurst", "motostoke", "turffield", "hulbury",
         "hammerlocke", "stow-on-side", "circhester", "spikemuth", "wyndon",
     ],
-    "paldea": [
-        "cabo-poco", "los-platos", "mesagoza", "cortondo", "artazon",
-        "levincia", "cascarrafa", "medali", "montenevera", "alfornada",
-        "porto-marinada", "zapapico",
-    ],
+    "paldea": ["paldea-mesagoza", "paldea-cortondo", "paldea-artazon", "paldea-levincia", "paldea-cascarrafa", "paldea-medali", "paldea-montenevera", "paldea-alfornada", "paldea-glaseado-mountain", "paldea-area-zero", "paldea-pokemon-league"],
 }
 
 TOWN_RE = re.compile(r"(city|town|village|plateau|league|ranch|resort|safari)")
@@ -202,7 +198,10 @@ def build_region(
         if loc.get("region") != region or is_pseudo_location(ident):
             continue
         kind = kind_of(ident, region)
-        if kind == "town" or pools_non_empty(loc):
+        if (kind == "town" or pools_non_empty(loc)
+                # 帕底亚城镇本身没有野生池(礼物/交换行才刚收进来),
+                # 但它们是道馆/商店所在 —— 只对帕底亚放开,别动其他地区的节点集合
+                or (region == "paldea" and ident in CANONICAL_TOWNS.get(region, ()))):
             nodes[ident] = kind
 
     canonical = [t for t in CANONICAL_TOWNS.get(region, []) if t in nodes]

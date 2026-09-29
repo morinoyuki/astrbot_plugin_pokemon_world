@@ -146,8 +146,10 @@ def collect() -> dict[str, dict]:
             hit = dex.resolve_species(name)          # → (key, entry) | None
             key = str(hit[0]) if hit else ""
             if not key or not _is_wild(key):
-                skipped.append(name)
-                continue
+                # 礼物 / 交换 / 定点:没有等级区间 —— 以前直接丢掉,导致“镇内无池”
+                # 的城镇进不了地图(道馆落点解析失败)。按 Lv5 记成 gift 行,
+                # 让城镇成为 hub(商店/中心)并给道馆一个落点。
+                pool.append([key, 5, 5, "gift", ch])
             ch = max(1, min(100, int(float(str(row.get("Frequency") or 10)))))
             pool.append([key, max(1, lo), max(1, hi), "walk", ch])
             names += 1

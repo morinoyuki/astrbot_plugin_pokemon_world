@@ -235,6 +235,13 @@ def untranslated_forme_keys() -> list[str]:
     return bad
 
 
+def _apply_legendary_class(species: dict[str, dict]) -> None:
+    """异兽/悖论种按官方分类补进传说级。"""
+    for k in LEGENDARY_CLASS_EXTRA:
+        row = species.get(k)
+        if isinstance(row, dict):
+            row["isLegendary"] = True
+
 def _localize_species_forms(species: dict[str, dict]) -> None:
     """就地中文化形态名,并把原英文写法留作别名(旧查询/存档仍能命中)。"""
     for key, s in species.items():
@@ -324,12 +331,23 @@ def _load(name: str) -> dict:
         return json.load(f)
 
 
+# 异兽(UB)与悖论种在正作里就属于传说级分类 —— 它们不该被算作“普通宝可梦”。
+# PokeAPI 的 is_legendary 不含这些人造宝可梦,这里补齐(数据来自官方分类)。
+LEGENDARY_CLASS_EXTRA = frozenset({
+    # 异兽(第七世代·阿罗拉)
+    "nihilego", "buzzwole", "pheromosa", "xurkitree", "celesteela", "kartana",
+    "guzzlord", "poipole", "naganadel",
+    # 悖论种(第九世代·帕底亚)
+    "gougingfire", "ragingbolt", "ironboulder", "ironcrown", "ironleaves",
+    "walkingwake",
+})
 class Dex:
     """宝可梦图鉴 / 招式 / 特性数据查询器(单例,线程内只读)。"""
 
     def __init__(self) -> None:
         self.species: dict[str, dict] = _load("species")
         _localize_species_forms(self.species)
+        _apply_legendary_class(self.species)
         self.moves: dict[str, dict] = _load("moves")
         # 搏命(PokeAPI/Showdown 已有条目):无属性克制、1/4 最大 HP 反作用
         self.moves.setdefault(
