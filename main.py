@@ -4808,7 +4808,6 @@ class PokemonWorldPlugin(Star):
             f"特性:{p.get('ability_zh') or '?'}",
             f"性格:{p.get('nature_zh') or '?'}",
             f"亲密:{growth.friend_line(p.get('friendship'))}",
-                        f"亲密:{int(p.get('friendship') or 0)}",
             f"持有:{p.get('item_zh') or '无'}",
         ]
         if p.get("ability_desc"):
