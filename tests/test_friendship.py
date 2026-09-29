@@ -187,3 +187,30 @@ def test_feeding_a_berry_raises_friendship():
         ev2 = _Event("/使用 橙橙果 1")
         run_cmd(p, ev2, p.cmd_use)
         assert p._load(_Event()).party[0]["friendship"] == 252
+
+
+def test_dex_unlocks_on_evolution_and_acquisition():
+    """进化/入队同样解锁图鉴(实测:进化成炽焰咆哮虎后图鉴仍显示未发现)。"""
+    import tempfile
+
+    from test_commands import _Cmd, _Event, run_cmd
+
+    from pw.engine import create_pokemon
+
+    tmp = tempfile.TemporaryDirectory()
+    with tmp:
+        p = _Cmd(tmp.name)
+        p.config = {"ui_image": False}
+        run_cmd(p, _Event("/开始 小智 杰尼龟"), p.cmd_start)
+        t = p._load(_Event())
+        assert not t.caught("incineroar")
+        t.commit(0, create_pokemon("incineroar", 40))     # 模拟进化后写回队伍
+        p._save(t)
+        t2 = p._load(_Event())
+        assert t2.caught("incineroar"), "进化/获得过的形态必须解锁图鉴"
+        assert t2.seen("incineroar")
+        # 图鉴页也要显示已捕获
+        ev = _Event("/图鉴 炽焰咆哮虎")
+        run_cmd(p, ev, p.cmd_dex)
+        out = "".join(ev.outputs)
+        assert "已捕获" in out, out[:200]

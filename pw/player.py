@@ -156,6 +156,11 @@ class Trainer:
     def commit(self, index: int, mon: Pokemon) -> None:
         if 0 <= index < len(self.party):
             self.party[index] = mon_to_dict(mon, self.party[index])
+        # 图鉴解锁:凡是「得到过」的形态都算 —— 进化出来的也要解锁
+        # (实测反馈:进化成炽焰咆哮虎后 /图鉴 仍是未发现;以前只登记野生捕获)
+        sp = str(getattr(mon, "species", "") or "")
+        if sp:
+            self.mark_caught(sp)
 
     def party_mon(self) -> list[Pokemon]:
         return [dict_to_mon(p) for p in self.party]
