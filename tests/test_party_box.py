@@ -1142,7 +1142,7 @@ def test_catch_card_shows_the_caught_mon_when_party_is_full(monkeypatch):
 
 
 def test_box_has_paging():
-    """/电脑 一页 20 只,带页码提示与翻页(不然几百只挤在一张长图上)。"""
+    """/电脑 一页 14 只,带页码提示与翻页(不然几百只挤在一张长图上)。"""
     import tempfile
 
     from test_commands import _Cmd, _Event, run_cmd
@@ -1160,18 +1160,18 @@ def test_box_has_paging():
         ev = _Event("/电脑")
         run_cmd(p, ev, p.cmd_box)
         out = "\n".join(ev.outputs)
-        assert "第 1/3 页" in out, out
+        assert "第 1/4 页" in out, out
         assert "只)" in out and "翻页" in out, out
         listed = [x for x in out.split("\n") if x[:2].rstrip(".").isdigit()]
-        assert len(listed) == 20, f"一页应该正好 20 只:{len(listed)}"
+        assert len(listed) == 14, f"一页应该正好 14 只:{len(listed)}"
         # 第 3 页只剩 5 只
         ev2 = _Event("/电脑 3")
         run_cmd(p, ev2, p.cmd_box)
         out2 = "\n".join(ev2.outputs)
-        assert "第 3/3 页" in out2, out2
+        assert "第 3/4 页" in out2, out2
         names = [x for x in out2.split("\n") if x[:2].rstrip(".").isdigit()]
         assert 0 < len(names) <= 20, f"第 3 页不该满页:{names}"
         # 下一页
         ev3 = _Event("/电脑 上一页")
         run_cmd(p, ev3, p.cmd_box)
-        assert "第 2/3 页" in "\n".join(ev3.outputs), ev3.outputs
+        assert "第 2/4 页" in "\n".join(ev3.outputs), ev3.outputs

@@ -2067,12 +2067,15 @@ def render_mon_summary(mon: dict, *, index: int = 1, party_size: int = 1,
 
 
 def render_box(mons: list[dict], *, capacity: int = 0, money: int = 0,
+               total: int = 0, offset: int = 0,
                scale: int = SCALE_DEFAULT) -> bytes:
-    """电脑箱子:`/电脑`。显示仓库里的宝可梦(每页 16 只)。"""
+    """电脑箱子:`/电脑`。显示本页宝可梦,并标出**全局序号**(`offset` 为本页首只的偏移)。"""
     try:
         sc = Screen(scale=scale)
-        sc.title_bar("电脑 · 宝可梦仓库",
-                     right=f"{len(mons)}/{capacity}只" if capacity else f"{len(mons)}只")
+        _tot = int(total or 0) or (len(mons) + int(offset or 0))
+        _lo = int(offset or 0) + 1 if mons else 0
+        _hi = int(offset or 0) + len(mons)
+        sc.title_bar("电脑 · 宝可梦仓库", right=f"共 {_tot} 只")
         if not mons:
             sc.window((5, 19, 235, sc.content_bottom), radius=2)
             sc.text_center(120, 70, "仓库是空的。", size=9, fill=TEXT_DIM)
@@ -2104,7 +2107,8 @@ def render_box(mons: list[dict], *, capacity: int = 0, money: int = 0,
             sc.hp_bar((cx + 27, cy + 10.5, cw - 34, 4),
                       _ratio(mon.get("cur_hp"), mon.get("max_hp")))
         more = len(mons) - cols * rows
-        tail = f"共 {len(mons)} 只"
+        tail = (f"共 {_tot} 只 · 本页 {len(mons)} 只:第 {_lo}-{_hi} 只"
+                if mons else f"共 {_tot} 只")
         if more > 0:
             tail += f"(另有 {more} 只未显示)"
         sc.footer(f"{tail} · 取出:`/队伍 取出 <序号>`", size=7.2)

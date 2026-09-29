@@ -1227,7 +1227,9 @@ class PokemonWorldPlugin(Star):
             return
         mons = self._box_payload(t)
         # ── 电脑分页:一页 20 只,`/电脑 <页码>`、`/电脑 下一页` ──
-        _per = 20
+        # 一页必须等于**图片一屏能画下的格数**(2 列 × 7 行 = 14):
+        # 以前写 20 → 第 2 页有 6 只画不出来(实测反馈“没显示其他宝可梦”)
+        _per = 14
         # 直接用原始消息取参数(不依赖各分支自己的局部变量名)
         try:
             _words = str(getattr(event, "message_str", "") or "").split()
@@ -1261,7 +1263,8 @@ class PokemonWorldPlugin(Star):
         text = self._box_text(t, mons, offset=_per * (_page - 1))
         async for r in self._emit_ui(
             event, "box",
-            lambda: UI.render_box(mons, capacity=len(mons) + 0 or 30,
+            lambda: UI.render_box(mons, capacity=max(30, len(t.box)),
+                                   total=len(t.box), offset=_per * (_page - 1),
                                   money=t.money, scale=self._img_scale()),
             text=text,
             hint=f"取出:`/队伍 取出 <序号>`(队伍满 {MAX_PARTY} 只时先存一只)",
