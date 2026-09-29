@@ -1225,6 +1225,38 @@ class PokemonWorldPlugin(Star):
             )
             return
         mons = self._box_payload(t)
+        # ── 电脑分页:一页 20 只,`/电脑 <页码>`、`/电脑 下一页` ──
+        _per = 20
+        # 直接用原始消息取参数(不依赖各分支自己的局部变量名)
+        try:
+            _words = str(getattr(event, "message_str", "") or "").split()
+            _raw = _words[1] if len(_words) > 1 else ""
+        except Exception:
+            _raw = ""
+        _pp = getattr(self, "_parse_page_args", None) or _parse_page_args
+        _pip = _pp(_raw, numeric_is_page=True)
+        _page = int(_pip[2] or 0) or int(_pip[1] or 0) or 1
+        if _raw.strip().isdigit():          # 「/电脑 3」这种裸数字按页码解释
+            _page = int(_raw.strip())
+        _total = len(mons)
+        _pages = max(1, (_total + _per - 1) // _per)
+        _low = _raw.strip().lower()
+        if _low in ("下一页", "next", "下页"):
+            _page = int(t.data.get("box_page") or 1) + 1
+        elif _low in ("上一页", "prev", "上页"):
+            _page = int(t.data.get("box_page") or 1) - 1
+        _page = min(max(1, int(_page or 1)), _pages)
+        if int(t.data.get("box_page") or 1) != _page:
+            t.data["box_page"] = _page
+            self._save(t)
+        _slice_from = (_page - 1) * _per
+        mons = mons[_slice_from:_slice_from + _per]
+        _page_note = (f"📄 电脑 第 {_page}/{_pages} 页(共 {_total} 只)"
+                      if _pages > 1 else "")
+        if _page_note:
+            yield event.plain_result(
+                _page_note + " —— 翻页:电脑 2 / 电脑 下一页 / 电脑 上一页"
+            )
         text = self._box_text(t, mons)
         async for r in self._emit_ui(
             event, "box",

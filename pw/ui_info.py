@@ -21,6 +21,7 @@ from .ui_render import (
     HP_LOW,
     HP_MID,
     HP_OK,
+    LOGICAL_H,
     MSG_FILL,
     MSG_FRAME,
     MSG_SHADOW,
@@ -138,6 +139,26 @@ def _dialog_text(sc: Screen, box, title: str, lines: list[str], *,
         sc.text(x0 + 7, y0 + 16.5 + row * 9.8, ln, size=size, fill=MSG_TEXT)
 
 
+def _wrap_rows(sc, text, avail: float, *, size: float = 8) -> list[str]:
+    """按实际字宽折行(每条占用多行,不再用省略号截断)。"""
+    out: list[str] = []
+    for raw in ([text] if isinstance(text, str) else list(text or ())):
+        cur = ""
+        for ch in str(raw):
+            probe = cur + ch
+            try:
+                w = sc.measure(probe, size)
+            except Exception:
+                w = len(probe) * size * 0.9
+            if cur and w > avail:
+                out.append(cur)
+                cur = ch
+            else:
+                cur = probe
+        if cur:
+            out.append(cur)
+    return out
+
 def _lines(seq, *, limit: int = 8) -> list[str]:
     return [_str(x) for x in (seq or ()) if _str(x)][:limit]
 
@@ -244,7 +265,22 @@ def render_news(day: int, *, world_events: list[str] = (), player_events: list[s
                 scale: int = SCALE_DEFAULT) -> bytes:
     """早间新闻:顶部信息条 + 世界 / 个人 两段播报(经典对话框)。"""
     try:
-        sc = Screen(scale=scale)
+        # 事件多就把画布加高 —— 不再为了固定高度裁掉事件(用户要求)
+        # 先按真实字宽把每条事件折行 → 用**实测行数**算画布高度(不裁事件)
+        _meas = Screen(scale=1)
+        _aw = max(60.0, 236 - 14)
+        _world_rows: list[str] = []
+        for _it in (list(_lines(world_events, limit=99)) or ["世界很平静。"]):
+            _world_rows.extend(_wrap_rows(_meas, f"· {_it}", _aw, size=8))
+        _mine_rows: list[str] = []
+        for _it in (list(_lines(player_events, limit=99)) or ["今天你还没有特别的消息。"]):
+            _mine_rows.extend(_wrap_rows(_meas, f"· {_it}", _aw, size=8))
+        _nw, _np = max(1, len(_world_rows)), max(1, len(_mine_rows) + 2)
+        _lh = 9.8
+        _wb = 35 + 16.5 + _nw * _lh + 2
+        _pbt = _wb + 4
+        _pbb = _pbt + 16.5 + _np * _lh + 2
+        sc = Screen(scale=scale, h=int(max(LOGICAL_H, _pbb + 20)))
         sc.title_bar("早间新闻", right=f"第 {day} 天")
 
         # 天气 / 地区 / 地点 信息条
@@ -275,20 +311,20 @@ def render_news(day: int, *, world_events: list[str] = (), player_events: list[s
             sc.text(10, 21.2, "天气与行踪:暂无记录", size=7.0, fill=TEXT_DIM)
 
         # 世界播报
-        world_box = (4, 35, 236, 85)
+        world_box = (4, 35, 236, int(_wb))
         _dialog(sc, world_box)
-        world = [f"· {x}" for x in _lines(world_events, limit=4)] or ["世界很平静。"]
-        _dialog_text(sc, world_box, "◆ 世界", world)
+        world = _world_rows
+        _dialog_text(sc, world_box, "◆ 世界", world, limit=99)
 
         # 个人播报 + 未解锁提示
-        player_box = (4, 89, 236, sc.content_bottom)
+        player_box = (4, int(_pbt), 236, int(_pbb))
         _dialog(sc, player_box)
-        mine = [f"· {x}" for x in _lines(player_events, limit=3)]
+        mine = list(_mine_rows)
         if not mine:
             mine = ["今天你还没有特别的消息。"]
         for lock in _lines(locks, limit=2):
             mine.append(f"× 尚未解锁:{lock}")
-        _dialog_text(sc, player_box, "◆ 个人", mine, limit=3)
+        _dialog_text(sc, player_box, "◆ 个人", mine, limit=99)
 
         sc.footer("◆ /今日 查看完整世界动态")
         return sc.finish()
