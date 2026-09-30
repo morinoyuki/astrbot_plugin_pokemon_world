@@ -1874,8 +1874,8 @@ def render_dex(
         sc.title_bar(f"No.{num:04d} " + (name if known else "???"), right=mark)
         sc.window((5, 19, 112, 112), radius=3)
         # 抓过闪光形态:图鉴页直接给出异色立绘 + 金色角标
-        sc.sprite(str(entry.get("_key") or ""), ground=(58, 108), factor=1.0,
-                  bounds=(84, 82), silhouette=not known, shiny=shiny, hires=True)
+        sc.sprite(str(entry.get("_key") or ""), ground=(57, 109), factor=1.12,
+                  bounds=(88, 86), silhouette=not known, shiny=shiny, hires=True)
         if shiny:
             sc.text(11, 22, "✨闪光", size=7.4, fill=(196, 156, 24))
         sc.window((116, 19, 235, 112), radius=3)
@@ -1884,14 +1884,19 @@ def render_dex(
         sc.text(150, y, str(entry.get("genus") or "?") if known else "???",
                 size=7.8, fill=TEXT)
         y += 11
-        for t in (entry.get("types") or [])[:2]:
-            label = str(t) if known else "???"
-            sc.d.rounded_rectangle([121, y, 121 + sc.tw(label, 7.4) + 8, y + 10],
-                                   radius=2,
-                                   fill=type_color(str(t)) if known else (150, 150, 150),
+        # 属性:中文名 + 同色底,两只**并排一行**(原来是英文 key,各占一行)
+        _types = [str(t) for t in (entry.get("types") or [])][:2]
+        _labels = [get_dex().type_label(t) if known else "???" for t in _types]
+        _ws = [min(54.0, sc.tw(lb, 7.2) + 8) for lb in _labels]
+        _cx = 121.0 + max(0.0, (109.0 - (sum(_ws) + 4 * max(0, len(_ws) - 1))) / 2)
+        for _t, _lb, _w in zip(_types, _labels, _ws, strict=False):
+            sc.d.rounded_rectangle([_cx, y, _cx + _w, y + 10], radius=2,
+                                   fill=type_color(_t) if known else (150, 150, 150),
                                    outline=BOX_EDGE)
-            sc.text(125, y + 1.2, label, size=7.4, fill=(255, 255, 250))
-            y += 11
+            sc.text(_cx + 4, y + 1.2, _fit(sc, _lb, _w - 6, 7.2), size=7.2,
+                    fill=(255, 255, 250))
+            _cx += _w + 4
+        y += 22                      # 与原来两行等高,下面字段位置不变
         bs = entry.get("baseStats") or {}
         total = sum(int(bs.get(k, 0) or 0) for k in ("hp", "atk", "def", "spa", "spd", "spe"))
         stats = [("HP", "hp"), ("攻击", "atk"), ("防御", "def"),
@@ -1992,8 +1997,8 @@ def render_mon_summary(mon: dict, *, index: int = 1, party_size: int = 1,
                 _chip(sc, cx, 30.5, t, size=6.6)
                 cx += w + 2
         # 立绘贴底,上边缘在属性标签之下(bounds 会按比例钳制,不会溢出)
-        sc.sprite(str(mon.get("species") or ""), ground=(50, 89), factor=1.0,
-                  bounds=(62, 46), shiny=bool(mon.get("shiny")), hires=True)
+        sc.sprite(str(mon.get("species") or ""), ground=(50, 89), factor=1.08,
+                  bounds=(66, 48), shiny=bool(mon.get("shiny")), hires=True)
 
         # ── 右上:等级 / HP / 经验 / 能力值 ──
         sc.window((100, 19, 235, 92), radius=2)
