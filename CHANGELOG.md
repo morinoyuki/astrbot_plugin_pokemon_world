@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.32.5
+
+### 带图消息(图片+文本)也按 markdown 发送
+
+- 上一版只包了纯文本出口,`chain_result`(界面图/战报图 + 旁边的文案)漏掉了;
+  现在新增 `_cres(event, comps)`,3 处图片出口全部走它,与文本出口同一套规则
+- 抽出 `_want_markdown(event)` 供两个出口共用:auto(仅 qqofficial)/ always / never
+
+- 回归 +1:qqofficial 下 `chain_result` 结果为 markdown、其他平台不受影响、
+  always/never 覆盖;并把“裸调用只能出现在包装器内部”的断言扩展到 chain_result
 ## 1.32.4
 
 ### `/迁移存档` 不再要求自己先开始冒险

@@ -467,6 +467,34 @@ def _explore_target(arg: str) -> str:
 _SEND_MD = {"mode": "auto"}
 
 
+def _cres(event, comps):
+    """图片+文本的出口:与 `_res` 同一套规则,让 QQ 官方接口按 markdown 发送。
+
+    `chain_result` 里的文字(图片旁边的提示/战报)也是消息内容,
+    只给纯文本出口加 markdown 会漏掉这些“带图的消息”。
+    """
+    res = event.chain_result(comps)   # 原始调用(不能递归到自己)
+    if not _want_markdown(event):
+        return res
+    try:
+        res.use_markdown(True)
+    except Exception:
+        return res
+    return res
+
+def _want_markdown(event) -> bool:
+    """这条消息要不要按 markdown 发送(auto:仅 qqofficial;always/never 强制)。"""
+    mode = str(_SEND_MD.get("mode") or "auto").lower()
+    if mode == "never":
+        return False
+    if mode == "always":
+        return True
+    try:
+        plat = str(event.get_platform_name() or "").lower()
+    except Exception:
+        return False
+    return "qq" in plat and "official" in plat
+
 def _res(event, text: str = ""):
     """统一的文本出口:所有 `_res(event, ...)` 都走这里。
 
@@ -475,22 +503,12 @@ def _res(event, text: str = ""):
     - 任何一步出错都退回普通纯文本 —— 发送格式绝不能把游戏搞崩
     """
     res = event.plain_result(text)   # 注意:这里必须是原始调用(不能递归到自己)
-    mode = str(_SEND_MD.get("mode") or "auto").lower()
-    if mode == "never":
+    if not _want_markdown(event):
         return res
-    if mode == "always":
-        want = True
-    else:
-        try:
-            plat = str(event.get_platform_name() or "").lower()
-        except Exception:
-            plat = ""
-        want = "qq" in plat and "official" in plat
-    if want:
-        try:
-            res.use_markdown(True)
-        except Exception:
-            return res
+    try:
+        res.use_markdown(True)
+    except Exception:
+        return res
     return res
 
 class PokemonWorldPlugin(Star):
@@ -4890,7 +4908,7 @@ class PokemonWorldPlugin(Star):
                     comps = [Image.fromFileSystem(path)]
                     if hint:
                         comps.append(Plain(hint))
-                    yield event.chain_result(comps)
+                    yield _cres(event, comps)
                     return
             except Exception as e:  # 渲染失败必须回退文本
                 logger.debug("宝可梦世界: %s 界面渲染失败,回退文本: %s", label, e)
@@ -5384,7 +5402,7 @@ class PokemonWorldPlugin(Star):
                         comps = [Image.fromFileSystem(path)]
                         if keep:
                             comps.append(Plain(keep))
-                        yield event.chain_result(comps)
+                        yield _cres(event, comps)
                         return
             except Exception as e:  # 渲染失败必须回退文本
                 logger.debug("宝可梦世界: 战斗图片渲染失败,回退文本: %s", e)
@@ -6250,7 +6268,7 @@ class PokemonWorldPlugin(Star):
                 )
                 if data:
                     path = self._temp_image(data, "pw_pvp")
-                    yield event.chain_result(
+                    yield _cres(event,
                         [Image.fromFileSystem(path), Plain(hint)]
                     )
                     return
