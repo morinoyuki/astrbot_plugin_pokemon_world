@@ -300,3 +300,36 @@ def test_weather_event_rotates_across_days_even_after_expiry():
     # 标题里的天气名要跟着换,不能还写着“沙暴来袭”而实际是下雪
     last = next(x for x in st.data["events"] if x["id"] == "w3")
     assert WEATHER_ZH_LITE[last["effects"]["battle_weather"]] in last["title"], last["title"]
+
+
+def test_no_two_locations_share_the_same_display_name():
+    """同地区内不允许重名节点 —— 重名会让 `/前往 <名字>` 指到另一个点,玩家会卡关。
+
+    实测反馈:「存在同名节点 导致卡关」(冠军之路 / 阿斯卡纳石室 / 吹寄洞穴…)。
+    """
+    import collections
+    import json
+    import os
+
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    with open(os.path.join(root, "pw", "static", "locations.json"), encoding="utf-8") as f:
+        raw = json.load(f)
+    nodes = raw["locations"] if isinstance(raw, dict) and "locations" in raw else raw
+    items = list(nodes.items()) if isinstance(nodes, dict) else [(v.get("id"), v) for v in nodes]
+
+    by_name = collections.defaultdict(list)
+    for key, node in items:
+        if isinstance(node, dict) and node.get("zh"):
+            by_name[(str(node.get("region")), str(node["zh"]))].append(key)
+    dup = {f"{r}·{zh}": ks for (r, zh), ks in by_name.items() if len(ks) > 1}
+    assert not dup, f"同地区存在同名地点:{dup}"
+
+    # 名字解析必须**限定在当前地区** —— 跨地区同名是合法的(关都和丰缘都有「变幻洞窟」),
+    # 但 `/前往 <名字>` 必须解析到**当前地区**的那个节点,否则会“指到别的地区”而卡关。
+    world = WorldMap()
+    for region in world.regions_with_data():
+        for key in world.nodes(region):
+            zh = world.node_zh(key)
+            got = world.find_location(zh, region)
+            assert got == key or world.node_zh(got) == zh, (
+                f"[{region}] {zh} 解析到了别的节点:{got}")

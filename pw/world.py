@@ -846,47 +846,32 @@ class WorldMap:
         return out
 
     def find_location(self, query: str, region: str = "") -> str:
-        """地点名 → 地图节点 key(支持中文名/英文名/标识/模糊匹配)。"""
+        """地点名 → 地图节点 key(中文名/英文名/标识/模糊)。
+
+        顺序很有讲究:**先在本地区节点里做显示名精确匹配**,再问 dex 的别名/编号
+        解析 —— dex 的地点索引是早期生成的产物,改名/新增节点后可能过期,
+        若先问它就会把「冠军之路」解析到别的节点,表现为 `/前往` 没反应(卡关)。
+        """
         q = str(query or "").strip()
         if not q:
             return ""
-        if q in self._index and (not region or self.region_of(q) == region):
-            return q
-        key = get_dex().find_location(q, region)
-        if key and key in self._index:
-            return key
-        # 兜底:按节点中文名/标识做包含匹配(限定在指定地区内)
+        try:
+            pool = [k for k in self._index if not region or self.region_of(k) == region]
+        except Exception:
+            pool = []
         nq = _norm(q)
-        if not nq:
-            return ""
-        pool = (
-            [k for k in self._index if self.region_of(k) == region]
-            if region
-            else list(self._index)
-        )
-        for k in sorted(pool, key=len):
-            if nq == _norm(k) or nq == _norm(self.node_zh(k)):
+        for k in pool:                      # ① 本地区显示名精确(忽略大小写/符号)
+            if nq and _norm(self.node_zh(k)) == nq:
                 return k
-        # 道路/水路必须**按编号精确匹配**:上游中文名是"31号道路",
-        # 子串匹配会把用户输入的"1号道路"当成它的子串 → 把人送到 31 号道路。
-        num = self.ROUTE_NUM_RE.search(str(q))
-        if not num:
-            num = re.search(r"^\s*(\d+)\s*号(?:道路|水路)$", str(q))
-        if num:
-            want = int(num.group(1))
-            water = "水路" in str(q) or "sea-route" in str(q)
-            for k in sorted(pool):
-                m2 = self.ROUTE_NUM_RE.search(str(k))
-                if not m2 or int(m2.group(1)) != want:
-                    continue
-                is_water = "-sea-route-" in str(k) or "水路" in self.node_zh(k)
-                if is_water == water:
+        key = get_dex().find_location(q, region)
+        if key and (not region or self.region_of(key) == region):
+            return key
+        if not any(ch.isdigit() for ch in q):
+            # ② 包含匹配:带数字的编号地点不做这一步,否则「1号道路」会撞上「11号道路」
+            for k in pool:
+                if nq and nq in _norm(self.node_zh(k)):
                     return k
-            return ""   # 该地区没有这条道路/水路,不要退化成子串匹配
-        for k in sorted(pool, key=len):
-            if nq in _norm(k) or nq in _norm(self.node_zh(k)):
-                return k
-        return ""
+        return key or ""
 
     def locations_with_species(self, species: str, limit: int = 12) -> list[dict]:
         """反查:哪些地点会出现该物种(基于真实地点分布)。"""

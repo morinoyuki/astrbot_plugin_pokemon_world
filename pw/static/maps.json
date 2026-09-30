@@ -534,7 +534,7 @@
      "hub": false
     },
     "kanto-victory-road-1": {
-     "zh": "冠军之路",
+     "zh": "冠军之路·前半",
      "kind": "area",
      "order": 480,
      "tier": 5,
@@ -545,7 +545,7 @@
      "hub": false
     },
     "kanto-victory-road-2": {
-     "zh": "冠军之路",
+     "zh": "冠军之路·深处",
      "kind": "area",
      "order": 490,
      "tier": 5,
@@ -723,7 +723,7 @@
      "hub": false
     },
     "dilford-chamber": {
-     "zh": "阿斯卡纳石室",
+     "zh": "阿斯卡纳石室(3)",
      "kind": "area",
      "order": 650,
      "tier": 6,
@@ -734,7 +734,7 @@
      "hub": false
     },
     "liptoo-chamber": {
-     "zh": "阿斯卡纳石室",
+     "zh": "阿斯卡纳石室(2)",
      "kind": "area",
      "order": 660,
      "tier": 7,
@@ -745,7 +745,7 @@
      "hub": false
     },
     "monean-chamber": {
-     "zh": "阿斯卡纳石室",
+     "zh": "阿斯卡纳石室(1)",
      "kind": "area",
      "order": 670,
      "tier": 7,
@@ -756,7 +756,7 @@
      "hub": false
     },
     "rixy-chamber": {
-     "zh": "阿斯卡纳石室",
+     "zh": "阿斯卡纳石室(4)",
      "kind": "area",
      "order": 680,
      "tier": 7,
@@ -2117,7 +2117,7 @@
      "hub": false
     },
     "team-magma-hideout": {
-     "zh": "熔岩队本部",
+     "zh": "熔岩队本部·深处",
      "kind": "area",
      "order": 510,
      "tier": 5,
@@ -3083,7 +3083,7 @@
      "hub": false
     },
     "maniac-tunnel": {
-     "zh": "遗迹迷隧道",
+     "zh": "遗迹迷隧道·深处",
      "kind": "area",
      "order": 420,
      "tier": 5,
@@ -4050,7 +4050,7 @@
      "hub": false
     },
     "unova-victory-road-2": {
-     "zh": "冠军之路",
+     "zh": "冠军之路·深处",
      "kind": "area",
      "order": 530,
      "tier": 6,
@@ -4212,7 +4212,7 @@
      "hub": false
     },
     "unova-victory-road": {
-     "zh": "冠军之路",
+     "zh": "冠军之路·前半",
      "kind": "area",
      "order": 670,
      "tier": 8,
@@ -4292,7 +4292,7 @@
      "hub": true
     },
     "guidance-chamber": {
-     "zh": "吹寄洞穴",
+     "zh": "指引洞窟",
      "kind": "area",
      "order": 740,
      "tier": 8,
@@ -4303,7 +4303,7 @@
      "hub": false
     },
     "trial-chamber": {
-     "zh": "冠军之路(黑／白)",
+     "zh": "冠军之路·试炼之间",
      "kind": "area",
      "order": 750,
      "tier": 8,
@@ -5314,7 +5314,7 @@
      "hub": false
     },
     "secluded-shore": {
-     "zh": "烏拉烏拉海灘",
+     "zh": "僻静海滩",
      "kind": "area",
      "order": 430,
      "tier": 5,
@@ -5417,7 +5417,7 @@
      "hub": false
     },
     "thrifty-megamart": {
-     "zh": "皇家大道",
+     "zh": "好奥乐市购物广场",
      "kind": "area",
      "order": 520,
      "tier": 6,
@@ -5582,7 +5582,7 @@
      "hub": false
     },
     "verdant-cavern--trial-site": {
-     "zh": "蔥鬱洞窟",
+     "zh": "葱郁洞窟·考验之地",
      "kind": "area",
      "order": 670,
      "tier": 7,

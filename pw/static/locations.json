@@ -4474,7 +4474,7 @@
   },
   "maniac-tunnel": {
    "name": "Maniac Tunnel",
-   "zh": "遗迹迷隧道",
+   "zh": "遗迹迷隧道·深处",
    "aliases": [],
    "region": "sinnoh",
    "pools": {
@@ -40708,7 +40708,7 @@
   },
   "kanto-victory-road-1": {
    "name": "Victory Road",
-   "zh": "冠军之路",
+   "zh": "冠军之路·前半",
    "aliases": [],
    "region": "kanto",
    "pools": {
@@ -57796,7 +57796,7 @@
   },
   "kanto-victory-road-2": {
    "name": "Victory Road",
-   "zh": "冠军之路",
+   "zh": "冠军之路·深处",
    "aliases": [],
    "region": "kanto",
    "pools": {
@@ -69329,7 +69329,7 @@
   },
   "monean-chamber": {
    "name": "Monean Chamber",
-   "zh": "阿斯卡纳石室",
+   "zh": "阿斯卡纳石室(1)",
    "aliases": [],
    "region": "kanto",
    "pools": {
@@ -69346,7 +69346,7 @@
   },
   "liptoo-chamber": {
    "name": "Liptoo Chamber",
-   "zh": "阿斯卡纳石室",
+   "zh": "阿斯卡纳石室(2)",
    "aliases": [],
    "region": "kanto",
    "pools": {
@@ -69380,7 +69380,7 @@
   },
   "dilford-chamber": {
    "name": "Dilford Chamber",
-   "zh": "阿斯卡纳石室",
+   "zh": "阿斯卡纳石室(3)",
    "aliases": [],
    "region": "kanto",
    "pools": {
@@ -69414,7 +69414,7 @@
   },
   "rixy-chamber": {
    "name": "Rixy Chamber",
-   "zh": "阿斯卡纳石室",
+   "zh": "阿斯卡纳石室(4)",
    "aliases": [],
    "region": "kanto",
    "pools": {
@@ -75125,7 +75125,7 @@
   },
   "unova-victory-road": {
    "name": "Victory Road",
-   "zh": "冠军之路",
+   "zh": "冠军之路·前半",
    "aliases": [],
    "region": "unova",
    "pools": {
@@ -75291,7 +75291,7 @@
   },
   "trial-chamber": {
    "name": "Trial Chamber",
-   "zh": "冠军之路(黑／白)",
+   "zh": "冠军之路·试炼之间",
    "aliases": [],
    "region": "unova",
    "pools": {
@@ -78745,7 +78745,7 @@
   },
   "guidance-chamber": {
    "name": "Guidance Chamber",
-   "zh": "吹寄洞穴",
+   "zh": "指引洞窟",
    "aliases": [],
    "region": "unova",
    "pools": {
@@ -84359,7 +84359,7 @@
   },
   "unova-victory-road-2": {
    "name": "Victory Road",
-   "zh": "冠军之路",
+   "zh": "冠军之路·深处",
    "aliases": [],
    "region": "unova",
    "pools": {
@@ -105213,7 +105213,7 @@
   },
   "secluded-shore": {
    "name": "Secluded Shore",
-   "zh": "烏拉烏拉海灘",
+   "zh": "僻静海滩",
    "aliases": [
     "烏拉烏拉後海岸"
    ],
@@ -105672,7 +105672,7 @@
   },
   "thrifty-megamart": {
    "name": "Royal Avenue",
-   "zh": "皇家大道",
+   "zh": "好奥乐市购物广场",
    "aliases": [],
    "region": "alola",
    "pools": {
@@ -107200,7 +107200,7 @@
   },
   "team-magma-hideout": {
    "name": "Team Magma Hideout",
-   "zh": "熔岩队本部",
+   "zh": "熔岩队本部·深处",
    "aliases": [],
    "region": "hoenn",
    "pools": {
@@ -107399,7 +107399,7 @@
   },
   "verdant-cavern--trial-site": {
    "name": "Verdant Cavern",
-   "zh": "蔥鬱洞窟",
+   "zh": "葱郁洞窟·考验之地",
    "aliases": [],
    "region": "alola",
    "pools": {
@@ -108416,7 +108416,7 @@
   },
   "shadow-pokemon-lab": {
    "name": "Shadow Pokémon Lab",
-   "zh": "寶可夢綜合研究所(歐雷)",
+   "zh": "宝可梦综合研究所",
    "aliases": [],
    "region": "orre",
    "pools": {
@@ -108957,7 +108957,7 @@
   },
   "pokemon-hq-lab": {
    "name": "Pokemon Hq Lab",
-   "zh": "寶可夢綜合研究所(歐雷)",
+   "zh": "宝可梦综合研究所·总部",
    "aliases": [],
    "region": "orre",
    "pools": {
