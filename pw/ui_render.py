@@ -1888,7 +1888,7 @@ def render_dex(
         _types = [str(t) for t in (entry.get("types") or [])][:2]
         _labels = [get_dex().type_label(t) if known else "???" for t in _types]
         _ws = [min(54.0, sc.tw(lb, 7.2) + 8) for lb in _labels]
-        _cx = 121.0 + max(0.0, (109.0 - (sum(_ws) + 4 * max(0, len(_ws) - 1))) / 2)
+        _cx = 121.0                     # 左对齐(用户要求:属性从面板左边开始排)
         for _t, _lb, _w in zip(_types, _labels, _ws, strict=False):
             sc.d.rounded_rectangle([_cx, y, _cx + _w, y + 10], radius=2,
                                    fill=type_color(_t) if known else (150, 150, 150),
