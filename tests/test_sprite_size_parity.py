@@ -93,6 +93,7 @@ def test_every_sprite_screen_draws_the_same_size_with_both_pipelines():
 
 def test_sprite_pipeline_still_single_resample():
     """hires 的初衷是"只重采样一次":大立绘必须走放大层通道。"""
-    src = open(os.path.join(_ROOT, "pw", "ui_render.py"), encoding="utf-8").read()
+    with open(os.path.join(_ROOT, "pw", "ui_render.py"), encoding="utf-8") as f:
+        src = f.read()
     assert "_hires" in src and "_paste_hires" in src
     assert "factor\") or 1.0) * S" in src, "放大层里的缩放必须乘 scale"
