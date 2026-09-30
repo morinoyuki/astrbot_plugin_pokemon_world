@@ -1268,7 +1268,10 @@ class Screen:
             bbox = img.getbbox()
             if bbox:
                 img = img.crop(bbox)
-            scale = float(req.get("factor") or 1.0)
+            # 旧管线是“先按 factor 贴到 240×160 逻辑层、再整张 ×S 放大”,
+            # 所以放大层里的等效缩放要**再乘 S** —— 少了这个 S 会让所有走 hires
+            # 的立绘只有原来的 1/S(实测:图鉴/队伍/仓库的立绘集体变小)。
+            scale = float(req.get("factor") or 1.0) * S
             if img.width * scale > bounds[0] or img.height * scale > bounds[1]:
                 scale = min(bounds[0] / img.width, bounds[1] / img.height)
             target = (max(1, round(img.width * scale)), max(1, round(img.height * scale)))

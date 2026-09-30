@@ -615,7 +615,7 @@ def render_growth(mon: dict, *, before_level: int = 0, after_level: int = 0,
         # ── 精灵小图 ──
         side = (154, 19, 235, 66)
         sc.window(side, radius=3)
-        sc.sprite(sp, ground=(194, 62), factor=1.18, bounds=(74, 42),
+        sc.sprite(sp, ground=(194, 62), factor=0.72, bounds=(58, 38),
                   shiny=bool(mon.get("shiny")), hires=True)
 
         # ── 学会的招式 ──
@@ -656,10 +656,10 @@ def _growth_evolution(sc: Screen, mon: dict, sp: str, name: str, from_zh: str,
     # 原有的招式信息留在下方
     sc.d.rectangle([4, 44, 236, 122], fill=BG)
     before_sp = _str(mon.get("pre_species")) or _species_key(from_zh) or sp
-    sc.sprite(before_sp, ground=(58, 106), factor=1.05, bounds=(84, 70),
+    sc.sprite(before_sp, ground=(56, 106), factor=0.85, bounds=(74, 62),
               silhouette=True, hires=True)
     # 闪光个体进化后仍然是闪光:进化瞬间也要用异色立绘
-    sc.sprite(sp, ground=(182, 106), factor=1.2, bounds=(94, 70),
+    sc.sprite(sp, ground=(184, 106), factor=1.0, bounds=(82, 62),
               shiny=bool(mon.get("shiny")), hires=True)
     sc.text_center(120, 78, "→", size=22, fill=(96, 94, 80))
     sc.text_center(56, 109, _str(from_zh, "之前"), size=8, fill=TEXT_DIM)
