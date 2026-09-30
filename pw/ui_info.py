@@ -218,8 +218,9 @@ def render_legendaries(region_zh: str, sites: list[dict], *, caught: list[str] =
             # 精灵槽
             sc.d.rounded_rectangle([8, y0 + 2, 30, y0 + rh - 3], radius=2,
                                    fill=SLOT_FILL, outline=BOX_EDGE)
+            # 这里画的是**传说据点**的一行(不是已捕获的宝可梦,没有闪光概念)
             sc.sprite(sp, ground=(19, y0 + rh - 4), factor=0.5, bounds=(18, 12),
-                      silhouette=not is_caught, hires=True)
+                      silhouette=not is_caught, hires=True)   # no-shiny
 
             # 名字
             name = "???" if is_locked else _fit(sc, _str(site.get("zh"), "?"), 52, 8.4)
@@ -494,7 +495,8 @@ def render_battle_result(*, outcome: str, title: str = "", lines: list[str] = ()
             sp = _str(mon.get("species"))
             # 结算画面的立绘放大一档(实测反馈太小):几乎占满左侧面板,
             # 仍在放大层单次重采样,不会糊
-            sc.sprite(sp, ground=(43, 111), factor=1.5, bounds=(66, 58), hires=True)
+            sc.sprite(sp, ground=(43, 111), factor=1.5, bounds=(66, 58),
+                      shiny=bool(mon.get("shiny")), hires=True)
             name = _fit(sc, _str(mon.get("name"), "?"), 66, 9)
             sc.text(11, 110, name, size=9, fill=TEXT)
             gender, gcolor = gender_symbol(_str(mon.get("gender")))

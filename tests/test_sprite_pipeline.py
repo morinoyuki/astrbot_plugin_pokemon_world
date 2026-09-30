@@ -53,3 +53,26 @@ def test_screen_supports_the_hires_pipeline():
     with open(os.path.join(_ROOT, "pw", "ui_render.py"), encoding="utf-8") as f:
         src = f.read()
     assert "hires" in src and "_hires" in src, "Screen 没有 hires 通道"
+
+
+def test_every_sprite_call_passes_the_shiny_flag():
+    """闪光立绘不能在某个界面被漏掉(实测:结算界面漏了)。
+
+    规则:除了**剪影**(silhouette=True,本来就画成黑影)之外,
+    每个 `sc.sprite(...)` 都必须显式传 `shiny=`。
+    """
+    import pathlib as _p
+
+    root = _p.Path(__file__).resolve().parent.parent / "pw"
+    missing = []
+    for f in sorted(root.glob("*.py")):
+        text = f.read_text(encoding="utf-8")
+        for i, line in enumerate(text.splitlines(), 1):
+            if "sc.sprite(" not in line:
+                continue
+            chunk = " ".join(text.splitlines()[i - 1:i + 3])
+            if "silhouette=True" in chunk or "no-shiny" in chunk:
+                continue   # 剪影/非宝可梦的行(如传说据点)没有闪光概念
+            if "shiny=" not in chunk:
+                missing.append(f"{f.name}:{i} {line.strip()[:70]}")
+    assert not missing, "这些立绘漏了 shiny=:" + chr(10).join(missing)

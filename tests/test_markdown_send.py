@@ -106,7 +106,7 @@ def test_image_plus_text_is_one_plain_message_without_markdown_markup():
     assert one[0].use_markdown_ is None, "带图的消息不该用 markdown"
     got = one[0].text
     assert got[0] is img or got[0].text is not None
-    caption = [c for c in got if getattr(c, "text", None) is not None][0].text
+    caption = next(c for c in got if getattr(c, "text", None) is not None).text
     assert "`" not in caption and "**" not in caption, caption
     assert "/对战 1" in caption and "/捕捉" in caption
     # 纯文本出口不受影响:仍是 markdown(反引号保留,客户端渲染成代码)
