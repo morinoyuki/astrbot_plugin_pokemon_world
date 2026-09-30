@@ -333,3 +333,18 @@ def test_no_two_locations_share_the_same_display_name():
             got = world.find_location(zh, region)
             assert got == key or world.node_zh(got) == zh, (
                 f"[{region}] {zh} 解析到了别的节点:{got}")
+
+
+def test_league_is_attached_to_the_main_line_not_only_side_areas():
+    """正作里“冠军之路出来就是联盟”——联盟必须直连主线末端,不能只连支线。"""
+    world = WorldMap()
+    for region in world.regions_with_data():
+        gateway = world.gateway(region)
+        assert gateway, f"{region} 缺联盟节点"
+        nbrs = [world.node_zh(k) for k in world.neighbors(gateway)]
+        assert nbrs, f"{region} 联盟没有任何相邻节点"
+        # 至少有一个邻居不是“支线岛屿/设施”那种绕路点
+        assert any(("冠军之路" in n or "道路" in n or "市" in n or "镇" in n
+                    or "水路" in n or "洞窟" in n) for n in nbrs), (
+            f"{region} 联盟只连着支线:{nbrs}")
+    assert "冠军之路·深处" in [world.node_zh(k) for k in world.neighbors(world.gateway("kanto"))]

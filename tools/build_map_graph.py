@@ -345,6 +345,21 @@ def build_region(
                     link(ident, ordered[other])
                     break
 
+    # 正作里“冠军之路出来就是联盟”:把联盟接到**最后一个非支线节点**上,
+    # 否则联盟只连着七之岛这类支线,玩家得绕支线才能挑战(实测反馈)。
+    _gateway_id = ""
+    for ident in ordered:
+        if ident.endswith("-pokemon-league") or ident == "indigo-plateau":
+            _gateway_id = ident
+            break
+    if _gateway_id:
+        _main_tail = [i for i in ordered if i != _gateway_id and not is_side_area(i)]
+        if _main_tail:
+            # 优先接「冠军之路」(正作的最后一关),没有才退化成主线最后一段
+            _vr = [i for i in _main_tail if "victory-road" in i]
+            _tail = max(_vr or _main_tail, key=lambda i: order_val.get(i, 0))
+            link(_tail, _gateway_id)
+
     for src, dst in edges:
         node_out[src]["next"].append(dst)
     for node in node_out.values():

@@ -551,7 +551,8 @@
      "tier": 5,
      "next": [
       "kanto-victory-road-1",
-      "kanto-underground-path"
+      "kanto-underground-path",
+      "kanto-pokemon-league"
      ],
      "hub": false
     },
@@ -970,6 +971,7 @@
      "order": 870,
      "tier": 8,
      "next": [
+      "kanto-victory-road-2",
       "resort-gorgeous",
       "navel-rock"
      ],
@@ -1517,7 +1519,8 @@
      "tier": 8,
      "next": [
       "johto-route-48",
-      "ruins-of-alph"
+      "ruins-of-alph",
+      "johto-pokemon-league"
      ],
      "hub": false
     },
@@ -1550,6 +1553,7 @@
      "tier": 8,
      "next": [
       "johto-safari-zone",
+      "dark-cave",
       "whirl-islands"
      ],
      "hub": true
@@ -2090,7 +2094,8 @@
      "tier": 5,
      "next": [
       "magma-hideout",
-      "scorched-slab"
+      "scorched-slab",
+      "hoenn-pokemon-league"
      ],
      "hub": false
     },
@@ -2610,6 +2615,7 @@
      "order": 950,
      "tier": 8,
      "next": [
+      "hoenn-victory-road",
       "battle-resort",
       "terra-cave"
      ],
@@ -3301,7 +3307,8 @@
      "tier": 7,
      "next": [
       "sinnoh-route-227",
-      "snowpoint-temple"
+      "snowpoint-temple",
+      "sinnoh-pokemon-league"
      ],
      "hub": false
     },
@@ -3344,6 +3351,7 @@
      "order": 650,
      "tier": 7,
      "next": [
+      "sinnoh-victory-road",
       "sinnoh-route-228",
       "sinnoh-route-229",
       "resort-area"
@@ -4218,7 +4226,8 @@
      "tier": 8,
      "next": [
       "seaside-cave",
-      "wellspring-cave"
+      "wellspring-cave",
+      "unova-pokemon-league"
      ],
      "hub": false
     },
@@ -4319,6 +4328,7 @@
      "order": 760,
      "tier": 8,
      "next": [
+      "unova-victory-road",
       "desert-resort",
       "trial-chamber"
      ],
@@ -4762,7 +4772,8 @@
      "tier": 7,
      "next": [
       "team-flare-secret-hq",
-      "kalos-route-22"
+      "kalos-route-22",
+      "kalos-pokemon-league"
      ],
      "hub": false
     },
@@ -4832,6 +4843,7 @@
      "order": 450,
      "tier": 8,
      "next": [
+      "kalos-victory-road",
       "pokemon-village",
       "sea-spirits-den"
      ],
@@ -5588,7 +5600,8 @@
      "tier": 7,
      "next": [
       "poni-plains",
-      "aether-paradise"
+      "aether-paradise",
+      "alola-pokemon-league"
      ],
      "hub": false
     },
@@ -5742,6 +5755,7 @@
      "tier": 8,
      "next": [
       "exeggutor-island",
+      "verdant-cavern--trial-site",
       "ultra-space-wilds"
      ],
      "hub": true
@@ -6556,7 +6570,8 @@
      "tier": 7,
      "next": [
       "giants-foot",
-      "isle-of-armor-caves"
+      "isle-of-armor-caves",
+      "galar-pokemon-league"
      ],
      "hub": false
     },
@@ -6710,6 +6725,7 @@
      "tier": 8,
      "next": [
       "wyndon",
+      "old-cemetery",
       "split-decision-ruins"
      ],
      "hub": true
@@ -7124,7 +7140,8 @@
      "tier": 8,
      "next": [
       "paldea-np2",
-      "paldea-casseroya-lake"
+      "paldea-casseroya-lake",
+      "paldea-crater"
      ],
      "hub": true
     },
@@ -7145,6 +7162,7 @@
      "order": 390,
      "tier": 8,
      "next": [
+      "paldea-pokemon-league",
       "paldea-casseroya-lake"
      ],
      "hub": false
