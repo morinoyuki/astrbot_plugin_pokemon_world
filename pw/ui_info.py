@@ -275,7 +275,9 @@ def render_news(day: int, *, world_events: list[str] = (), player_events: list[s
         _mine_rows: list[str] = []
         for _it in (list(_lines(player_events, limit=99)) or ["今天你还没有特别的消息。"]):
             _mine_rows.extend(_wrap_rows(_meas, f"· {_it}", _aw, size=8))
-        _nw, _np = max(1, len(_world_rows)), max(1, len(_mine_rows) + 2)
+        # 两个框的高度必须用同一套公式(16.5 + 行数*9.8 + 7);个人框原来多算
+        # 了 2 行(早期“尚未解锁”行的遗留),底部就比“世界”框多出一大截空白。
+        _nw, _np = max(1, len(_world_rows)), max(1, len(_mine_rows))
         _lh = 9.8
         _wb = 35 + 16.5 + _nw * _lh + 7
         _pbt = _wb + 4
