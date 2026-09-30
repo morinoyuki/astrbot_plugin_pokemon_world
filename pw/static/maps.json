@@ -551,15 +551,15 @@
      "tier": 5,
      "next": [
       "kanto-victory-road-1",
-      "kanto-underground-path",
-      "kanto-pokemon-league"
+      "kanto-pokemon-league",
+      "kanto-underground-path"
      ],
      "hub": false
     },
     "kanto-underground-path": {
      "zh": "地下通道(5-6号道路)",
      "kind": "area",
-     "order": 500,
+     "order": 510,
      "tier": 5,
      "next": [
       "kanto-victory-road-2",
@@ -570,7 +570,7 @@
     "pattern-bush": {
      "zh": "标志之林",
      "kind": "area",
-     "order": 510,
+     "order": 520,
      "tier": 5,
      "next": [
       "kanto-underground-path",
@@ -581,7 +581,7 @@
     "four-island": {
      "zh": "第四島",
      "kind": "area",
-     "order": 520,
+     "order": 530,
      "tier": 5,
      "next": [
       "pattern-bush",
@@ -592,7 +592,7 @@
     "water-labyrinth": {
      "zh": "水之迷宫",
      "kind": "area",
-     "order": 530,
+     "order": 540,
      "tier": 5,
      "next": [
       "four-island",
@@ -603,7 +603,7 @@
     "kanto-altering-cave": {
      "zh": "变幻洞窟",
      "kind": "area",
-     "order": 540,
+     "order": 550,
      "tier": 5,
      "next": [
       "water-labyrinth",
@@ -614,7 +614,7 @@
     "memorial-pillar": {
      "zh": "回忆之塔",
      "kind": "area",
-     "order": 550,
+     "order": 560,
      "tier": 6,
      "next": [
       "kanto-altering-cave",
@@ -625,7 +625,7 @@
     "three-isle-port": {
      "zh": "第三島碼頭",
      "kind": "area",
-     "order": 560,
+     "order": 570,
      "tier": 6,
      "next": [
       "memorial-pillar",
@@ -636,7 +636,7 @@
     "five-island": {
      "zh": "第五島",
      "kind": "area",
-     "order": 570,
+     "order": 580,
      "tier": 6,
      "next": [
       "three-isle-port",
@@ -647,20 +647,20 @@
     "resort-gorgeous": {
      "zh": "豪华度假区",
      "kind": "town",
-     "order": 580,
+     "order": 590,
      "tier": 6,
      "next": [
       "kanto-route-28",
+      "kanto-pokemon-league",
       "five-island",
-      "green-path",
-      "kanto-pokemon-league"
+      "green-path"
      ],
      "hub": true
     },
     "green-path": {
      "zh": "绿之步道",
      "kind": "area",
-     "order": 590,
+     "order": 600,
      "tier": 6,
      "next": [
       "resort-gorgeous",
@@ -671,7 +671,7 @@
     "one-island": {
      "zh": "第一島",
      "kind": "area",
-     "order": 600,
+     "order": 610,
      "tier": 6,
      "next": [
       "green-path",
@@ -682,7 +682,7 @@
     "outcast-island": {
      "zh": "外岛",
      "kind": "area",
-     "order": 610,
+     "order": 620,
      "tier": 6,
      "next": [
       "one-island",
@@ -693,7 +693,7 @@
     "tanoby-ruins": {
      "zh": "阿斯卡纳遗迹",
      "kind": "area",
-     "order": 620,
+     "order": 630,
      "tier": 6,
      "next": [
       "outcast-island",
@@ -704,7 +704,7 @@
     "trainer-tower": {
      "zh": "训练家塔",
      "kind": "area",
-     "order": 630,
+     "order": 640,
      "tier": 6,
      "next": [
       "tanoby-ruins",
@@ -715,7 +715,7 @@
     "ruin-valley": {
      "zh": "遗迹山谷",
      "kind": "area",
-     "order": 640,
+     "order": 650,
      "tier": 6,
      "next": [
       "trainer-tower",
@@ -726,7 +726,7 @@
     "dilford-chamber": {
      "zh": "阿斯卡纳石室(3)",
      "kind": "area",
-     "order": 650,
+     "order": 660,
      "tier": 6,
      "next": [
       "ruin-valley",
@@ -737,7 +737,7 @@
     "liptoo-chamber": {
      "zh": "阿斯卡纳石室(2)",
      "kind": "area",
-     "order": 660,
+     "order": 670,
      "tier": 7,
      "next": [
       "dilford-chamber",
@@ -748,7 +748,7 @@
     "monean-chamber": {
      "zh": "阿斯卡纳石室(1)",
      "kind": "area",
-     "order": 670,
+     "order": 680,
      "tier": 7,
      "next": [
       "liptoo-chamber",
@@ -759,7 +759,7 @@
     "rixy-chamber": {
      "zh": "阿斯卡纳石室(4)",
      "kind": "area",
-     "order": 680,
+     "order": 690,
      "tier": 7,
      "next": [
       "monean-chamber",
@@ -770,7 +770,7 @@
     "scufib-chamber": {
      "zh": "Scufib Chamber",
      "kind": "area",
-     "order": 690,
+     "order": 700,
      "tier": 7,
      "next": [
       "rixy-chamber",
@@ -781,7 +781,7 @@
     "viapos-chamber": {
      "zh": "Viapos Chamber",
      "kind": "area",
-     "order": 700,
+     "order": 710,
      "tier": 7,
      "next": [
       "scufib-chamber",
@@ -792,7 +792,7 @@
     "weepth-chamber": {
      "zh": "Weepth Chamber",
      "kind": "area",
-     "order": 710,
+     "order": 720,
      "tier": 7,
      "next": [
       "viapos-chamber",
@@ -803,7 +803,7 @@
     "treasure-beach": {
      "zh": "宝物海滩",
      "kind": "area",
-     "order": 720,
+     "order": 730,
      "tier": 7,
      "next": [
       "weepth-chamber",
@@ -814,7 +814,7 @@
     "five-isle-meadow": {
      "zh": "第五島空地",
      "kind": "area",
-     "order": 730,
+     "order": 740,
      "tier": 7,
      "next": [
       "treasure-beach",
@@ -825,7 +825,7 @@
     "kindle-road": {
      "zh": "热气之路",
      "kind": "area",
-     "order": 740,
+     "order": 750,
      "tier": 7,
      "next": [
       "five-isle-meadow",
@@ -836,7 +836,7 @@
     "bond-bridge": {
      "zh": "牵绊桥",
      "kind": "area",
-     "order": 750,
+     "order": 760,
      "tier": 7,
      "next": [
       "kindle-road",
@@ -847,7 +847,7 @@
     "cape-brink": {
      "zh": "边缘海岬",
      "kind": "area",
-     "order": 760,
+     "order": 770,
      "tier": 7,
      "next": [
       "bond-bridge",
@@ -858,7 +858,7 @@
     "berry-forest": {
      "zh": "樹果森林",
      "kind": "area",
-     "order": 770,
+     "order": 780,
      "tier": 8,
      "next": [
       "cape-brink",
@@ -869,7 +869,7 @@
     "seafoam-islands": {
      "zh": "双子岛",
      "kind": "area",
-     "order": 780,
+     "order": 790,
      "tier": 8,
      "next": [
       "berry-forest",
@@ -880,7 +880,7 @@
     "water-path": {
      "zh": "水之步道",
      "kind": "area",
-     "order": 790,
+     "order": 800,
      "tier": 8,
      "next": [
       "seafoam-islands",
@@ -891,7 +891,7 @@
     "birth-island": {
      "zh": "诞生之岛",
      "kind": "area",
-     "order": 800,
+     "order": 810,
      "tier": 8,
      "next": [
       "water-path",
@@ -902,7 +902,7 @@
     "lost-cave": {
      "zh": "不归之穴",
      "kind": "area",
-     "order": 810,
+     "order": 820,
      "tier": 8,
      "next": [
       "birth-island",
@@ -913,7 +913,7 @@
     "mt-ember": {
      "zh": "灯火山",
      "kind": "area",
-     "order": 820,
+     "order": 830,
      "tier": 8,
      "next": [
       "lost-cave",
@@ -924,7 +924,7 @@
     "kanto-power-plant": {
      "zh": "无人发电厂",
      "kind": "area",
-     "order": 830,
+     "order": 840,
      "tier": 8,
      "next": [
       "mt-ember",
@@ -935,7 +935,7 @@
     "sevault-canyon": {
      "zh": "七宝溪谷",
      "kind": "area",
-     "order": 840,
+     "order": 850,
      "tier": 8,
      "next": [
       "kanto-power-plant",
@@ -946,7 +946,7 @@
     "cerulean-cave": {
      "zh": "华蓝洞窟",
      "kind": "area",
-     "order": 850,
+     "order": 860,
      "tier": 8,
      "next": [
       "sevault-canyon",
@@ -957,18 +957,18 @@
     "navel-rock": {
      "zh": "肚脐岩",
      "kind": "area",
-     "order": 860,
+     "order": 870,
      "tier": 8,
      "next": [
-      "cerulean-cave",
-      "kanto-pokemon-league"
+      "kanto-pokemon-league",
+      "cerulean-cave"
      ],
      "hub": false
     },
     "kanto-pokemon-league": {
      "zh": "关都宝可梦联盟",
      "kind": "league",
-     "order": 870,
+     "order": 500,
      "tier": 8,
      "next": [
       "kanto-victory-road-2",
@@ -1519,15 +1519,15 @@
      "tier": 8,
      "next": [
       "johto-route-48",
-      "ruins-of-alph",
-      "johto-pokemon-league"
+      "johto-pokemon-league",
+      "ruins-of-alph"
      ],
      "hub": false
     },
     "ruins-of-alph": {
      "zh": "阿露福遗迹",
      "kind": "area",
-     "order": 490,
+     "order": 500,
      "tier": 8,
      "next": [
       "dark-cave",
@@ -1538,18 +1538,18 @@
     "whirl-islands": {
      "zh": "漩涡岛",
      "kind": "area",
-     "order": 500,
+     "order": 510,
      "tier": 8,
      "next": [
-      "ruins-of-alph",
-      "johto-pokemon-league"
+      "johto-pokemon-league",
+      "ruins-of-alph"
      ],
      "hub": false
     },
     "johto-pokemon-league": {
      "zh": "城都宝可梦联盟",
      "kind": "league",
-     "order": 510,
+     "order": 490,
      "tier": 8,
      "next": [
       "johto-safari-zone",
@@ -2094,15 +2094,15 @@
      "tier": 5,
      "next": [
       "magma-hideout",
-      "scorched-slab",
-      "hoenn-pokemon-league"
+      "hoenn-pokemon-league",
+      "scorched-slab"
      ],
      "hub": false
     },
     "scorched-slab": {
      "zh": "天旱石窟",
      "kind": "area",
-     "order": 490,
+     "order": 500,
      "tier": 5,
      "next": [
       "hoenn-victory-road",
@@ -2113,7 +2113,7 @@
     "team-aqua-hideout": {
      "zh": "海洋队基地",
      "kind": "area",
-     "order": 500,
+     "order": 510,
      "tier": 5,
      "next": [
       "scorched-slab",
@@ -2124,7 +2124,7 @@
     "team-magma-hideout": {
      "zh": "熔岩队本部·深处",
      "kind": "area",
-     "order": 510,
+     "order": 520,
      "tier": 5,
      "next": [
       "team-aqua-hideout",
@@ -2135,7 +2135,7 @@
     "cave-of-origin": {
      "zh": "觉醒神殿",
      "kind": "area",
-     "order": 520,
+     "order": 530,
      "tier": 5,
      "next": [
       "team-magma-hideout",
@@ -2146,7 +2146,7 @@
     "desert-underpass": {
      "zh": "沙漠的地下道",
      "kind": "area",
-     "order": 530,
+     "order": 540,
      "tier": 5,
      "next": [
       "cave-of-origin",
@@ -2157,7 +2157,7 @@
     "island-cave": {
      "zh": "小岛洞穴",
      "kind": "area",
-     "order": 540,
+     "order": 550,
      "tier": 5,
      "next": [
       "desert-underpass",
@@ -2168,7 +2168,7 @@
     "artisan-cave": {
      "zh": "工匠之穴",
      "kind": "area",
-     "order": 550,
+     "order": 560,
      "tier": 5,
      "next": [
       "island-cave",
@@ -2179,7 +2179,7 @@
     "mossdeep-space-center": {
      "zh": "绿岭宇宙中心",
      "kind": "area",
-     "order": 560,
+     "order": 570,
      "tier": 5,
      "next": [
       "artisan-cave",
@@ -2190,7 +2190,7 @@
     "sea-mauville": {
      "zh": "海紫堇",
      "kind": "area",
-     "order": 570,
+     "order": 580,
      "tier": 5,
      "next": [
       "mossdeep-space-center",
@@ -2201,7 +2201,7 @@
     "hoenn-route-125": {
      "zh": "125号水路(丰缘)",
      "kind": "route",
-     "order": 580,
+     "order": 590,
      "tier": 5,
      "next": [
       "hoenn-safari-zone",
@@ -2213,7 +2213,7 @@
     "mossdeep-city": {
      "zh": "绿岭市",
      "kind": "town",
-     "order": 590,
+     "order": 600,
      "tier": 5,
      "next": [
       "hoenn-route-125",
@@ -2224,7 +2224,7 @@
     "hoenn-route-126": {
      "zh": "126号水路(丰缘)",
      "kind": "route",
-     "order": 600,
+     "order": 610,
      "tier": 6,
      "next": [
       "mossdeep-city",
@@ -2235,7 +2235,7 @@
     "hoenn-route-127": {
      "zh": "127号水路(丰缘)",
      "kind": "route",
-     "order": 610,
+     "order": 620,
      "tier": 6,
      "next": [
       "hoenn-route-126",
@@ -2246,7 +2246,7 @@
     "sootopolis-city": {
      "zh": "琉璃市",
      "kind": "town",
-     "order": 620,
+     "order": 630,
      "tier": 6,
      "next": [
       "hoenn-route-127",
@@ -2257,7 +2257,7 @@
     "hoenn-route-128": {
      "zh": "128号水路(丰缘)",
      "kind": "route",
-     "order": 630,
+     "order": 640,
      "tier": 6,
      "next": [
       "sootopolis-city",
@@ -2268,7 +2268,7 @@
     "hoenn-route-129": {
      "zh": "129号水路(丰缘)",
      "kind": "route",
-     "order": 640,
+     "order": 650,
      "tier": 6,
      "next": [
       "hoenn-route-128",
@@ -2279,7 +2279,7 @@
     "hoenn-route-130": {
      "zh": "130号水路(丰缘)",
      "kind": "route",
-     "order": 650,
+     "order": 660,
      "tier": 6,
      "next": [
       "hoenn-route-129",
@@ -2290,7 +2290,7 @@
     "ever-grande-city": {
      "zh": "彩悠市",
      "kind": "town",
-     "order": 660,
+     "order": 670,
      "tier": 6,
      "next": [
       "hoenn-route-130",
@@ -2301,7 +2301,7 @@
     "hoenn-route-131": {
      "zh": "131号水路(丰缘)",
      "kind": "route",
-     "order": 670,
+     "order": 680,
      "tier": 6,
      "next": [
       "ever-grande-city",
@@ -2312,7 +2312,7 @@
     "hoenn-route-132": {
      "zh": "132号水路(丰缘)",
      "kind": "route",
-     "order": 680,
+     "order": 690,
      "tier": 6,
      "next": [
       "hoenn-route-131",
@@ -2323,7 +2323,7 @@
     "pacifidlog-town": {
      "zh": "暮水镇",
      "kind": "town",
-     "order": 690,
+     "order": 700,
      "tier": 6,
      "next": [
       "hoenn-route-132",
@@ -2334,7 +2334,7 @@
     "hoenn-route-133": {
      "zh": "133号水路(丰缘)",
      "kind": "route",
-     "order": 700,
+     "order": 710,
      "tier": 6,
      "next": [
       "pacifidlog-town",
@@ -2345,7 +2345,7 @@
     "hoenn-route-134": {
      "zh": "134号水路(丰缘)",
      "kind": "route",
-     "order": 710,
+     "order": 720,
      "tier": 6,
      "next": [
       "hoenn-route-133",
@@ -2357,7 +2357,7 @@
     "hoenn-altering-cave": {
      "zh": "变幻洞窟",
      "kind": "area",
-     "order": 720,
+     "order": 730,
      "tier": 7,
      "next": [
       "hoenn-route-134",
@@ -2368,7 +2368,7 @@
     "mirage-tower": {
      "zh": "幻影之塔",
      "kind": "area",
-     "order": 730,
+     "order": 740,
      "tier": 7,
      "next": [
       "hoenn-altering-cave",
@@ -2379,7 +2379,7 @@
     "mirage-island": {
      "zh": "mirage-island",
      "kind": "area",
-     "order": 740,
+     "order": 750,
      "tier": 7,
      "next": [
       "mirage-tower",
@@ -2390,7 +2390,7 @@
     "faraway-island": {
      "zh": "边境的小岛",
      "kind": "area",
-     "order": 750,
+     "order": 760,
      "tier": 7,
      "next": [
       "mirage-island",
@@ -2401,7 +2401,7 @@
     "mirage-spot-cave": {
      "zh": "幻之洞窟",
      "kind": "area",
-     "order": 760,
+     "order": 770,
      "tier": 7,
      "next": [
       "faraway-island",
@@ -2412,7 +2412,7 @@
     "mirage-spot-mountain": {
      "zh": "幻之山脈",
      "kind": "area",
-     "order": 770,
+     "order": 780,
      "tier": 7,
      "next": [
       "mirage-spot-cave",
@@ -2423,7 +2423,7 @@
     "mirage-spot-forest": {
      "zh": "Mirage Forest",
      "kind": "area",
-     "order": 780,
+     "order": 790,
      "tier": 7,
      "next": [
       "mirage-spot-mountain",
@@ -2434,7 +2434,7 @@
     "mirage-spot-island": {
      "zh": "幻之岛",
      "kind": "area",
-     "order": 790,
+     "order": 800,
      "tier": 7,
      "next": [
       "mirage-spot-forest",
@@ -2445,7 +2445,7 @@
     "ancient-tomb": {
      "zh": "古代坟墓",
      "kind": "area",
-     "order": 800,
+     "order": 810,
      "tier": 7,
      "next": [
       "mirage-spot-island",
@@ -2456,20 +2456,20 @@
     "battle-resort": {
      "zh": "对战度假地",
      "kind": "town",
-     "order": 810,
+     "order": 820,
      "tier": 7,
      "next": [
+      "hoenn-pokemon-league",
       "hoenn-route-134",
       "ancient-tomb",
-      "desert-ruins",
-      "hoenn-pokemon-league"
+      "desert-ruins"
      ],
      "hub": true
     },
     "desert-ruins": {
      "zh": "沙漠遗迹",
      "kind": "area",
-     "order": 820,
+     "order": 830,
      "tier": 7,
      "next": [
       "battle-resort",
@@ -2480,7 +2480,7 @@
     "southern-island": {
      "zh": "南方孤岛",
      "kind": "area",
-     "order": 830,
+     "order": 840,
      "tier": 7,
      "next": [
       "desert-ruins",
@@ -2491,7 +2491,7 @@
     "hoenn-battle-frontier": {
      "zh": "对战开拓区(第三世代)",
      "kind": "area",
-     "order": 840,
+     "order": 850,
      "tier": 8,
      "next": [
       "southern-island",
@@ -2502,7 +2502,7 @@
     "sky-pillar": {
      "zh": "天空之柱",
      "kind": "area",
-     "order": 850,
+     "order": 860,
      "tier": 8,
      "next": [
       "hoenn-battle-frontier",
@@ -2513,7 +2513,7 @@
     "crescent-isle": {
      "zh": "弓形島",
      "kind": "area",
-     "order": 860,
+     "order": 870,
      "tier": 8,
      "next": [
       "sky-pillar",
@@ -2524,7 +2524,7 @@
     "fabled-cave": {
      "zh": "朦胧洞窟",
      "kind": "area",
-     "order": 870,
+     "order": 880,
      "tier": 8,
      "next": [
       "crescent-isle",
@@ -2535,7 +2535,7 @@
     "gnarled-den": {
      "zh": "歪曲洞穴",
      "kind": "area",
-     "order": 880,
+     "order": 890,
      "tier": 8,
      "next": [
       "fabled-cave",
@@ -2546,7 +2546,7 @@
     "nameless-cavern": {
      "zh": "未知洞窟",
      "kind": "area",
-     "order": 890,
+     "order": 900,
      "tier": 8,
      "next": [
       "gnarled-den",
@@ -2557,7 +2557,7 @@
     "pathless-plain": {
      "zh": "无名平原",
      "kind": "area",
-     "order": 900,
+     "order": 910,
      "tier": 8,
      "next": [
       "nameless-cavern",
@@ -2568,7 +2568,7 @@
     "soaring-in-the-sky": {
      "zh": "翱翔高空",
      "kind": "area",
-     "order": 910,
+     "order": 920,
      "tier": 8,
      "next": [
       "pathless-plain",
@@ -2579,7 +2579,7 @@
     "trackless-forest": {
      "zh": "原始森林",
      "kind": "area",
-     "order": 920,
+     "order": 930,
      "tier": 8,
      "next": [
       "soaring-in-the-sky",
@@ -2590,7 +2590,7 @@
     "marine-cave": {
      "zh": "海之窟",
      "kind": "area",
-     "order": 930,
+     "order": 940,
      "tier": 8,
      "next": [
       "trackless-forest",
@@ -2601,18 +2601,18 @@
     "terra-cave": {
      "zh": "陆之窟",
      "kind": "area",
-     "order": 940,
+     "order": 950,
      "tier": 8,
      "next": [
-      "marine-cave",
-      "hoenn-pokemon-league"
+      "hoenn-pokemon-league",
+      "marine-cave"
      ],
      "hub": false
     },
     "hoenn-pokemon-league": {
      "zh": "丰缘宝可梦联盟",
      "kind": "league",
-     "order": 950,
+     "order": 490,
      "tier": 8,
      "next": [
       "hoenn-victory-road",
@@ -3307,15 +3307,15 @@
      "tier": 7,
      "next": [
       "sinnoh-route-227",
-      "snowpoint-temple",
-      "sinnoh-pokemon-league"
+      "sinnoh-pokemon-league",
+      "snowpoint-temple"
      ],
      "hub": false
     },
     "snowpoint-temple": {
      "zh": "雪峰神殿",
      "kind": "area",
-     "order": 620,
+     "order": 630,
      "tier": 7,
      "next": [
       "sinnoh-victory-road",
@@ -3326,7 +3326,7 @@
     "spear-pillar": {
      "zh": "枪之柱",
      "kind": "area",
-     "order": 630,
+     "order": 640,
      "tier": 7,
      "next": [
       "snowpoint-temple",
@@ -3337,18 +3337,18 @@
     "sinnoh-route-228": {
      "zh": "228号道路(神奥)",
      "kind": "route",
-     "order": 640,
+     "order": 650,
      "tier": 7,
      "next": [
-      "spear-pillar",
-      "sinnoh-pokemon-league"
+      "sinnoh-pokemon-league",
+      "spear-pillar"
      ],
      "hub": false
     },
     "sinnoh-pokemon-league": {
      "zh": "宝可梦联盟",
      "kind": "town",
-     "order": 650,
+     "order": 620,
      "tier": 7,
      "next": [
       "sinnoh-victory-road",
@@ -4226,15 +4226,15 @@
      "tier": 8,
      "next": [
       "seaside-cave",
-      "wellspring-cave",
-      "unova-pokemon-league"
+      "unova-pokemon-league",
+      "wellspring-cave"
      ],
      "hub": false
     },
     "wellspring-cave": {
      "zh": "泉源洞穴",
      "kind": "area",
-     "order": 680,
+     "order": 690,
      "tier": 8,
      "next": [
       "unova-victory-road",
@@ -4245,7 +4245,7 @@
     "pinwheel-forest": {
      "zh": "矢车森林",
      "kind": "area",
-     "order": 690,
+     "order": 700,
      "tier": 8,
      "next": [
       "wellspring-cave",
@@ -4256,7 +4256,7 @@
     "unova-route-23": {
      "zh": "23号道路",
      "kind": "route",
-     "order": 700,
+     "order": 710,
      "tier": 8,
      "next": [
       "pinwheel-forest",
@@ -4268,7 +4268,7 @@
     "ns-castle": {
      "zh": "Ｎ的城堡",
      "kind": "area",
-     "order": 710,
+     "order": 720,
      "tier": 8,
      "next": [
       "unova-route-23",
@@ -4279,7 +4279,7 @@
     "giant-chasm": {
      "zh": "巨人洞窟",
      "kind": "area",
-     "order": 720,
+     "order": 730,
      "tier": 8,
      "next": [
       "ns-castle",
@@ -4290,20 +4290,20 @@
     "desert-resort": {
      "zh": "荒野名勝區",
      "kind": "town",
-     "order": 730,
+     "order": 740,
      "tier": 8,
      "next": [
+      "unova-pokemon-league",
       "unova-route-23",
       "giant-chasm",
-      "guidance-chamber",
-      "unova-pokemon-league"
+      "guidance-chamber"
      ],
      "hub": true
     },
     "guidance-chamber": {
      "zh": "指引洞窟",
      "kind": "area",
-     "order": 740,
+     "order": 750,
      "tier": 8,
      "next": [
       "desert-resort",
@@ -4314,18 +4314,18 @@
     "trial-chamber": {
      "zh": "冠军之路·试炼之间",
      "kind": "area",
-     "order": 750,
+     "order": 760,
      "tier": 8,
      "next": [
-      "guidance-chamber",
-      "unova-pokemon-league"
+      "unova-pokemon-league",
+      "guidance-chamber"
      ],
      "hub": false
     },
     "unova-pokemon-league": {
      "zh": "合众宝可梦联盟",
      "kind": "league",
-     "order": 760,
+     "order": 680,
      "tier": 8,
      "next": [
       "unova-victory-road",
@@ -4772,15 +4772,15 @@
      "tier": 7,
      "next": [
       "team-flare-secret-hq",
-      "kalos-route-22",
-      "kalos-pokemon-league"
+      "kalos-pokemon-league",
+      "kalos-route-22"
      ],
      "hub": false
     },
     "kalos-route-22": {
      "zh": "22号道路",
      "kind": "route",
-     "order": 400,
+     "order": 410,
      "tier": 8,
      "next": [
       "kalos-victory-road",
@@ -4793,7 +4793,7 @@
     "reflection-cave": {
      "zh": "鏡穴",
      "kind": "area",
-     "order": 410,
+     "order": 420,
      "tier": 8,
      "next": [
       "kalos-route-22",
@@ -4804,7 +4804,7 @@
     "friend-safari": {
      "zh": "朋友狩猎",
      "kind": "town",
-     "order": 420,
+     "order": 430,
      "tier": 8,
      "next": [
       "kalos-route-22",
@@ -4816,31 +4816,31 @@
     "pokemon-village": {
      "zh": "寶可夢村",
      "kind": "town",
-     "order": 430,
+     "order": 440,
      "tier": 8,
      "next": [
+      "kalos-pokemon-league",
       "kalos-route-22",
       "friend-safari",
-      "sea-spirits-den",
-      "kalos-pokemon-league"
+      "sea-spirits-den"
      ],
      "hub": true
     },
     "sea-spirits-den": {
      "zh": "海神之穴",
      "kind": "area",
-     "order": 440,
+     "order": 450,
      "tier": 8,
      "next": [
-      "pokemon-village",
-      "kalos-pokemon-league"
+      "kalos-pokemon-league",
+      "pokemon-village"
      ],
      "hub": false
     },
     "kalos-pokemon-league": {
      "zh": "卡洛斯宝可梦联盟",
      "kind": "league",
-     "order": 450,
+     "order": 400,
      "tier": 8,
      "next": [
       "kalos-victory-road",
@@ -5600,15 +5600,15 @@
      "tier": 7,
      "next": [
       "poni-plains",
-      "aether-paradise",
-      "alola-pokemon-league"
+      "alola-pokemon-league",
+      "aether-paradise"
      ],
      "hub": false
     },
     "aether-paradise": {
      "zh": "以太樂園",
      "kind": "area",
-     "order": 680,
+     "order": 690,
      "tier": 7,
      "next": [
       "verdant-cavern--trial-site",
@@ -5619,7 +5619,7 @@
     "poke-pelago": {
      "zh": "寶可度假地",
      "kind": "area",
-     "order": 690,
+     "order": 700,
      "tier": 7,
      "next": [
       "aether-paradise",
@@ -5630,7 +5630,7 @@
     "altar-of-the-moone": {
      "zh": "月輪祭壇",
      "kind": "area",
-     "order": 700,
+     "order": 710,
      "tier": 7,
      "next": [
       "poke-pelago",
@@ -5641,7 +5641,7 @@
     "altar-of-the-sunne": {
      "zh": "日輪祭壇",
      "kind": "area",
-     "order": 710,
+     "order": 720,
      "tier": 8,
      "next": [
       "altar-of-the-moone",
@@ -5652,7 +5652,7 @@
     "resolution-cave": {
      "zh": "終結洞窟(阿羅拉)",
      "kind": "area",
-     "order": 720,
+     "order": 730,
      "tier": 8,
      "next": [
       "altar-of-the-sunne",
@@ -5663,7 +5663,7 @@
     "mahalo-trail": {
      "zh": "馬哈羅山路",
      "kind": "area",
-     "order": 730,
+     "order": 740,
      "tier": 8,
      "next": [
       "resolution-cave",
@@ -5674,7 +5674,7 @@
     "ruins-of-abundance": {
      "zh": "豐收遺跡",
      "kind": "area",
-     "order": 740,
+     "order": 750,
      "tier": 8,
      "next": [
       "mahalo-trail",
@@ -5685,7 +5685,7 @@
     "ruins-of-conflict": {
      "zh": "戰爭遺跡",
      "kind": "area",
-     "order": 750,
+     "order": 760,
      "tier": 8,
      "next": [
       "ruins-of-abundance",
@@ -5696,7 +5696,7 @@
     "ruins-of-hope": {
      "zh": "彼岸遺跡",
      "kind": "area",
-     "order": 760,
+     "order": 770,
      "tier": 8,
      "next": [
       "ruins-of-conflict",
@@ -5707,7 +5707,7 @@
     "ruins-of-life": {
      "zh": "生命遺跡",
      "kind": "area",
-     "order": 770,
+     "order": 780,
      "tier": 8,
      "next": [
       "ruins-of-hope",
@@ -5718,7 +5718,7 @@
     "team-rockets-castle": {
      "zh": "火箭隊城堡",
      "kind": "area",
-     "order": 780,
+     "order": 790,
      "tier": 8,
      "next": [
       "ruins-of-life",
@@ -5729,7 +5729,7 @@
     "ultra-space": {
      "zh": "究極空間",
      "kind": "area",
-     "order": 790,
+     "order": 800,
      "tier": 8,
      "next": [
       "team-rockets-castle",
@@ -5740,18 +5740,18 @@
     "ultra-space-wilds": {
      "zh": "究極空間零地帶",
      "kind": "area",
-     "order": 800,
+     "order": 810,
      "tier": 8,
      "next": [
-      "ultra-space",
-      "alola-pokemon-league"
+      "alola-pokemon-league",
+      "ultra-space"
      ],
      "hub": false
     },
     "alola-pokemon-league": {
      "zh": "阿罗拉宝可梦联盟",
      "kind": "league",
-     "order": 810,
+     "order": 680,
      "tier": 8,
      "next": [
       "exeggutor-island",
@@ -6570,15 +6570,15 @@
      "tier": 7,
      "next": [
       "giants-foot",
-      "isle-of-armor-caves",
-      "galar-pokemon-league"
+      "galar-pokemon-league",
+      "isle-of-armor-caves"
      ],
      "hub": false
     },
     "isle-of-armor-caves": {
      "zh": "Random caves across the Isle of Armor",
      "kind": "area",
-     "order": 730,
+     "order": 740,
      "tier": 7,
      "next": [
       "old-cemetery",
@@ -6589,7 +6589,7 @@
     "honeycalm-island": {
      "zh": "蜂巢島",
      "kind": "area",
-     "order": 740,
+     "order": 750,
      "tier": 7,
      "next": [
       "isle-of-armor-caves",
@@ -6600,7 +6600,7 @@
     "galar-battle-tower": {
      "zh": "对战塔(剑／盾)",
      "kind": "area",
-     "order": 750,
+     "order": 760,
      "tier": 7,
      "next": [
       "honeycalm-island",
@@ -6611,7 +6611,7 @@
     "crown-shrine": {
      "zh": "王冠神殿",
      "kind": "area",
-     "order": 760,
+     "order": 770,
      "tier": 8,
      "next": [
       "galar-battle-tower",
@@ -6622,7 +6622,7 @@
     "roaring-sea-caves": {
      "zh": "海鳴洞窟",
      "kind": "area",
-     "order": 770,
+     "order": 780,
      "tier": 8,
      "next": [
       "crown-shrine",
@@ -6633,7 +6633,7 @@
     "tunnel-to-the-top": {
      "zh": "登頂隧道",
      "kind": "area",
-     "order": 780,
+     "order": 790,
      "tier": 8,
      "next": [
       "roaring-sea-caves",
@@ -6644,7 +6644,7 @@
     "lakeside-cave": {
      "zh": "湖畔洞窟",
      "kind": "area",
-     "order": 790,
+     "order": 800,
      "tier": 8,
      "next": [
       "tunnel-to-the-top",
@@ -6655,7 +6655,7 @@
     "max-lair": {
      "zh": "極巨巢穴",
      "kind": "area",
-     "order": 800,
+     "order": 810,
      "tier": 8,
      "next": [
       "lakeside-cave",
@@ -6666,7 +6666,7 @@
     "energy-plant": {
      "zh": "能源工廠",
      "kind": "area",
-     "order": 810,
+     "order": 820,
      "tier": 8,
      "next": [
       "max-lair",
@@ -6677,7 +6677,7 @@
     "galar-iceberg-ruins": {
      "zh": "冰山遺跡(伽勒爾)",
      "kind": "area",
-     "order": 820,
+     "order": 830,
      "tier": 8,
      "next": [
       "energy-plant",
@@ -6688,7 +6688,7 @@
     "galar-iron-ruins": {
      "zh": "黑金遗迹(伽勒爾)",
      "kind": "area",
-     "order": 830,
+     "order": 840,
      "tier": 8,
      "next": [
       "galar-iceberg-ruins",
@@ -6699,7 +6699,7 @@
     "galar-rock-peak-ruins": {
      "zh": "岩山遺跡(伽勒爾)",
      "kind": "area",
-     "order": 840,
+     "order": 850,
      "tier": 8,
      "next": [
       "galar-iron-ruins",
@@ -6710,18 +6710,18 @@
     "split-decision-ruins": {
      "zh": "抉擇遺跡",
      "kind": "area",
-     "order": 850,
+     "order": 860,
      "tier": 8,
      "next": [
-      "galar-rock-peak-ruins",
-      "galar-pokemon-league"
+      "galar-pokemon-league",
+      "galar-rock-peak-ruins"
      ],
      "hub": false
     },
     "galar-pokemon-league": {
      "zh": "伽勒尔宝可梦联盟",
      "kind": "league",
-     "order": 860,
+     "order": 730,
      "tier": 8,
      "next": [
       "wyndon",
@@ -7136,7 +7136,7 @@
     "paldea-pokemon-league": {
      "zh": "宝可梦联盟",
      "kind": "town",
-     "order": 370,
+     "order": 390,
      "tier": 8,
      "next": [
       "paldea-np2",
@@ -7148,22 +7148,22 @@
     "paldea-casseroya-lake": {
      "zh": "大鍋湖",
      "kind": "area",
-     "order": 380,
+     "order": 370,
      "tier": 8,
      "next": [
-      "paldea-pokemon-league",
-      "paldea-crater"
+      "paldea-crater",
+      "paldea-pokemon-league"
      ],
      "hub": false
     },
     "paldea-crater": {
      "zh": "帕底亚大坑",
      "kind": "area",
-     "order": 390,
+     "order": 380,
      "tier": 8,
      "next": [
-      "paldea-pokemon-league",
-      "paldea-casseroya-lake"
+      "paldea-casseroya-lake",
+      "paldea-pokemon-league"
      ],
      "hub": false
     }

@@ -111,8 +111,14 @@ def test_kanto_progression_order_is_canonical():
                  "tanoby-ruins", "navel-rock"):
         if side in order:
             assert order[side] > last_town, f"支线 {side} 插进了主线中间"
-    # 主线必须收在联盟上(联盟是最后节点)
-    assert order["kanto-pokemon-league"] == max(order.values())
+    # 联盟必须**紧跟冠军之路**(地图上的路径才连得起来),之后只剩二周目支线
+    assert order["kanto-pokemon-league"] == order["kanto-victory-road-2"] + 10, (
+        order["kanto-victory-road-2"], order["kanto-pokemon-league"])
+    towns = {"pallet-town", "viridian-city", "pewter-city", "cerulean-city",
+             "vermilion-city", "celadon-city", "saffron-city", "fuchsia-city",
+             "cinnabar-island"}
+    after = [k for k, v in order.items() if v > order["kanto-pokemon-league"]]
+    assert not (set(after) & towns), f"联盟之后还有城镇:{sorted(set(after) & towns)}"
 
 
 def test_world_map_command_lists_region_progress():

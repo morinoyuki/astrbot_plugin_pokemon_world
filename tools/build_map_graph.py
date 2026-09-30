@@ -359,6 +359,16 @@ def build_region(
             _vr = [i for i in _main_tail if "victory-road" in i]
             _tail = max(_vr or _main_tail, key=lambda i: order_val.get(i, 0))
             link(_tail, _gateway_id)
+            # 画面上的“路径”是按 order 排出来的:联盟必须**紧跟主线末端**,
+            # 否则玩家走到联盟时,地图窗口会停在支线那一带,看不出自己站在终点。
+            _ro = sorted(ordered, key=lambda i: order_val.get(i, 0))
+            if _gateway_id in _ro:
+                _ro.remove(_gateway_id)
+                _ro.insert(_ro.index(_tail) + 1, _gateway_id)
+                for _idx, _i in enumerate(_ro):
+                    order_val[_i] = (_idx + 1) * 10
+                    if _i in node_out:
+                        node_out[_i]["order"] = order_val[_i]   # 输出节点也要同步
 
     for src, dst in edges:
         node_out[src]["next"].append(dst)
