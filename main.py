@@ -3886,6 +3886,20 @@ class PokemonWorldPlugin(Star):
         best = min(c[2] for c in cands)
         return [(u, n) for u, n, rank in cands if rank == best]
 
+    def _pick_player_event_targets(self, players: list, scope: str, day: int) -> list:
+        """从本群玩家中**随机**挑 2~4 位作为“个人事件”的对象。
+
+        - 人数不足 2 人:原样返回(人太少就没必要挑)
+        - 用 `stable_rng("player-events", scope, day)` 作种子 → 同一天结果一致,
+          既不会因为刷新而换人,也不会把同一天的事件摊给所有人(那样就不“个人”了)
+        """
+        names = list(players or [])
+        if len(names) <= 2:
+            return names
+        rng = stable_rng("player-events", scope, day)
+        want = max(2, min(4, int(rng.randint(2, 4))))
+        return rng.sample(names, min(want, len(names)))
+
     def _is_admin_uid(self, uid: str) -> bool:
         """管理员门禁:配置 `admin_uids`(逗号分隔)里包含才算 —— 未配置时默认拒绝。"""
         raw = str(self._cfg("admin_uids", "") or "")
@@ -4347,6 +4361,9 @@ class PokemonWorldPlugin(Star):
                 # 玩家指令刚滚出来的事件会被调度器的旧快照覆盖(丢更新)。
                 async with self._lock(scope):
                     state = self._state(scope)
+                    # 个人事件只**随机挑 2~4 位**玩家生成 —— “个人”才有稀缺感(用户要求)。
+                    # 种子用 (群, 游戏日):同一天重跑选到的是同一批人,刷新不会换人。
+                    players = self._pick_player_event_targets(players, scope, state.day)
                     res = await D.roll_day(
                         scope=scope,
                         state=state,
