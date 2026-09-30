@@ -97,3 +97,18 @@ def test_admin_command_gating_and_listing():
         out4 = "\n".join(ev4.outputs)
         assert "已迁移 1 位玩家的存档" in out4, out4
         assert p2.trainers.list_players("qqofficial-group") == [t2.uid]
+
+
+def test_migrate_works_without_starting_the_adventure():
+    """迁移是管理操作:自己没 `/开始` 也要能用(不能先要求建号)。"""
+    tmp = tempfile.TemporaryDirectory()
+    p = _Cmd(tmp.name)
+    p.config = {"ui_image": False, "admin_uids": "u1"}
+    # 造一份别的玩家的存档,但**调用者自己没有号**
+    p.trainers.save("test:GroupMessage:g1", "u9", {"party": [], "name": "别人"})
+    ev = _Event("/迁移存档 列表")
+    run_cmd(p, ev, p.cmd_migrate)
+    out = "".join(x for x in ev.outputs if isinstance(x, str))
+    assert "没有开始旅程" not in out, out
+    assert "u9" in out or "g1" in out, out       # 列表真的出来了
+    assert p._load(_Event()) is None             # 确认调用者确实没有存档

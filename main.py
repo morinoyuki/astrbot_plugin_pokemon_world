@@ -3952,10 +3952,13 @@ class PokemonWorldPlugin(Star):
         · `/迁移存档 玩家 <群> <旧ID> <新ID>`   单人或批量(逗号分隔)
         · 末尾加 `force` 允许覆盖目标已有存档
         """
-        t, err = self._require(event)
-        if err:
-            yield _res(event, err)
+        # 迁移是**管理操作**:即使自己还没开始冒险也要能用 ——
+        # 所以不走 `_require`(它会先要求 /开始),只做管理员校验。
+        uid, scope = self._uid(event), self._scope(event)
+        if not self._is_admin_uid(uid):
+            yield _res(event, "❌ 只有管理员能迁移存档(id 需在 admin_uids 里)。")
             return
+        t = self._load(event) or Trainer({"party": []}, uid=uid, scope=scope)
         if not self._is_admin_uid(t.uid):
             yield _res(event,
                 "❌ 只有管理员能迁移存档。请先在插件配置 `admin_uids` 里填上你的 ID。"
