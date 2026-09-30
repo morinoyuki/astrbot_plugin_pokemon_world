@@ -460,6 +460,39 @@ def _explore_target(arg: str) -> str:
     return ""
 
 
+# ── 文本发送格式 ──────────────────────────────────────────────
+# QQ 官方接口(qqofficial)默认**按 markdown 发送**:AstrBot 的 MessageEventResult
+# 有 use_markdown(),适配器支持就发 markdown、不支持也只是忽略这份元数据。
+# 其他平台保持纯文本;开关见插件配置 `send_markdown`(auto/always/never)。
+_SEND_MD = {"mode": "auto"}
+
+
+def _res(event, text: str = ""):
+    """统一的文本出口:所有 `_res(event, ...)` 都走这里。
+
+    - auto(默认):平台名含 `qq` + `official` 时才用 markdown
+    - always / never:强制开/关(想统一风格或适配器不兼容时用)
+    - 任何一步出错都退回普通纯文本 —— 发送格式绝不能把游戏搞崩
+    """
+    res = event.plain_result(text)   # 注意:这里必须是原始调用(不能递归到自己)
+    mode = str(_SEND_MD.get("mode") or "auto").lower()
+    if mode == "never":
+        return res
+    if mode == "always":
+        want = True
+    else:
+        try:
+            plat = str(event.get_platform_name() or "").lower()
+        except Exception:
+            plat = ""
+        want = "qq" in plat and "official" in plat
+    if want:
+        try:
+            res.use_markdown(True)
+        except Exception:
+            return res
+    return res
+
 class PokemonWorldPlugin(Star):
     def __init__(self, context: Context, config=None):
         super().__init__(context)
@@ -469,6 +502,8 @@ class PokemonWorldPlugin(Star):
         # 配置 storage=json 可退回旧的"每 uid 一个 JSON 文件"实现。
         # 首次打开数据库时会自动导入磁盘上的旧 JSON 存档(改名为 *.imported 保留)。
         self._storage = str(self._cfg("storage", "sqlite") or "sqlite").strip().lower()
+        # 文本发送格式:auto(仅 QQ 官方接口按 markdown)/ always / never
+        _SEND_MD["mode"] = str(self._cfg("send_markdown", "auto") or "auto").strip().lower()
         self._db = SqliteBackend(self.data_dir) if self._storage != "json" else None
         if self._db is not None:
             self._db.import_legacy()
@@ -695,14 +730,14 @@ class PokemonWorldPlugin(Star):
         async with self._lock(scope):
             if self.trainers.exists(scope, uid):
                 if self.trainers.load(scope, uid):
-                    yield event.plain_result(
+                    yield _res(event,
                         "你已经开始过旅程了。查看 `/状态`,或管理员用 `/重置世界` 重新开始。"
                     )
                     return
                 # 文件在但读不出来 → 备份后允许重开(否则玩家被"卡死")
                 bak = self.trainers.backup_corrupt(scope, uid)
                 logger.warning("宝可梦世界: %s/%s 存档损坏,已备份为 %s", scope, uid, bak)
-                yield event.plain_result(
+                yield _res(event,
                     f"⚠️ 你的存档已损坏(备份为 `{bak or '未知'}`),现在重新开始一段旅程。"
                 )
             tokens = [t for t in args.split() if t]
@@ -724,13 +759,13 @@ class PokemonWorldPlugin(Star):
                         pool_keys.add(str(hit[0]))
                 hit0 = get_dex().resolve_species(starter)
                 if hit0 and str(hit0[0]) not in pool_keys:
-                    yield event.plain_result(
+                    yield _res(event,
                         f"❌ 「{starter}」不在初始宝可梦候选里。"
                         "用 `/开始 <名字>` 不带宝可梦会弹出选择菜单。"
                     )
                     return
             if not starter:
-                yield event.plain_result(self._starter_menu(pool, name))
+                yield _res(event, self._starter_menu(pool, name))
                 return
             name = name or f"训练家{uid[-4:]}"
             starter_key = starter
@@ -746,7 +781,7 @@ class PokemonWorldPlugin(Star):
                 if mon
                 else "🐾 初始伙伴:无(可去野外收服第一只)"
             )
-            yield event.plain_result(
+            yield _res(event,
                 WELCOME_TEMPLATE.format(
                     name=t.name,
                     place=world.where_am_i(t),
@@ -754,14 +789,14 @@ class PokemonWorldPlugin(Star):
                     starter_line=starter_line,
                 )
             )
-            yield event.plain_result(HELP_TEXT)
+            yield _res(event, HELP_TEXT)
 
     @filter.command("状态", alias={"status", "训练家", "档案"})
     async def cmd_status(self, event: AstrMessageEvent):
         """/状态 —— 训练家档案"""
         t, err = self._require(event, in_battle_ok=True)
         if err:
-            yield event.plain_result(err)
+            yield _res(event, err)
             return
         async with self._lock(t.scope):
             today = await self._ensure_day(event, t)
@@ -779,7 +814,7 @@ class PokemonWorldPlugin(Star):
         """/队伍 [存入|取出|换位|放生|电脑] <序号> —— 队伍与仓库管理"""
         t, err = self._require(event, in_battle_ok=True)
         if err:
-            yield event.plain_result(err)
+            yield _res(event, err)
             return
         parts = self._args(event, ("队伍", "team", "宝可梦队伍")).split()
         sub = parts[0] if parts else ""
@@ -789,7 +824,7 @@ class PokemonWorldPlugin(Star):
         managing = sub in ("存入", "取下", "取出", "换位", "交换", "放生",
                            "deposit", "withdraw", "swap", "release")
         if managing and B.in_battle(t):
-            yield event.plain_result(
+            yield _res(event,
                 "⚠️ 对战中不能整理队伍 —— 先打完这场(出招/捕捉/逃跑)。"
             )
             return
@@ -797,18 +832,18 @@ class PokemonWorldPlugin(Star):
             idx = coerce_int(args[0] if args else "0", 0)
             mon = t.mon(idx - 1) if idx >= 1 else None
             if mon is None:
-                yield event.plain_result(
+                yield _res(event,
                     f"❌ 用法:`/队伍 存入 <队伍序号>`(现在是 1~{max(1, len(t.party))})"
                 )
                 return
             if len(t.party) <= 1:
-                yield event.plain_result("❌ 队伍里至少要留一只宝可梦。")
+                yield _res(event, "❌ 队伍里至少要留一只宝可梦。")
                 return
             if not t.deposit(idx - 1):
-                yield event.plain_result("❌ 存入失败(序号越界或队伍只剩一只)。")
+                yield _res(event, "❌ 存入失败(序号越界或队伍只剩一只)。")
                 return
             self._save(t)
-            yield event.plain_result(
+            yield _res(event,
                 f"📦 {mon.display} 已存入电脑(队伍 {len(t.party)} 只 / 电脑 {len(t.box)} 只)。"
             )
             return
@@ -817,53 +852,53 @@ class PokemonWorldPlugin(Star):
             from .pw.player import MAX_PARTY
 
             if not ident:
-                yield event.plain_result("❌ 用法:`/队伍 取出 <电脑序号>`(用 `/电脑` 看列表)")
+                yield _res(event, "❌ 用法:`/队伍 取出 <电脑序号>`(用 `/电脑` 看列表)")
                 return
             hit = t.box_find(ident)
             if hit is None:
-                yield event.plain_result(f"❌ 电脑里没有「{ident}」。")
+                yield _res(event, f"❌ 电脑里没有「{ident}」。")
                 return
             if len(t.party) >= MAX_PARTY:
-                yield event.plain_result(
+                yield _res(event,
                     f"❌ 队伍已经满 {MAX_PARTY} 只了,先用 `/队伍 存入 <序号>` 腾个位置。"
                 )
                 return
             mon_zh = _sp_zh(str(hit[1].get("species")))
             if not t.withdraw(str(hit[1].get("id") or "")):
-                yield event.plain_result("❌ 取出失败。")
+                yield _res(event, "❌ 取出失败。")
                 return
             self._save(t)
-            yield event.plain_result(
+            yield _res(event,
                 f"🎒 {mon_zh} 加入了队伍(队伍 {len(t.party)} 只 / 电脑 {len(t.box)} 只)。"
             )
             return
         if sub in ("换位", "交换", "swap"):
             if len(args) < 2:
-                yield event.plain_result("❌ 用法:`/队伍 换位 <序号A> <序号B>`")
+                yield _res(event, "❌ 用法:`/队伍 换位 <序号A> <序号B>`")
                 return
             a, b = coerce_int(args[0], 0), coerce_int(args[1], 0)
             if not t.swap_party(a, b):
-                yield event.plain_result("❌ 换位失败(序号要在 1~6 之间且不相同)。")
+                yield _res(event, "❌ 换位失败(序号要在 1~6 之间且不相同)。")
                 return
             self._save(t)
-            yield event.plain_result(
+            yield _res(event,
                 f"🔀 已交换第 {a} 只与第 {b} 只 —— 第 1 只是首发。"
             )
             return
         if sub in ("放生", "release"):
             if len(args) < 2 or args[1] not in ("确认", "confirm", "yes"):
-                yield event.plain_result(
+                yield _res(event,
                     "⚠️ 放生不可撤销。确认请输入:`/队伍 放生 <序号> 确认`"
                 )
                 return
             mon = t.release_pokemon(args[0], where="party")
             if mon is None:
-                yield event.plain_result(
+                yield _res(event,
                     "❌ 放生失败(序号越界,或者队伍只剩这一只)。"
                 )
                 return
             self._save(t)
-            yield event.plain_result(
+            yield _res(event,
                 f"👋 你放生了 {mon.display}(Lv{mon.level})。它回到了野外。"
                 + ("(队伍已空,已自动从电脑补一只)" if not t.party else "")
             )
@@ -873,7 +908,7 @@ class PokemonWorldPlugin(Star):
                 yield r
             return
         if not t.party:
-            yield event.plain_result("队伍是空的,去野外收服一只吧:`/探索`")
+            yield _res(event, "队伍是空的,去野外收服一只吧:`/探索`")
             return
         async with self._lock(t.scope):
             await self._ensure_day(event, t)
@@ -983,7 +1018,7 @@ class PokemonWorldPlugin(Star):
         """/招式 [宝可梦序号|名字] [招式序号|名字] —— 任意宝可梦的招式说明\n        (对战中可随时查,不消耗回合)"""
         t, err = self._require(event, in_battle_ok=True)
         if err:
-            yield event.plain_result(err)
+            yield _res(event, err)
             return
         parts = self._args(event, ("招式", "技能", "招式表", "move", "moves")).split()
         where, mon_dict = "party", None
@@ -991,7 +1026,7 @@ class PokemonWorldPlugin(Star):
         if parts and parts[0] in ("电脑", "box", "仓库"):
             hit = t.box_find(parts[1] if len(parts) > 1 else "")
             if hit is None:
-                yield event.plain_result(
+                yield _res(event,
                     f"❌ 电脑里没有「{parts[1] if len(parts) > 1 else ''}」。用 `/电脑` 看列表。"
                 )
                 return
@@ -1001,7 +1036,7 @@ class PokemonWorldPlugin(Star):
             # `/招式 <队伍序号> <招式序号|名字>`:任意宝可梦的具体招式
             idx = int(parts[0])
             if not 1 <= idx <= len(t.party):
-                yield event.plain_result(f"❌ 队伍里没有第 {idx} 只。")
+                yield _res(event, f"❌ 队伍里没有第 {idx} 只。")
                 return
             where, mon_dict = "party", t.party[idx - 1]
             move_arg = parts[1]
@@ -1020,7 +1055,7 @@ class PokemonWorldPlugin(Star):
         if mon_dict is None:
             idx = self._current_mon_index(t)
             if not t.party:
-                yield event.plain_result("队伍是空的,先去 `/探索` 收服一只吧。")
+                yield _res(event, "队伍是空的,先去 `/探索` 收服一只吧。")
                 return
             where, mon_dict = "party", t.party[idx]
         mon = B.dict_to_mon(mon_dict)
@@ -1031,7 +1066,7 @@ class PokemonWorldPlugin(Star):
         if where == "box":
             head = f"◆ {raw}(电脑)Lv{mon.level} 的招式"
         if not mon.moves:
-            yield event.plain_result(head + ":没有招式。")
+            yield _res(event, head + ":没有招式。")
             return
         # 有招式参数 → 看详情
         if move_arg:
@@ -1039,7 +1074,7 @@ class PokemonWorldPlugin(Star):
             if move_arg.isdigit():
                 n = int(move_arg)
                 if not 1 <= n <= len(mon.moves):
-                    yield event.plain_result(
+                    yield _res(event,
                         f"❌ 它只有 {len(mon.moves)} 个招式(1~{len(mon.moves)})。"
                     )
                     return
@@ -1058,16 +1093,16 @@ class PokemonWorldPlugin(Star):
                     # resolve_move 返回 (key, entry) 或 None(注意别把元组当 key)
                     hit = dex.resolve_move(move_arg)
                     if hit and str(hit[0]) not in (mon.moves or []):
-                        yield event.plain_result(
+                        yield _res(event,
                             self._move_detail(str(hit[0]))
                             + f"\n(注意:{raw} 没有学会这招)"
                         )
                         return
                     key = str(hit[0]) if hit else ""
                 if not key:
-                    yield event.plain_result(f"❌ 找不到招式「{move_arg}」。")
+                    yield _res(event, f"❌ 找不到招式「{move_arg}」。")
                     return
-            yield event.plain_result(self._move_detail(key, mon=mon))
+            yield _res(event, self._move_detail(key, mon=mon))
             return
         # 无参数 → 招式列表
         lines = [head, "（看详情:`/招式 <序号>` 查当前宝可梦;`/招式 <队伍序号> <序号>` 或 `/招式 <名字> <招式名>` 查队伍里任意一只;对战中查招式**不消耗回合**）"]
@@ -1076,14 +1111,14 @@ class PokemonWorldPlugin(Star):
                 key, index=i, pp=int(mon.pp.get(key, 0) or 0),
                 pp_max=max_pp(mon, key),
             ))
-        yield event.plain_result("\n".join(lines))
+        yield _res(event, "\n".join(lines))
 
     @filter.command("宝可梦", alias={"精灵", "查看", "资料", "mon", "pokemon"})
     async def cmd_mon(self, event: AstrMessageEvent):
         """/宝可梦 [序号|名字] —— 查看单只宝可梦的详细资料(电脑里的要加前缀)"""
         t, err = self._require(event, in_battle_ok=True)
         if err:
-            yield event.plain_result(err)
+            yield _res(event, err)
             return
         parts = self._args(event, ("宝可梦", "精灵", "查看", "资料", "mon", "pokemon")).split()
         where, ident = "party", ""
@@ -1102,7 +1137,7 @@ class PokemonWorldPlugin(Star):
         if where == "box":
             hit = t.box_find(ident)
             if hit is None:
-                yield event.plain_result(
+                yield _res(event,
                     f"❌ 电脑里没有「{ident}」。用 `/电脑` 看仓库列表。"
                 )
                 return
@@ -1110,7 +1145,7 @@ class PokemonWorldPlugin(Star):
         else:
             found = t.find(ident)
             if found is None:
-                yield event.plain_result(
+                yield _res(event,
                     f"❌ 队伍里没有「{ident}」。用 `/队伍` 看队伍、`/电脑` 看仓库。"
                 )
                 return
@@ -1200,28 +1235,28 @@ class PokemonWorldPlugin(Star):
         """/电脑 —— 查看电脑仓库里的宝可梦"""
         t, err = self._require(event, in_battle_ok=True)
         if err:
-            yield event.plain_result(err)
+            yield _res(event, err)
             return
         from .pw.player import MAX_PARTY
 
         parts = self._args(event, ("电脑", "仓库", "箱子", "box", "storage")).split()
         if parts and parts[0] in ("放生", "release"):
             if B.in_battle(t):
-                yield event.plain_result(
+                yield _res(event,
                     "⚠️ 对战中不能放生 —— 先打完这场(出招/捕捉/逃跑)。"
                 )
                 return
             if len(parts) < 3 or parts[2] not in ("确认", "confirm", "yes"):
-                yield event.plain_result(
+                yield _res(event,
                     "⚠️ 放生不可撤销。确认请输入:`/电脑 放生 <序号> 确认`"
                 )
                 return
             mon = t.release_pokemon(parts[1], where="box")
             if mon is None:
-                yield event.plain_result(f"❌ 电脑里没有「{parts[1]}」。")
+                yield _res(event, f"❌ 电脑里没有「{parts[1]}」。")
                 return
             self._save(t)
-            yield event.plain_result(
+            yield _res(event,
                 f"👋 你放生了 {mon.display}(Lv{mon.level})。它回到了野外。"
             )
             return
@@ -1257,7 +1292,7 @@ class PokemonWorldPlugin(Star):
         _page_note = (f"📄 电脑 第 {_page}/{_pages} 页(共 {_total} 只)"
                       if _pages > 1 else "")
         if _page_note:
-            yield event.plain_result(
+            yield _res(event,
                 _page_note + " —— 翻页:电脑 2 / 电脑 下一页 / 电脑 上一页"
             )
         _off = _per * (_page - 1)
@@ -1277,11 +1312,11 @@ class PokemonWorldPlugin(Star):
         """/背包 —— 查看背包"""
         t, err = self._require(event, in_battle_ok=True)
         if err:
-            yield event.plain_result(err)
+            yield _res(event, err)
             return
         items = t.bag_items()
         if not items:
-            yield event.plain_result("背包是空的。")
+            yield _res(event, "背包是空的。")
             return
         pocket_arg, want_index, want_page = _parse_page_args(
             self._args(event, ("背包", "bag", "道具")), numeric_is_page=False
@@ -1340,7 +1375,7 @@ class PokemonWorldPlugin(Star):
         """/地图 [地区] —— 查看地图与相邻地点"""
         t, err = self._require(event, in_battle_ok=True)
         if err:
-            yield event.plain_result(err)
+            yield _res(event, err)
             return
         world = WorldMap()
         arg = self._args(event, ("地图", "map", "地区", "地点")).strip()
@@ -1359,7 +1394,7 @@ class PokemonWorldPlugin(Star):
             return
         region = world.resolve_region(arg) if arg else t.region
         if arg and not region:
-            yield event.plain_result(f"❌ 没有「{arg}」这个地区。")
+            yield _res(event, f"❌ 没有「{arg}」这个地区。")
             return
         async with self._lock(t.scope):
             await self._ensure_day(event, t)
@@ -1455,7 +1490,7 @@ class PokemonWorldPlugin(Star):
         """/前往 [飞行] <地点> —— 移动"""
         t, err = self._require(event)
         if err:
-            yield event.plain_result(err)
+            yield _res(event, err)
             return
         arg = self._args(event, ("前往", "go", "移动", "去")).strip()
         by_fly = False
@@ -1465,27 +1500,27 @@ class PokemonWorldPlugin(Star):
                 arg = arg[len(prefix) :].strip()
                 break
         if not arg:
-            yield event.plain_result("❌ 用法:`/前往 <地点>` 或 `/前往 飞行 <城镇>`")
+            yield _res(event, "❌ 用法:`/前往 <地点>` 或 `/前往 飞行 <城镇>`")
             return
         if B.in_battle(t):
-            yield event.plain_result("⚠️ 对战中不能移动。")
+            yield _res(event, "⚠️ 对战中不能移动。")
             return
         async with self._lock(t.scope):
             await self._ensure_day(event, t)
             world = WorldMap()
             key = world.find_location(arg, t.region) or world.find_location(arg)
             if not key:
-                yield event.plain_result(f"❌ 找不到地点「{arg}」。用 `/地图` 看看能去哪。")
+                yield _res(event, f"❌ 找不到地点「{arg}」。用 `/地图` 看看能去哪。")
                 return
             state = self._state(t.scope)
             ok, msg = world.travel_check(
                 t, key, locked_until=state.data.get("locks") or {}, by_fly=by_fly
             )
             if not ok:
-                yield event.plain_result(msg)
+                yield _res(event, msg)
                 return
             if by_fly and not t.spend_money(FLY_COST):
-                yield event.plain_result("❌ 钱不够买机票。")
+                yield _res(event, "❌ 钱不够买机票。")
                 return
             if world.region_of(key) != t.region:
                 t.data["region"] = world.region_of(key)
@@ -1507,30 +1542,30 @@ class PokemonWorldPlugin(Star):
             )
             if qlines:
                 msg += "\n" + "\n".join(qlines)
-            yield event.plain_result(msg)
+            yield _res(event, msg)
 
     @filter.command("探索", alias={"explore", "遭遇", "搜索"})
     async def cmd_explore(self, event: AstrMessageEvent):
         """/探索 [野生|属性 <属性>|训练家|道具|事件] —— 有指向性地探索"""
         t, err = self._require(event)
         if err:
-            yield event.plain_result(err)
+            yield _res(event, err)
             return
         if B.in_battle(t):
-            yield event.plain_result("⚠️ 先把眼前的战斗打完:`/对战 <招式>`")
+            yield _res(event, "⚠️ 先把眼前的战斗打完:`/对战 <招式>`")
             return
         mode = _explore_target(
             self._args(event, ("探索", "explore", "遭遇", "搜索"))
         )
         if not mode:
-            yield event.plain_result(_EXPLORE_USAGE)
+            yield _res(event, _EXPLORE_USAGE)
             return
         async with self._lock(t.scope):
             today = await self._ensure_day(event, t)
             if t.all_fainted():
                 for line in today:
-                    yield event.plain_result(line)
-                yield event.plain_result("❌ 队伍全部失去战斗能力,去 `/治疗` 吧。")
+                    yield _res(event, line)
+                yield _res(event, "❌ 队伍全部失去战斗能力,去 `/治疗` 吧。")
                 return
             state = self._state(t.scope)
             world = WorldMap()
@@ -1545,7 +1580,7 @@ class PokemonWorldPlugin(Star):
             # ── 只想知道今天有什么事件:不掷骰、不开战 ──
             if mode == "event":
                 self._save(t)
-                yield event.plain_result(
+                yield _res(event,
                     "\n".join(
                         [
                             *notice,
@@ -1645,7 +1680,7 @@ class PokemonWorldPlugin(Star):
                 used = _item_finds(t, loc)
                 if cap and used >= cap:
                     self._save(t)
-                    yield event.plain_result(
+                    yield _res(event,
                         "\n".join(
                             [*notice,
                              f"🍂 这附近能捡的都被你捡完了({_month_key()} 已捡 "
@@ -1672,7 +1707,7 @@ class PokemonWorldPlugin(Star):
                 lines = [*notice, f"🔍 你在草丛里发现了 {zh} ×{n}!{tail}"]
                 if bonus:
                     lines.append(bonus)
-                yield event.plain_result("\n".join(lines))
+                yield _res(event, "\n".join(lines))
                 return
 
             # ── 只想找训练家 ──
@@ -1681,13 +1716,13 @@ class PokemonWorldPlugin(Star):
                 self._save(t)
                 if npcs:
                     cand = self._pick_trainer(t, npcs)
-                    yield event.plain_result(
+                    yield _res(event,
                         "\n".join(notice)
                         + f"\n👀 你看到一位训练家:{cand['name']}。"
                         f"\n用 `/训练家战` 发起挑战。"
                     )
                 else:
-                    yield event.plain_result(
+                    yield _res(event,
                         "\n".join(notice)
                         + "\n👀 这条路上今天没有遇到训练家,换个地方或明天再来。"
                     )
@@ -1701,7 +1736,7 @@ class PokemonWorldPlugin(Star):
                        if roll < wild_p else None)
                 if hit is None:
                     self._save(t)
-                    yield event.plain_result(
+                    yield _res(event,
                         "\n".join(
                             [*notice,
                              "👀 你在附近转了一圈,什么也没遇到……",
@@ -1721,7 +1756,7 @@ class PokemonWorldPlugin(Star):
                                   shiny_rate=self._shiny_rate())
                 if not hit:
                     self._save(t)
-                    yield event.plain_result(
+                    yield _res(event,
                         "\n".join([*notice, "这里似乎什么也没有发生……"])
                     )
                     return
@@ -1734,7 +1769,7 @@ class PokemonWorldPlugin(Star):
                 if npcs:
                     cand = self._pick_trainer(t, npcs)
                     self._save(t)
-                    yield event.plain_result(
+                    yield _res(event,
                         "\n".join(notice)
                         + f"\n👀 你看到一位训练家:{cand['name']}。"
                         f"\n用 `/训练家战` 发起挑战。"
@@ -1744,7 +1779,7 @@ class PokemonWorldPlugin(Star):
             used = _item_finds(t, loc)
             if cap and used >= cap:
                 self._save(t)
-                yield event.plain_result(
+                yield _res(event,
                     "\n".join(
                         [*notice,
                          f"🍂 你在附近转了一圈 —— 能捡的都被你捡完了"
@@ -1765,7 +1800,7 @@ class PokemonWorldPlugin(Star):
             lines = [*notice, f"🔍 你在草丛里发现了 {zh} ×{n}!{tail}"]
             if bonus:
                 lines.append(bonus)
-            yield event.plain_result("\n".join(lines))
+            yield _res(event, "\n".join(lines))
 
     def _maybe_stone_find(self, t: Trainer, rng) -> str:
         """探索捡道具时的地点主题掉落:进化石(约 10%)。
@@ -1884,7 +1919,7 @@ class PokemonWorldPlugin(Star):
         """/对战 <行动> —— 出招 / 换人 / 道具 / 逃跑"""
         t, err = self._require(event, in_battle_ok=True)
         if err:
-            yield event.plain_result(err)
+            yield _res(event, err)
             return
         arg = self._args(event, ("对战", "battle", "出招", "move")).strip()
         low = arg.strip().lower()
@@ -1915,10 +1950,10 @@ class PokemonWorldPlugin(Star):
             return
 
         if not B.in_battle(t):
-            yield event.plain_result("❌ 当前没有对战。用 `/探索` 或 `/道馆 挑战` 开战。")
+            yield _res(event, "❌ 当前没有对战。用 `/探索` 或 `/道馆 挑战` 开战。")
             return
         if not arg:
-            yield event.plain_result(B.status_text(t))
+            yield _res(event, B.status_text(t))
             return
         async with self._lock(t.scope):
             state = self._state(t.scope)
@@ -1946,7 +1981,7 @@ class PokemonWorldPlugin(Star):
                     _cur_sess["meta"] = meta
             self._save(t)
             if res.error:
-                yield event.plain_result(res.error + "\n\n" + B.status_text(t))
+                yield _res(event, res.error + "\n\n" + B.status_text(t))
                 return
             text = "\n".join(res.lines)
             if res.finished:
@@ -1992,12 +2027,12 @@ class PokemonWorldPlugin(Star):
             ):
                 yield r
             if res.awaiting_switch:
-                yield event.plain_result(
+                yield _res(event,
                     "⚠️ 你的宝可梦倒下了,必须换人:\n" + B.team_status(t)
                 )
                 return
             if self._cfg_bool("narrate_every_turn", False):
-                yield event.plain_result(
+                yield _res(event,
                     await self._narrate("对战回合", res.lines, text)
                 )
 
@@ -2006,7 +2041,7 @@ class PokemonWorldPlugin(Star):
         """/捕捉 <精灵球> —— 投球捕获"""
         t, err = self._require(event, in_battle_ok=True)
         if err:
-            yield event.plain_result(err)
+            yield _res(event, err)
             return
         ball = self._args(event, ("捕捉", "catch", "投球")).strip() or "精灵球"
         event.message_str = f"/对战 catch {ball}"
@@ -2023,7 +2058,7 @@ class PokemonWorldPlugin(Star):
         """
         t, err = self._require(event, in_battle_ok=True)
         if err:
-            yield event.plain_result(err)
+            yield _res(event, err)
             return
         event.message_str = "/对战 mega"
         async for r in self.cmd_battle(event):
@@ -2035,10 +2070,10 @@ class PokemonWorldPlugin(Star):
         """/训练家战 [序号] —— 挑战本地点训练家"""
         t, err = self._require(event)
         if err:
-            yield event.plain_result(err)
+            yield _res(event, err)
             return
         if B.in_battle(t):
-            yield event.plain_result("⚠️ 先结束当前对战。")
+            yield _res(event, "⚠️ 先结束当前对战。")
             return
         # 组队中:训练家战默认升级成合作双打(每人只出场一只)
         _pair = COOP.pair_for(self._state(t.scope), t.uid)
@@ -2051,18 +2086,18 @@ class PokemonWorldPlugin(Star):
             state = self._state(t.scope)
             npcs = npc.route_trainers(t, t.location, day=state.day)
             if not npcs:
-                yield event.plain_result("这附近没有训练家。")
+                yield _res(event, "这附近没有训练家。")
                 return
             idx = coerce_int(self._args(event, ("训练家战", "npc战", "训练家对战")).strip(), 1) or 1
             if not 1 <= idx <= len(npcs):
-                yield event.plain_result(
+                yield _res(event,
                     "可选对手:\n"
                     + "\n".join(f"{i}. {n['name']}" for i, n in enumerate(npcs, 1))
                 )
                 return
             err = _start_err(t)
             if err:
-                yield event.plain_result(err)
+                yield _res(event, err)
                 return
             meta = npc.build_route_battle(t, npcs[idx - 1], day=state.day)
             log = B.start(
@@ -2088,7 +2123,7 @@ class PokemonWorldPlugin(Star):
         """/道馆 [挑战] —— 查看/挑战道馆"""
         t, err = self._require(event)
         if err:
-            yield event.plain_result(err)
+            yield _res(event, err)
             return
         world = WorldMap()
         # 少数地点有两个道馆(数据构建时缺城市被并入同一节点)。gym_at 只返回
@@ -2107,29 +2142,29 @@ class PokemonWorldPlugin(Star):
         if not gym:
             nxt = world.next_gym(t.region, t.badges)
             if nxt:
-                yield event.plain_result(
+                yield _res(event,
                     f"这里没有道馆。下一个道馆在 "
                     f"{world.node_zh(nxt.get('location'))}({nxt.get('leader')},"
                     f"{_type_zh(nxt.get('type'))}属性)。"
                 )
             else:
-                yield event.plain_result(
+                yield _res(event,
                     f"你已经拿下{world.region_zh(t.region)}全部徽章!去 "
                     f"{world.node_zh(world.gateway(t.region))} 挑战联盟吧。"
                 )
             return
         if not gym or not gym.get("team"):
-            yield event.plain_result("⚠️ 该道馆数据缺失。")
+            yield _res(event, "⚠️ 该道馆数据缺失。")
             return
         if sub in ("挑战", "challenge", "打", "fight"):
             if B.in_battle(t):
-                yield event.plain_result("⚠️ 先结束当前对战。")
+                yield _res(event, "⚠️ 先结束当前对战。")
                 return
             async with self._lock(t.scope):
                 state = self._state(t.scope)
                 err = _start_err(t)
                 if err:
-                    yield event.plain_result(err)
+                    yield _res(event, err)
                     return
                 meta = npc.build_gym_battle(t, gym)
                 log = B.start(
@@ -2175,26 +2210,26 @@ class PokemonWorldPlugin(Star):
         """/联盟 [挑战] —— 挑战四天王与冠军"""
         t, err = self._require(event)
         if err:
-            yield event.plain_result(err)
+            yield _res(event, err)
             return
         world = WorldMap()
         region = t.region
         need = len(world.gyms(region)) or 8
         if t.badge_count(region) < need:
-            yield event.plain_result(
+            yield _res(event,
                 f"❌ 需要 {need} 枚{world.region_zh(region)}徽章,"
                 f"你现在有 {t.badge_count(region)} 枚。"
             )
             return
         if not world.is_gateway(t.location):
-            yield event.plain_result(
+            yield _res(event,
                 f"❌ 请先前往 {world.node_zh(world.gateway(region))}。"
             )
             return
         e4 = world.elite4(region)
         champ = world.champion(region)
         if not e4 or not champ:
-            yield event.plain_result("⚠️ 该地区联盟数据缺失。")
+            yield _res(event, "⚠️ 该地区联盟数据缺失。")
             return
         sub = self._args(event, ("联盟", "league", "四天王", "冠军")).strip()
         if sub not in ("挑战", "challenge", "打"):
@@ -2233,7 +2268,7 @@ class PokemonWorldPlugin(Star):
                 yield r
             return
         if B.in_battle(t):
-            yield event.plain_result("⚠️ 先结束当前对战。")
+            yield _res(event, "⚠️ 先结束当前对战。")
             return
         # 主线必须按序推进:不能跳过"击退敌对组织"等章节直接通关联盟。
         # 注意只拦"挑战",看板(纯信息展示)照常显示。
@@ -2247,14 +2282,14 @@ class PokemonWorldPlugin(Star):
                 todo = f"前往 {world.node_zh(loc_key)} 用 `/主线 挑战`"
             else:
                 todo = "用 `/主线 挑战` 开战"
-            yield event.plain_result(
+            yield _res(event,
                 f"❌ 主线还没推进到联盟 —— 当前章节「{cur.get('title')}」:{todo}。"
                 "输入 `/主线` 查看下一步。"
             )
             return
         err = _start_err(t)
         if err:
-            yield event.plain_result(err)
+            yield _res(event, err)
             return
         async with self._lock(t.scope):
             state = self._state(t.scope)
@@ -2291,13 +2326,13 @@ class PokemonWorldPlugin(Star):
         """/商店 [买|卖 <道具> [数量]] —— 商店"""
         t, err = self._require(event)
         if err:
-            yield event.plain_result(err)
+            yield _res(event, err)
             return
         # 对战中禁止买卖:战斗每回合会把开战时的队伍/背包快照写回存档
         # (_sync),战斗中的改动会被回滚 —— 买东西会"钱货两失",卖东西则是
         # 空手套白狼。和 /治疗 /前往 一样,这里直接拒绝。
         if B.in_battle(t):
-            yield event.plain_result("⚠️ 对战中不能买卖,先结束当前对战。")
+            yield _res(event, "⚠️ 对战中不能买卖,先结束当前对战。")
             return
         # 任何指令都应懒刷新游戏日(设计约定);否则只逛商店的玩家会一直用着
         # 已经过期的世界事件折扣。
@@ -2306,7 +2341,7 @@ class PokemonWorldPlugin(Star):
             t = self._load(event) or t
         world = WorldMap()
         if "mart" not in world.services(t.location):
-            yield event.plain_result("❌ 这里没有商店,去城镇(宝可梦中心所在地)吧。")
+            yield _res(event, "❌ 这里没有商店,去城镇(宝可梦中心所在地)吧。")
             return
         state = self._state(t.scope)
         discount = float(state.modifiers.get("shop_discount", 1.0))
@@ -2356,7 +2391,7 @@ class PokemonWorldPlugin(Star):
             name = tokens[1]
             n = coerce_int(tokens[2], 1) if len(tokens) > 2 else 1
         else:
-            yield event.plain_result(
+            yield _res(event,
                 "❌ 用法:`/商店 买 <道具> [数量]`、`/商店 卖 <道具> [数量]`、"
                 "`/商店 <序号>`(看第 N 件)、`/商店 页 <N>`(翻页)"
             )
@@ -2366,11 +2401,11 @@ class PokemonWorldPlugin(Star):
         if action in ("买", "buy"):
             key = _resolve_stock(name, stock)
             if not key:
-                yield event.plain_result(f"❌ 商店没有「{name}」。")
+                yield _res(event, f"❌ 商店没有「{name}」。")
                 return
             price = item_price(key, badge_count=t.badge_count(), discount=discount) * n
             if t.money < price:
-                yield event.plain_result(
+                yield _res(event,
                     f"❌ 需要 {fmt_money(price)},你只有 {fmt_money(t.money)}。"
                 )
                 return
@@ -2384,11 +2419,11 @@ class PokemonWorldPlugin(Star):
             )
             if qlines:
                 msg += "\n" + "\n".join(qlines)
-            yield event.plain_result(msg)
+            yield _res(event, msg)
             return
         key = _resolve_stock(name, set(t.bag))
         if not key or t.count(key) < n:
-            yield event.plain_result(f"❌ 你没有足够的「{name}」。")
+            yield _res(event, f"❌ 你没有足够的「{name}」。")
             return
         t.take_item(key, n)
         # 卖价必须与买价用**同一个基准**(同样吃徽章折扣与世界事件折扣)。
@@ -2399,7 +2434,7 @@ class PokemonWorldPlugin(Star):
                                  discount=discount) // 2) * n
         t.add_money(gain)
         self._save(t)
-        yield event.plain_result(
+        yield _res(event,
             f"💰 卖出 {(BAG_ITEMS.get(key) or {}).get('zh', key)} ×{n}"
             f",获得 {fmt_money(gain)}。余额 {fmt_money(t.money)}。"
         )
@@ -2409,18 +2444,18 @@ class PokemonWorldPlugin(Star):
         """/治疗 —— 在宝可梦中心恢复"""
         t, err = self._require(event)
         if err:
-            yield event.plain_result(err)
+            yield _res(event, err)
             return
         world = WorldMap()
         if "center" not in world.services(t.location):
-            yield event.plain_result("❌ 这里没有宝可梦中心,去城镇吧。")
+            yield _res(event, "❌ 这里没有宝可梦中心,去城镇吧。")
             return
         if B.in_battle(t):
-            yield event.plain_result("⚠️ 对战中不能治疗。")
+            yield _res(event, "⚠️ 对战中不能治疗。")
             return
         n = t.heal_party()
         self._save(t)
-        yield event.plain_result(
+        yield _res(event,
             f"🏥 乔伊小姐为你的 {n} 只宝可梦做了治疗 —— 全部恢复如初!"
         )
 
@@ -2433,16 +2468,16 @@ class PokemonWorldPlugin(Star):
         """
         t, err = self._require(event)
         if err:
-            yield event.plain_result(err)
+            yield _res(event, err)
             return
         world = WorldMap()
         if not world.is_hub(t.location):
-            yield event.plain_result("❌ 领养要去「宝可梦中心」(研究所)办理。")
+            yield _res(event, "❌ 领养要去「宝可梦中心」(研究所)办理。")
             return
         arg = self._args(event, ("领养", "adopt", "领取", "研究所")).strip()
         entries = _adopt_entries()
         if not entries:
-            yield event.plain_result("❌ 御三家数据缺失。")
+            yield _res(event, "❌ 御三家数据缺失。")
             return
         # 只有名字 → 直接领养;只有地区 → 列该地区的三只;什么都没有 → 全列
         want_zh = ""
@@ -2470,12 +2505,12 @@ class PokemonWorldPlugin(Star):
                     )
             lines.append(f"花费 {fmt_money(cost)}(已有 {fmt_money(t.money)})")
             lines.append(f"用法:`/领养 {want_region or '火斑喵'}`".replace(" 火斑喵", " 火斑喵"))
-            yield event.plain_result("\n".join(lines))
+            yield _res(event, "\n".join(lines))
             return
         key, region_zh = entries[want_zh]
         cost = ADOPT_BASE + ADOPT_PER_BADGE * t.badge_count()
         if t.money < cost:
-            yield event.plain_result(
+            yield _res(event,
                 f"❌ 领养 {want_zh} 需要 {fmt_money(cost)},你只有 {fmt_money(t.money)}。"
             )
             return
@@ -2486,7 +2521,7 @@ class PokemonWorldPlugin(Star):
             added = t.add_pokemon(mon, day=self._state(t.scope).day)
             self._save(t)
             in_party = any(str(p.get("id")) == str(added.get("id")) for p in t.party)
-        yield event.plain_result(
+        yield _res(event,
             f"🏫 研究员的助手把「{want_zh}」交给你了!({region_zh}御三家 · Lv5)\n"
             f"花费 {fmt_money(cost)} —— 它已经在你的"
             f"{'队伍' if in_party else '电脑'}里。"
@@ -2497,14 +2532,14 @@ class PokemonWorldPlugin(Star):
         """`/复活 <化石>` —— 在宝可梦中心(研究所)把化石复活成宝可梦。"""
         t, err = self._require(event)
         if err:
-            yield event.plain_result(err)
+            yield _res(event, err)
             return
         if B.in_battle(t):
-            yield event.plain_result("⚠️ 对战中不能去研究所,先结束当前对战。")
+            yield _res(event, "⚠️ 对战中不能去研究所,先结束当前对战。")
             return
         world = WorldMap()
         if not world.is_hub(t.location):
-            yield event.plain_result("❌ 化石复活要在「宝可梦中心」(研究所)办理。")
+            yield _res(event, "❌ 化石复活要在「宝可梦中心」(研究所)办理。")
             return
         arg = self._args(event, ("复活", "revive", "化石复活", "研究所复活")).strip()
         bag = t.data.get("bag") or {}
@@ -2534,7 +2569,7 @@ class PokemonWorldPlugin(Star):
                 )
             if not have and not has_parts:
                 lines.append("你还没有化石。4 枚徽章后可在商店买到,委托奖励偶尔也有。")
-            yield event.plain_result("\n".join(lines))
+            yield _res(event, "\n".join(lines))
             return
 
         # 解析:可能是"两件拼合化石",也可能是一件,也可能是想要的目标名
@@ -2550,7 +2585,7 @@ class PokemonWorldPlugin(Star):
                 mon = create_pokemon(combo_sp, REVIVE_LEVEL)
                 t.add_pokemon(mon, day=self._state(t.scope).day)
                 self._save(t)
-            yield event.plain_result(
+            yield _res(event,
                 f"🦴 两件化石被强行拼在了一起…… {_sp_zh(combo_sp)} 复活了!"
                 f"(Lv{REVIVE_LEVEL})\n"
                 + "、".join(f"{BAG_ITEMS[k]['zh']} 用掉 1 个" for k in keys)
@@ -2574,7 +2609,7 @@ class PokemonWorldPlugin(Star):
                     mon = create_pokemon(target, REVIVE_LEVEL)
                     t.add_pokemon(mon, day=self._state(t.scope).day)
                     self._save(t)
-                yield event.plain_result(
+                yield _res(event,
                     f"🦴 两件化石被强行拼在了一起…… {_sp_zh(target)} 复活了!"
                     f"(Lv{REVIVE_LEVEL})\n"
                     + "、".join(f"{BAG_ITEMS[k]['zh']} 用掉 1 个" for k in keys)
@@ -2590,17 +2625,17 @@ class PokemonWorldPlugin(Star):
                                              key=lambda kv: _sp_zh(kv[1]))
                     if key in combo
                 ]
-                yield event.plain_result(
+                yield _res(event,
                     f"🧩 {BAG_ITEMS[key]['zh']} 只是一半,拼不出宝可梦。可以配:\n"
                     + "\n".join(f"　· {p}" for p in pairs)
                 )
                 return
-            yield event.plain_result(
+            yield _res(event,
                 f"❌ 没有「{arg}」这件化石(用 `/复活` 看看手里有什么)。"
             )
             return
         if not t.count(key):
-            yield event.plain_result(f"❌ 你没有「{BAG_ITEMS[key]['zh']}」这件化石。")
+            yield _res(event, f"❌ 你没有「{BAG_ITEMS[key]['zh']}」这件化石。")
             return
         async with self._lock(t.scope):
             t.take_item(key, 1)
@@ -2608,7 +2643,7 @@ class PokemonWorldPlugin(Star):
             t.add_pokemon(mon, day=self._state(t.scope).day)
             self._save(t)
             left = t.count(key)
-        yield event.plain_result(
+        yield _res(event,
             f"🦴 化石在机器的嗡鸣中裂开了 —— {_sp_zh(sp)} 复活了!(Lv{REVIVE_LEVEL})\n"
             f"{BAG_ITEMS[key]['zh']} 用掉 1 个,还剩 {left} 个。"
         )
@@ -2624,28 +2659,28 @@ class PokemonWorldPlugin(Star):
         """
         t, err = self._require(event)
         if err:
-            yield event.plain_result(err)
+            yield _res(event, err)
             return
         if B.in_battle(t):
-            yield event.plain_result("⚠️ 对战中不能整理招式,先结束当前对战。")
+            yield _res(event, "⚠️ 对战中不能整理招式,先结束当前对战。")
             return
         arg = self._args(event, ("学招", "learn", "学招式")).strip()
         tokens = arg.split()
         idx = coerce_int(tokens[0], 0) if tokens else 0
         if not idx:
-            yield event.plain_result(
+            yield _res(event,
                 "❌ 用法:`/学招 <队伍序号>` 查看待决定的招式 · "
                 "`/学招 <序号> 替换 <现有招式序号>` · `/学招 <序号> 放弃 [待定序号]`"
             )
             return
         mon = t.mon(idx - 1)
         if mon is None:
-            yield event.plain_result("❌ 队伍序号不对。")
+            yield _res(event, "❌ 队伍序号不对。")
             return
         md = t.party[idx - 1]
         pending = list(md.get("pending") or [])
         if not pending:
-            yield event.plain_result(
+            yield _res(event,
                 f"ℹ️ {mon.display} 现在没有要决定的招式。\n"
                 "新招式来自**升级、进化或招式机**:招式栏没满会自动学会,满了会留在这里"
                 "等你选择「替换」一个旧招式或「放弃」。"
@@ -2661,20 +2696,20 @@ class PokemonWorldPlugin(Star):
             elif rest:
                 target_arg = rest[0]
             if not target_arg:
-                yield event.plain_result(self._pending_panel(mon, md, pending, idx))
+                yield _res(event, self._pending_panel(mon, md, pending, idx))
                 return
             pno = min(max(1, which), len(pending))
             want = pending[pno - 1]
             forgotten = self._decide_pending(t, idx, mon, md, want, target_arg)
             if not forgotten:
-                yield event.plain_result(
+                yield _res(event,
                     f"❌ 没找到要替换的招式(用 1-{len(mon.moves)} 的序号或招式名):\n"
                     + "\n".join(
                         f"{i}. {growth.move_brief(m)}" for i, m in enumerate(mon.moves, 1)
                     )
                 )
                 return
-            yield event.plain_result(
+            yield _res(event,
                 f"✅ {mon.display} 忘记了「{growth.move_zh(forgotten)}」,"
                 f"学会了「{growth.move_brief(want)}」!"
                 + self._pending_tail(1, len(pending) - 1, idx)
@@ -2691,7 +2726,7 @@ class PokemonWorldPlugin(Star):
             entry_label = (BAG_ITEMS.get(kept_tm) or {}).get("zh") or kept_tm
             md["pending_tm"] = pt
             self._save(t)
-            yield event.plain_result(
+            yield _res(event,
                 f"🗑️ {mon.display} 放弃了「{growth.move_brief(want)}」"
                 + (
                     f"(「{entry_label}」还在背包里,可以留给别人用)"
@@ -2702,7 +2737,7 @@ class PokemonWorldPlugin(Star):
                 + self._pending_tail(pno, len(md["pending"]), idx)
             )
             return
-        yield event.plain_result(self._pending_panel(mon, md, pending, idx))
+        yield _res(event, self._pending_panel(mon, md, pending, idx))
 
     def _pending_panel(self, mon, md: dict, pending: list[str], idx: int) -> str:
         """待决定面板:列出每条待定招式(带效果)与现有招式,以及决定方式。
@@ -2792,10 +2827,10 @@ class PokemonWorldPlugin(Star):
         """/进化 <队伍序号> [道具] —— 查看/执行进化"""
         t, err = self._require(event)
         if err:
-            yield event.plain_result(err)
+            yield _res(event, err)
             return
         if B.in_battle(t):
-            yield event.plain_result("⚠️ 对战中不能进化,先结束当前对战。")
+            yield _res(event, "⚠️ 对战中不能进化,先结束当前对战。")
             return
         dex = get_dex()
         arg = self._args(event, ("进化", "evolve")).strip()
@@ -2836,12 +2871,12 @@ class PokemonWorldPlugin(Star):
                     desc += f" …(共 {len(opts)} 种)"
                 lines.append(f"{i}. {mon.display} → {desc}")
             lines.append("用法:`/进化 <序号>` 或 `/进化 <序号> <进化石>`")
-            yield event.plain_result("\n".join(lines))
+            yield _res(event, "\n".join(lines))
             return
         idx = coerce_int(tokens[0], 1) or 1
         mon = t.mon(idx - 1)
         if mon is None:
-            yield event.plain_result("❌ 队伍序号不对。")
+            yield _res(event, "❌ 队伍序号不对。")
             return
         item = tokens[1] if len(tokens) > 1 else ""
         if item:
@@ -2849,12 +2884,12 @@ class PokemonWorldPlugin(Star):
 
             r = resolve_bag_item(item)
             if not r or t.count(r[0]) <= 0:
-                yield event.plain_result(f"❌ 背包里没有「{item}」。")
+                yield _res(event, f"❌ 背包里没有「{item}」。")
                 return
             key, entry = r
             opts = dex.use_item_evolutions(mon.species, key, gender=mon.gender)
             if not opts:
-                yield event.plain_result(f"⚠️ {mon.display} 对 {entry['zh']} 没有反应。")
+                yield _res(event, f"⚠️ {mon.display} 对 {entry['zh']} 没有反应。")
                 return
             target = opts[0]["target"] if isinstance(opts[0], dict) else opts[0]
             t.take_item(key, 1)
@@ -2870,7 +2905,7 @@ class PokemonWorldPlugin(Star):
             msg += self._evo_pending_line(mon, pend, idx)
             if qlines:
                 msg += "\n" + "\n".join(qlines)
-            yield event.plain_result(msg)
+            yield _res(event, msg)
             return
         opts = dex.evolution_options(
             mon.species,
@@ -2886,7 +2921,7 @@ class PokemonWorldPlugin(Star):
         )
         met = [o for o in opts if o.get("met")]
         if not met:
-            yield event.plain_result(
+            yield _res(event,
                 f"⚠️ {mon.display} 暂时无法进化。"
                 + (
                     "条件:" + "、".join(_kind_zh(o.get("kind")) for o in opts)
@@ -2900,7 +2935,7 @@ class PokemonWorldPlugin(Star):
         pend = self._apply_evo(t, mon, target, t.party[idx - 1])
         t.commit(idx - 1, mon)
         self._save(t)
-        yield event.plain_result(
+        yield _res(event,
             f"✨ 咦……?{growth.species_zh(old)} 进化成了 {growth.species_zh(target)}!"
             + self._evo_pending_line(mon, pend, idx)
         )
@@ -2975,10 +3010,10 @@ class PokemonWorldPlugin(Star):
         `/交换 <序号>` 与远方训练家连接交换(自连,只触发通信进化)"""
         t, err = self._require(event)
         if err:
-            yield event.plain_result(err)
+            yield _res(event, err)
             return
         if B.in_battle(t):
-            yield event.plain_result("⚠️ 对战中不能交换,先结束当前对战。")
+            yield _res(event, "⚠️ 对战中不能交换,先结束当前对战。")
             return
         world = WorldMap()
         arg = self._args(event, ("交换", "trade", "连接交换", "通讯交换")).strip()
@@ -2994,7 +3029,7 @@ class PokemonWorldPlugin(Star):
                 if ats:
                     offers = [o for o in offers if o.get("from") == ats[0][0]]
                 if not offers:
-                    yield event.plain_result(
+                    yield _res(event,
                         "❌ 没有等你回应的交换请求。"
                         "(对方要用 `/交换 @你 <他的宝可梦序号>` 发起)"
                     )
@@ -3002,10 +3037,10 @@ class PokemonWorldPlugin(Star):
                 offer = offers[0]
                 idx = coerce_int(parts[1], 1) if len(parts) > 1 else 1
                 if not 1 <= idx <= len(t.party):
-                    yield event.plain_result(f"❌ 队伍里没有第 {idx} 只。")
+                    yield _res(event, f"❌ 队伍里没有第 {idx} 只。")
                     return
                 if "center" not in world.services(t.location):
-                    yield event.plain_result(
+                    yield _res(event,
                         "❌ 回应交换要在宝可梦中心进行。"
                     )
                     return
@@ -3015,13 +3050,13 @@ class PokemonWorldPlugin(Star):
                 other_data = self.trainers.load(t.scope, str(offer.get("from")))
                 if not other_data:
                     self._save_state(state)
-                    yield event.plain_result("❌ 对方的存档已经不存在了,请求已取消。")
+                    yield _res(event, "❌ 对方的存档已经不存在了,请求已取消。")
                     return
                 other = Trainer(other_data, uid=str(offer.get("from")), scope=t.scope)
                 where, oi = _find_mon_slot(other, str(offer.get("mon_id")))
                 if oi < 0:
                     self._save_state(state)
-                    yield event.plain_result(
+                    yield _res(event,
                         "❌ 对方要交换的宝可梦已经不在 TA 的队伍/电脑里了,请求已取消。"
                     )
                     return
@@ -3070,7 +3105,7 @@ class PokemonWorldPlugin(Star):
                 )
             if my_slot == "box":
                 lines.append("　└ 队伍满了,收到的宝可梦先进了电脑(`/队伍 取出`)。")
-            yield event.plain_result("\n".join(lines))
+            yield _res(event, "\n".join(lines))
             return
 
         # ── 拒绝 / 取消 ──
@@ -3091,11 +3126,11 @@ class PokemonWorldPlugin(Star):
                         removed.append(v)
                 self._save_state(state)
             if not removed:
-                yield event.plain_result("❌ 没有可取消的交换请求。")
+                yield _res(event, "❌ 没有可取消的交换请求。")
                 return
             who = removed[0].get("from_name") or removed[0].get("from")
             act = "撤销了发给" if removed[0].get("from") == t.uid else "回绝了"
-            yield event.plain_result(f"🚫 你已{act} {who} 的交换请求。")
+            yield _res(event, f"🚫 你已{act} {who} 的交换请求。")
             return
 
         # ── 发起:必须 @ 到人 ──
@@ -3104,24 +3139,24 @@ class PokemonWorldPlugin(Star):
             idx = coerce_int(nums[0], 0) if nums else 0
             target_uid, target_name = ats[0]
             if target_uid == t.uid:
-                yield event.plain_result("⚠️ 不能和自己交换(自己练不就好了)。")
+                yield _res(event, "⚠️ 不能和自己交换(自己练不就好了)。")
                 return
             if not 1 <= idx <= len(t.party):
-                yield event.plain_result(
+                yield _res(event,
                     "❌ 用法:`/交换 @对方 <你的宝可梦序号>` —— 序号是**你自己的**队伍序号。"
                 )
                 return
             if "center" not in world.services(t.location):
-                yield event.plain_result("❌ 连接交换要在宝可梦中心进行。")
+                yield _res(event, "❌ 连接交换要在宝可梦中心进行。")
                 return
             if not self.trainers.exists(t.scope, target_uid):
-                yield event.plain_result(
+                yield _res(event,
                     "❌ 对方还没有在玩(用 `/开始` 建过存档),或者不在本群。"
                 )
                 return
             mon = t.mon(idx - 1)
             if mon is None:
-                yield event.plain_result("❌ 队伍序号不对。")
+                yield _res(event, "❌ 队伍序号不对。")
                 return
             async with self._lock(t.scope):
                 box = self._trade_box(state)
@@ -3137,7 +3172,7 @@ class PokemonWorldPlugin(Star):
                 }
                 self._save_state(state)
             held = self._held_zh(str(mon.item or ""))
-            yield event.plain_result(
+            yield _res(event,
                 f"📨 已向 {target_name or '对方'} (@{target_uid}) 发起交换:"
                 f"送出你的 **{mon.display} Lv{mon.level}**"
                 + (f"(携带 {held})" if held else "")
@@ -3163,16 +3198,16 @@ class PokemonWorldPlugin(Star):
                     f"{o.get('zh')} Lv{o.get('level')} 换你的宝可梦 —— "
                     f"`/交换 接受 <你的序号>`",
                 )
-            yield event.plain_result("\n".join(lines))
+            yield _res(event, "\n".join(lines))
             return
         idx = coerce_int(parts[0], 1) or 1
         async with self._lock(t.scope):
             mon = t.mon(idx - 1)
             if mon is None:
-                yield event.plain_result("❌ 队伍序号不对。")
+                yield _res(event, "❌ 队伍序号不对。")
                 return
             if "center" not in world.services(t.location):
-                yield event.plain_result("❌ 连接交换要在宝可梦中心进行。")
+                yield _res(event, "❌ 连接交换要在宝可梦中心进行。")
                 return
             dex = get_dex()
             # **必须把携带物传进去**:以前漏了 item 又没看 met,导致"需要携带道具"
@@ -3191,7 +3226,7 @@ class PokemonWorldPlugin(Star):
             ]
             ready = [o for o in opts if o.get("met")]
             if not opts:
-                yield event.plain_result(
+                yield _res(event,
                     f"⚠️ {mon.display} 通过连接交换也不会进化"
                     "(通信进化只对胡地/耿鬼/怪力/大岩蛇这类有效)。"
                 )
@@ -3206,7 +3241,7 @@ class PokemonWorldPlugin(Star):
                         if zh not in needs:
                             needs.append(zh)
                 tip = "或".join(needs) if needs else "特定道具"
-                yield event.plain_result(
+                yield _res(event,
                     f"⚠️ {mon.display} 要携带 {tip} 才能通过连接交换进化"
                     f"(用 `/持有 {tip.split('或')[0]} {idx}` 装上再 `/交换 {idx}`)。"
                 )
@@ -3221,7 +3256,7 @@ class PokemonWorldPlugin(Star):
             pend = self._apply_evo(t, mon, target, t.party[idx - 1])
             t.commit(idx - 1, mon)
             self._save(t)
-        yield event.plain_result(
+        yield _res(event,
             f"🔁 你与远方训练家完成了连接交换 —— {growth.species_zh(old)} 进化成了 "
             f"{growth.species_zh(target)}!" + self._evo_pending_line(mon, pend, idx)
         )
@@ -3236,15 +3271,15 @@ class PokemonWorldPlugin(Star):
         """
         t, err = self._require(event)
         if err:
-            yield event.plain_result(err)
+            yield _res(event, err)
             return
         if B.in_battle(t):
-            yield event.plain_result("⚠️ 对战中请用 `/对战 item <道具>`。")
+            yield _res(event, "⚠️ 对战中请用 `/对战 item <道具>`。")
             return
         arg = self._args(event, ("使用", "use", "用道具")).strip()
         tokens = arg.split()
         if not tokens:
-            yield event.plain_result(
+            yield _res(event,
                 "用法:`/使用 <道具> [队伍序号] [招式序号]`\n"
                 "· 回复/状态/复活/PP:`/使用 伤药 1`、`/使用 万灵药 2`\n"
                 "· 神奇糖果:`/使用 神奇糖果 1`\n"
@@ -3263,11 +3298,11 @@ class PokemonWorldPlugin(Star):
         nums = [p for p in tokens if p.isdigit()]
         name = " ".join(p for p in tokens if not p.isdigit())
         if not name:
-            yield event.plain_result("❌ 请写道具名字,例如 `/使用 伤药 1`。")
+            yield _res(event, "❌ 请写道具名字,例如 `/使用 伤药 1`。")
             return
         r = resolve_bag_item(name)
         if not r or t.count(r[0]) <= 0:
-            yield event.plain_result(f"❌ 背包里没有「{name}」。")
+            yield _res(event, f"❌ 背包里没有「{name}」。")
             return
         key, entry = r
         eff = entry.get("effect") or {}
@@ -3276,13 +3311,13 @@ class PokemonWorldPlugin(Star):
 
         # ⓪' Mega 石 / 钥石:不是消耗品,给出正确用法(直接 "使用" 不生效)
         if eff.get("mega"):
-            yield event.plain_result(
+            yield _res(event,
                 f"ℹ️ {entry['zh']} 是携带道具:先 `/持有 {entry['zh']} <队伍序号>` 装备,"
                 "对战中用 `/mega`(或 `/对战 mega <招式>`)让对应宝可梦 Mega 进化。"
             )
             return
         if eff.get("key_stone"):
-            yield event.plain_result(
+            yield _res(event,
                 "ℹ️ 钥石放在背包里就生效:宝可梦携带对应的 Mega 石,"
                 "对战中即可 Mega 进化(商店可买 Mega 石)。"
             )
@@ -3292,20 +3327,20 @@ class PokemonWorldPlugin(Star):
         tm_mv = str(eff.get("teaches") or "")
         if tm_mv:
             if not num:
-                yield event.plain_result(
+                yield _res(event,
                     f"❌ 用法:`/使用 {entry['zh']} <队伍序号>`(对兼容的宝可梦使用)。"
                 )
                 return
             mon = t.mon(num - 1)
             if mon is None:
-                yield event.plain_result(f"❌ 队伍里没有第 {num} 只。")
+                yield _res(event, f"❌ 队伍里没有第 {num} 只。")
                 return
             brief = growth.move_brief(tm_mv)
             if tm_mv in mon.moves:
-                yield event.plain_result(f"❌ {mon.display} 已经会「{growth.move_zh(tm_mv)}」了。")
+                yield _res(event, f"❌ {mon.display} 已经会「{growth.move_zh(tm_mv)}」了。")
                 return
             if not get_dex().tm_compatible(mon.species, tm_mv):
-                yield event.plain_result(
+                yield _res(event,
                     f"❌ {mon.display} 用不了这台招式机 —— 它学不会「"
                     f"{growth.move_zh(tm_mv)}」。"
                 )
@@ -3315,7 +3350,7 @@ class PokemonWorldPlugin(Star):
                 t.take_item(key, 1)          # 学到了,机器用掉
                 t.commit(num - 1, mon)
                 self._save(t)
-                yield event.plain_result(
+                yield _res(event,
                     f"📀 {mon.display} 学会了「{brief}」!(招式机已用掉)"
                 )
                 return
@@ -3325,7 +3360,7 @@ class PokemonWorldPlugin(Star):
             pt[tm_mv] = key
             t.party[num - 1]["pending_tm"] = pt
             self._save(t)
-            yield event.plain_result(
+            yield _res(event,
                 f"📀 招式栏满了 —— {mon.display} 想学「{brief}」。\n"
                 f"用 `/学招 {num}` 决定替换哪一招或放弃;"
                 "放弃的话招式机会留在背包里。"
@@ -3337,11 +3372,11 @@ class PokemonWorldPlugin(Star):
             num = num or 1
             mon = t.mon(num - 1)
             if mon is None:
-                yield event.plain_result(f"❌ 队伍里没有第 {num} 只。")
+                yield _res(event, f"❌ 队伍里没有第 {num} 只。")
                 return
             dex = get_dex()
             if mon.level >= 100:
-                yield event.plain_result(f"⚠️ {mon.display} 已经是 Lv100 了。")
+                yield _res(event, f"⚠️ {mon.display} 已经是 Lv100 了。")
                 return
             rate = dex.growth_of(mon.species)
             need = max(1, dex.exp_for_level(rate, mon.level + 1) - mon.exp)
@@ -3389,7 +3424,7 @@ class PokemonWorldPlugin(Star):
             rest = self._pending_notice(t, skip=num)
             if rest:
                 lines.append(rest)
-            yield event.plain_result("\n".join(lines))
+            yield _res(event, "\n".join(lines))
             return
 
         # ② 回复 / 状态 / 复活 / PP(战斗外也能用)
@@ -3412,7 +3447,7 @@ class PokemonWorldPlugin(Star):
                         break
             if picked is None:
                 wt = f"第 {num} 只" if num else "队伍里的宝可梦都"
-                yield event.plain_result(
+                yield _res(event,
                     f"⚠️ {wt}用不上 {entry['zh']} —— 满血且状态正常时不必用。"
                 )
                 return
@@ -3420,14 +3455,14 @@ class PokemonWorldPlugin(Star):
             mv = ""
             if move_idx:
                 if not target.moves or not 1 <= move_idx <= len(target.moves):
-                    yield event.plain_result(
+                    yield _res(event,
                         f"❌ {target.display} 没有第 {move_idx} 个招式。"
                     )
                     return
                 mv = target.moves[move_idx - 1]
             ok, line = apply_out_of_battle(target, key, move=mv or None)
             if not ok:
-                yield event.plain_result(f"⚠️ 现在用不了 {entry['zh']}。")
+                yield _res(event, f"⚠️ 现在用不了 {entry['zh']}。")
                 return
             # 喂树果:除了回血/治病,还能增进感情(正作里树果就是亲密度来源);
             # 必须写在 commit **之前**,否则只改了临时对象 = 没加
@@ -3444,7 +3479,7 @@ class PokemonWorldPlugin(Star):
             t.commit(slot, target)
             t.take_item(key, 1)
             self._save(t)
-            yield event.plain_result(
+            yield _res(event,
                 f"{line}\n　└ 用掉了 {entry['zh']} ×1,还剩 {t.count(key)} 个。"
             )
             return
@@ -3454,19 +3489,19 @@ class PokemonWorldPlugin(Star):
             num = num or 1
             mon = t.mon(num - 1)
             if mon is None:
-                yield event.plain_result(f"❌ 队伍里没有第 {num} 只。")
+                yield _res(event, f"❌ 队伍里没有第 {num} 只。")
                 return
             if not mon.moves:
-                yield event.plain_result(f"⚠️ {mon.display} 还没有招式。")
+                yield _res(event, f"⚠️ {mon.display} 还没有招式。")
                 return
             if not move_idx:
-                yield event.plain_result(
+                yield _res(event,
                     f"❓ 要给哪个招式提升?用法:`/使用 {entry['zh']} {num} <招式序号>`"
                     "(先 `/招式 " + str(num) + "` 看序号)"
                 )
                 return
             if not 1 <= move_idx <= len(mon.moves):
-                yield event.plain_result(f"❌ {mon.display} 没有第 {move_idx} 个招式。")
+                yield _res(event, f"❌ {mon.display} 没有第 {move_idx} 个招式。")
                 return
             from .pw.items import PP_UP_MAX
 
@@ -3477,7 +3512,7 @@ class PokemonWorldPlugin(Star):
             # PP 极限提升剂直接顶到 +3(上限),普通提升剂 +1
             step = PP_UP_MAX - bonus if want_max else 1
             if step <= 0 or (not want_max and bonus >= PP_UP_MAX):
-                yield event.plain_result(
+                yield _res(event,
                     f"⚠️ {growth.move_zh(mv)} 的 PP 上限已经提升到极限了"
                     f"({base} → {base + bonus})。"
                 )
@@ -3489,7 +3524,7 @@ class PokemonWorldPlugin(Star):
             t.take_item(key, 1)
             t.commit(num - 1, mon)
             self._save(t)
-            yield event.plain_result(
+            yield _res(event,
                 f"⚙️ {mon.display} 的「{growth.move_zh(mv)}」PP 上限 "
                 f"{base + bonus} → {base + bonus + add}!"
                 + (f"(已到上限 +{PP_UP_MAX})" if bonus + add >= PP_UP_MAX else "")
@@ -3501,7 +3536,7 @@ class PokemonWorldPlugin(Star):
             num = num or 1
             mon = t.mon(num - 1)
             if mon is None:
-                yield event.plain_result(f"❌ 队伍里没有第 {num} 只。")
+                yield _res(event, f"❌ 队伍里没有第 {num} 只。")
                 return
             dex = get_dex()
             slots = dex.ability_options(mon.species)
@@ -3518,7 +3553,7 @@ class PokemonWorldPlugin(Star):
             if want_hidden:
                 target_ab = _ab_key(slots.get("H") or "")
                 if not target_ab:
-                    yield event.plain_result(
+                    yield _res(event,
                         f"⚠️ {mon.display}({dex.species.get(mon.species, {}).get('zh')})"
                         "没有隐藏特性。"
                     )
@@ -3527,20 +3562,20 @@ class PokemonWorldPlugin(Star):
                 normals = [_ab_key(slots[k]) for k in ("0", "1") if slots.get(k)]
                 others = [a for a in normals if a and a != cur]
                 if not others:
-                    yield event.plain_result(
+                    yield _res(event,
                         f"⚠️ {mon.display} 没有另一个普通特性可换。"
                     )
                     return
                 target_ab = others[0]
             if target_ab == cur:
-                yield event.plain_result(f"⚠️ {mon.display} 已经是这个特性了。")
+                yield _res(event, f"⚠️ {mon.display} 已经是这个特性了。")
                 return
             old_ab, old_zh = cur, self._ability_zh(cur)
             mon.ability = target_ab
             t.take_item(key, 1)
             t.commit(num - 1, mon)
             self._save(t)
-            yield event.plain_result(
+            yield _res(event,
                 f"🧬 {mon.display} 的特性:{old_zh or old_ab} → "
                 f"{self._ability_zh(target_ab) or target_ab}!"
             )
@@ -3558,7 +3593,7 @@ class PokemonWorldPlugin(Star):
             tips.append("这件道具的效果本插件还没实现")
         if key in ITEMS:
             tips.append("这是持有道具,用 `/持有 <道具> [序号]` 装备")
-        yield event.plain_result(
+        yield _res(event,
             f"⚠️ {entry.get('zh', key)} 不能在战斗外这样使用。"
             + ("(" + ";".join(tips) + ")" if tips else "")
         )
@@ -3573,7 +3608,7 @@ class PokemonWorldPlugin(Star):
         """
         t, err = self._require(event)
         if err:
-            yield event.plain_result(err)
+            yield _res(event, err)
             return
         from .pw.items import ITEMS, resolve_bag_item, resolve_item
 
@@ -3585,7 +3620,7 @@ class PokemonWorldPlugin(Star):
                 mon = B.dict_to_mon(p)
                 held = self._held_zh(str(mon.item or "")) or "无"
                 lines.append(f"{i}. {mon.display} Lv{mon.level} —— 持有:{held}")
-            yield event.plain_result("\n".join(lines))
+            yield _res(event, "\n".join(lines))
             return
         async with self._lock(t.scope):
             # 取下
@@ -3594,28 +3629,28 @@ class PokemonWorldPlugin(Star):
                     else self._current_mon_index(t) + 1
                 mon = t.mon(num - 1)
                 if mon is None:
-                    yield event.plain_result("❌ 队伍序号不对。")
+                    yield _res(event, "❌ 队伍序号不对。")
                     return
                 if not mon.item:
-                    yield event.plain_result(f"⚠️ {mon.display} 没有携带任何道具。")
+                    yield _res(event, f"⚠️ {mon.display} 没有携带任何道具。")
                     return
                 back = str(mon.item)
                 mon.item = ""
                 t.commit(num - 1, mon)
                 t.add_item(back, 1)
                 self._save(t)
-                yield event.plain_result(
+                yield _res(event,
                     f"🎒 已从 {mon.display} 取下 {self._held_zh(back)},放回背包。"
                 )
                 return
             r = resolve_bag_item(parts[0]) or resolve_item(parts[0])
             if not r:
-                yield event.plain_result(f"❌ 没有找到道具「{parts[0]}」。")
+                yield _res(event, f"❌ 没有找到道具「{parts[0]}」。")
                 return
             key, entry = r
             # 只有"携带后真的有作用"的道具才允许装(持有类效果 / 携带进化)
             if key not in ITEMS:
-                yield event.plain_result(
+                yield _res(event,
                     f"⚠️ {entry.get('zh', key)} 是消耗品,携带没有效果。"
                     "(回复/球类请在 `/对战` 里用,进化石用 `/进化 <序号> <道具>`)"
                 )
@@ -3624,14 +3659,14 @@ class PokemonWorldPlugin(Star):
                 else self._current_mon_index(t) + 1
             mon = t.mon(num - 1)
             if mon is None:
-                yield event.plain_result(f"❌ 队伍里没有第 {num} 只。")
+                yield _res(event, f"❌ 队伍里没有第 {num} 只。")
                 return
             if str(mon.item or "") == key:
-                yield event.plain_result(f"⚠️ {mon.display} 已经携带了 {entry['zh']}。")
+                yield _res(event, f"⚠️ {mon.display} 已经携带了 {entry['zh']}。")
                 return
             if mon.item:
                 old_zh = self._held_zh(str(mon.item))
-                yield event.plain_result(
+                yield _res(event,
                     f"⚠️ {mon.display} 正携带 {old_zh},先 `/持有 取下 {num}` 再换。"
                 )
                 return
@@ -3643,13 +3678,13 @@ class PokemonWorldPlugin(Star):
                     None,
                 )
                 tip = f"(第 {holder} 只正携带它)" if holder else ""
-                yield event.plain_result(f"❌ 背包里没有 {entry['zh']}{tip}。")
+                yield _res(event, f"❌ 背包里没有 {entry['zh']}{tip}。")
                 return
             mon.item = key
             t.commit(num - 1, mon)
             self._save(t)
             eff = effect_text(key)
-            yield event.plain_result(
+            yield _res(event,
                 f"✅ {mon.display} 开始携带 {entry['zh']}"
                 + (f" —— {eff}" if eff else "") + "。"
             )
@@ -3659,7 +3694,7 @@ class PokemonWorldPlugin(Star):
         """/图鉴 <名字> —— 图鉴资料"""
         t, err = self._require(event, in_battle_ok=True)
         if err:
-            yield event.plain_result(err)
+            yield _res(event, err)
             return
         dex = get_dex()
         name = self._args(event, ("图鉴", "dex", "宝可梦图鉴")).strip()
@@ -3667,14 +3702,14 @@ class PokemonWorldPlugin(Star):
             shiny_line = (
                 f" ✨ 其中闪光(异色){t.shiny_count()} 种。" if t.shiny_count() else ""
             )
-            yield event.plain_result(
+            yield _res(event,
                 f"📖 图鉴进度:已见到 {len(t.data['dex_seen'])} 种,"
                 f"已捕获 {len(t.data['dex_caught'])} 种。{shiny_line}"
             )
             return
         r = dex.resolve_species(name)
         if not r:
-            yield event.plain_result(f"❌ 未收录宝可梦「{name}」。")
+            yield _res(event, f"❌ 未收录宝可梦「{name}」。")
             return
         key, entry = r
         world = WorldMap()
@@ -3747,7 +3782,7 @@ class PokemonWorldPlugin(Star):
         """/今日 —— 今日世界与个人事件"""
         t, err = self._require(event, in_battle_ok=True)
         if err:
-            yield event.plain_result(err)
+            yield _res(event, err)
             return
         async with self._lock(t.scope):
             lines = await self._ensure_day(event, t)
@@ -3803,7 +3838,7 @@ class PokemonWorldPlugin(Star):
         """/任务 —— 查看/放弃支线委托"""
         t, err = self._require(event, in_battle_ok=True)
         if err:
-            yield event.plain_result(err)
+            yield _res(event, err)
             return
         arg = self._args(event, ("任务", "委托", "quest", "quests")).strip()
         async with self._lock(t.scope):
@@ -3811,7 +3846,7 @@ class PokemonWorldPlugin(Star):
             parts = arg.split()
             if parts and parts[0] in ("放弃", "drop", "取消"):
                 if B.in_battle(t):
-                    yield event.plain_result(
+                    yield _res(event,
                         "⚠️ 对战中不能放弃委托 —— 先打完这场(出招/捕捉/逃跑)。"
                     )
                     return
@@ -3819,9 +3854,9 @@ class PokemonWorldPlugin(Star):
                 q = QT.abandon(t, idx)
                 self._save(t)
                 if not q:
-                    yield event.plain_result("❌ 没有这个序号的委托。用 `/任务` 看看列表。")
+                    yield _res(event, "❌ 没有这个序号的委托。用 `/任务` 看看列表。")
                     return
-                yield event.plain_result(f"🗑️ 你撇下了「{q.get('title')}」这条委托。")
+                yield _res(event, f"🗑️ 你撇下了「{q.get('title')}」这条委托。")
                 return
         text = QT.panel_text(t)
         acts = QT.active(t)
@@ -3919,10 +3954,10 @@ class PokemonWorldPlugin(Star):
         """
         t, err = self._require(event)
         if err:
-            yield event.plain_result(err)
+            yield _res(event, err)
             return
         if not self._is_admin_uid(t.uid):
-            yield event.plain_result(
+            yield _res(event,
                 "❌ 只有管理员能迁移存档。请先在插件配置 `admin_uids` 里填上你的 ID。"
             )
             return
@@ -3942,7 +3977,7 @@ class PokemonWorldPlugin(Star):
             if len(scopes) > 20:
                 lines.append(f"…还有 {len(scopes) - 20} 个群")
             lines.append("迁移:`/迁移存档 群 <旧> <新>` 或 `/迁移存档 玩家 <群> <旧> <新>`")
-            yield event.plain_result("\n".join(lines))
+            yield _res(event, "\n".join(lines))
             return
 
         dry = head in ("预览", "dry", "dryrun", "试试")
@@ -3954,7 +3989,7 @@ class PokemonWorldPlugin(Star):
 
         if head in ("群", "组", "scope"):
             if len(parts) < 2:
-                yield event.plain_result("用法:`/迁移存档 群 <旧群ID> <新群ID>`")
+                yield _res(event, "用法:`/迁移存档 群 <旧群ID> <新群ID>`")
                 return
             old, new = parts[0], parts[1]
             players = self.trainers.list_players(old)
@@ -3967,19 +4002,19 @@ class PokemonWorldPlugin(Star):
                 f"· 目标群现状:{len(self.trainers.list_players(new))} 份存档",
             ]
             if dry:
-                yield event.plain_result(chr(10).join(lines) + chr(10) + "(预览模式,没有改动任何数据)")
+                yield _res(event, chr(10).join(lines) + chr(10) + "(预览模式,没有改动任何数据)")
                 return
             moved, msg = self.trainers.rename_scope(old, new, force=force)
             if msg:
-                yield event.plain_result(f"❌ {msg}")
+                yield _res(event, f"❌ {msg}")
                 return
             self.worlds.rename(old, new)
-            yield event.plain_result(chr(10).join(lines) + f"{chr(10)}✅ 已迁移 {moved} 位玩家的存档。")
+            yield _res(event, chr(10).join(lines) + f"{chr(10)}✅ 已迁移 {moved} 位玩家的存档。")
             return
 
         if head in ("玩家", "player", "uid"):
             if len(parts) < 3:
-                yield event.plain_result("用法:`/迁移存档 玩家 <群ID> <旧ID> <新ID>`(可用逗号批量)")
+                yield _res(event, "用法:`/迁移存档 玩家 <群ID> <旧ID> <新ID>`(可用逗号批量)")
                 return
             scope, olds, new = parts[0], parts[1], parts[2]
             old_list = [x for x in re.split(r"[,，]", olds) if x.strip()]
@@ -3994,10 +4029,10 @@ class PokemonWorldPlugin(Star):
             out.extend(f"· {x}" for x in msgs)
             if len(old_list) > 1:
                 out.append("(注意:多个旧 ID 迁到同一个新 ID 会互相覆盖,建议一次一个)")
-            yield event.plain_result("\n".join(out))
+            yield _res(event, "\n".join(out))
             return
 
-        yield event.plain_result(
+        yield _res(event,
             "用法:`/迁移存档 列表` / `预览 群 <旧> <新>` / `群 <旧> <新>` / "
             "`玩家 <群> <旧ID> <新ID>`(末尾可加 force)"
         )
@@ -4013,23 +4048,23 @@ class PokemonWorldPlugin(Star):
             # 于是**没配置管理员(默认情况)时任何玩家都能清空全群存档**。
             # 清空是破坏性操作,宁可拒绝也不能放开。
             if not admins:
-                yield event.plain_result(
+                yield _res(event,
                     "❌ 未配置管理员(`admin_uids`),为避免误删,清空全群存档已禁用。"
                     "请先在插件配置里填写管理员 QQ。"
                 )
                 return
             if uid not in admins:
-                yield event.plain_result("❌ 只有管理员能清空全群存档。")
+                yield _res(event, "❌ 只有管理员能清空全群存档。")
                 return
             n = self.trainers.delete_scope(scope)
             self.worlds.delete(scope)
-            yield event.plain_result(f"🗑️ 已清空本会话的 {n} 份存档。")
+            yield _res(event, f"🗑️ 已清空本会话的 {n} 份存档。")
             return
         if not self.trainers.exists(scope, uid):
-            yield event.plain_result("❌ 你没有存档。")
+            yield _res(event, "❌ 你没有存档。")
             return
         self.trainers.delete(scope, uid)
-        yield event.plain_result("🗑️ 你的存档已删除,可以重新 `/开始`。")
+        yield _res(event, "🗑️ 你的存档已删除,可以重新 `/开始`。")
 
     @filter.command("新手", alias={"引导", "教程", "新手引导", "tutorial", "guide"})
     async def cmd_tutorial(self, event: AstrMessageEvent):
@@ -4040,12 +4075,12 @@ class PokemonWorldPlugin(Star):
             nxt = _next_step(t)
             if nxt:
                 lines.append(nxt)
-        yield event.plain_result("\n\n".join(lines))
+        yield _res(event, "\n\n".join(lines))
 
     @filter.command("帮助", alias={"help", "说明"})
     async def cmd_help(self, event: AstrMessageEvent):
         """/帮助 —— 指令一览"""
-        yield event.plain_result(HELP_TEXT)
+        yield _res(event, HELP_TEXT)
 
     # ══════════════════════════════════════════════════════════════
     # 文本渲染
@@ -4412,14 +4447,14 @@ class PokemonWorldPlugin(Star):
         """/主线 [挑战] —— 主线与敌对组织剧情"""
         t, err = self._require(event)
         if err:
-            yield event.plain_result(err)
+            yield _res(event, err)
             return
         sub = self._args(event, ("主线", "story", "剧情", "主线剧情")).strip()
         async with self._lock(t.scope):
             state = self._state(t.scope)
             for st in story.progress(t, world=WorldMap(), day=state.day):
                 self._save(t)
-                yield event.plain_result(f"📜 主线推进:{st['title']}")
+                yield _res(event, f"📜 主线推进:{st['title']}")
             cur = story.current_stage(t)
             if sub not in ("挑战", "challenge", "打", "开战"):
                 info = story.STORY.get(t.region) or {}
@@ -4442,17 +4477,17 @@ class PokemonWorldPlugin(Star):
                     yield r
                 return
             if not cur:
-                yield event.plain_result("本地区主线已经完成了。")
+                yield _res(event, "本地区主线已经完成了。")
                 return
             reason = story.stage_locked(t, cur)
             if reason:
-                yield event.plain_result(f"❌ {reason}。\n{cur['desc']}")
+                yield _res(event, f"❌ {reason}。\n{cur['desc']}")
                 return
             if B.in_battle(t):
-                yield event.plain_result("⚠️ 先结束当前对战。")
+                yield _res(event, "⚠️ 先结束当前对战。")
                 return
             if t.all_fainted():
-                yield event.plain_result("❌ 队伍全部失去战斗能力,先 `/治疗`。")
+                yield _res(event, "❌ 队伍全部失去战斗能力,先 `/治疗`。")
                 return
             meta = story.boss_meta(t, cur)
             log = B.start(
@@ -4473,7 +4508,7 @@ class PokemonWorldPlugin(Star):
         """/神兽 [挑战 <名字>] —— 传说宝可梦定点遭遇"""
         t, err = self._require(event)
         if err:
-            yield event.plain_result(err)
+            yield _res(event, err)
             return
         sub = self._args(event, ("神兽", "legend", "传说", "传说宝可梦")).strip()
         async with self._lock(t.scope):
@@ -4487,7 +4522,7 @@ class PokemonWorldPlugin(Star):
                         break
                 here = legendary.ready(t, world=world, day=state.day)
                 if not here:
-                    yield event.plain_result(
+                    yield _res(event,
                         "❌ 这里没有可挑战的神兽。用 `/神兽` 查看已知栖息地。"
                     )
                     return
@@ -4498,7 +4533,7 @@ class PokemonWorldPlugin(Star):
                             site = cand
                             break
                     if site is None:
-                        yield event.plain_result(
+                        yield _res(event,
                             f"❌ 此地没有「{name}」。可选:"
                             + "、".join(c["zh"] for c in here)
                         )
@@ -4506,7 +4541,7 @@ class PokemonWorldPlugin(Star):
                 else:
                     site = here[0]
                 if B.in_battle(t):
-                    yield event.plain_result("⚠️ 先结束当前对战。")
+                    yield _res(event, "⚠️ 先结束当前对战。")
                     return
                 _lnotice: list[str] = []
                 meta = self._maybe_shiny_legend(
@@ -4560,11 +4595,11 @@ class PokemonWorldPlugin(Star):
         """/大赛 [挑战] —— 冠军后解锁的世界大赛"""
         t, err = self._require(event)
         if err:
-            yield event.plain_result(err)
+            yield _res(event, err)
             return
         world = WorldMap()
         if not story.tournament_unlocked(t, world=world):
-            yield event.plain_result(
+            yield _res(event,
                 "❌ 世界大赛只对冠军开放 —— 先成为任意地区的冠军吧。"
             )
             return
@@ -4599,14 +4634,14 @@ class PokemonWorldPlugin(Star):
                 yield r
             return
         if B.in_battle(t):
-            yield event.plain_result("⚠️ 先结束当前对战。")
+            yield _res(event, "⚠️ 先结束当前对战。")
             return
         if rnd >= len(story.TOURNAMENT_ROUNDS):
             rnd = 0
         async with self._lock(t.scope):
             state = self._state(t.scope)
             if t.all_fainted():
-                yield event.plain_result("❌ 队伍全部失去战斗能力,先 `/治疗`。")
+                yield _res(event, "❌ 队伍全部失去战斗能力,先 `/治疗`。")
                 return
             meta = story.tournament_meta(
                 t, rnd, world=world, rng=stable_rng("tour", t.uid, state.day, rnd)
@@ -4706,14 +4741,14 @@ class PokemonWorldPlugin(Star):
                 yield r
         if len(grown) > GROWTH_CARD_LIMIT:
             rest = grown[GROWTH_CARD_LIMIT:]
-            yield event.plain_result("其余成长:" + "、".join(
+            yield _res(event, "其余成长:" + "、".join(
                 f"{d.get('name')} Lv{coerce_int(d.get('from_level'), 0)}→"
                 f"{coerce_int(d.get('to_level'), 0)}" for d in rest))
         if grown or caught_card:
             # 成长卡(或捕获卡)已经当结果卡用了 —— 不再发重复的战报卡
             notice = self._pending_notice(t)
             if notice:
-                yield event.plain_result(notice)
+                yield _res(event, notice)
             return
         if res.outcome in ("win", "loss", "forfeit", "escaped", "stalled"):
             async for r in self._emit_ui(
@@ -4733,7 +4768,7 @@ class PokemonWorldPlugin(Star):
                 yield r
         notice = self._pending_notice(t)
         if notice:
-            yield event.plain_result(notice)
+            yield _res(event, notice)
 
     async def _emit_growth_card(self, event: AstrMessageEvent, t: Trainer,
                                 detail: dict):
@@ -4858,7 +4893,7 @@ class PokemonWorldPlugin(Star):
                 logger.debug("宝可梦世界: %s 界面渲染失败,回退文本: %s", label, e)
         body = "\n".join(x for x in (text, hint) if x)
         if body:
-            yield event.plain_result(body)
+            yield _res(event, body)
 
     def _ability_zh(self, key: str) -> str:
         """特性的中文名(查不到就返回空串)。"""
@@ -5314,7 +5349,7 @@ class PokemonWorldPlugin(Star):
         _banner = str(_bdata.get("banter_long") or "")
         if _banner and not _bdata.get("banter_shown"):
             _bdata["banter_shown"] = True
-            yield event.plain_result(f"💬 {_banner}")
+            yield _res(event, f"💬 {_banner}")
 
         if self._cfg_bool("battle_image", True):
             try:
@@ -5363,7 +5398,7 @@ class PokemonWorldPlugin(Star):
         else:
             body = text or keep
         if body:
-            yield event.plain_result(body)
+            yield _res(event, body)
 
     # ════════════════════════════════════════════════════════════
     # 玩家对玩家(PvP)回合制对战
@@ -5380,21 +5415,21 @@ class PokemonWorldPlugin(Star):
         """/组队 <@某人|接受|拒绝|离开> —— 找搭档一起打双打"""
         t, err = self._require(event, in_battle_ok=True)
         if err:
-            yield event.plain_result(err)
+            yield _res(event, err)
             return
         arg = self._args(event, ("组队", "搭档", "team")).strip()
         state = self._state(t.scope)
         if arg in ("接受", "同意", "accept"):
             rows = COOP.incoming(state, t.uid)
             if not rows:
-                yield event.plain_result("❌ 没有待处理的组队邀请。")
+                yield _res(event, "❌ 没有待处理的组队邀请。")
                 return
             row = rows[-1]
             COOP.accept(state, row)
             self._save_state(state)
             other = COOP.partner_of(row, t.uid)
             nm = (row.get("names") or {}).get(other) or "搭档"
-            yield event.plain_result(
+            yield _res(event,
                 f"🤝 你和 {nm} 组成了搭档!\n· 和 TA 站在**同一地点**,由邀请方发 `/双打` 开始\n"
                 "· 双打里各打各的:轮到你就用 `/双打 <招式序号>` 出招"
             )
@@ -5404,44 +5439,44 @@ class PokemonWorldPlugin(Star):
             if rows:
                 COOP.decline(state, rows[-1])
                 self._save_state(state)
-            yield event.plain_result("👋 已忽略组队邀请。")
+            yield _res(event, "👋 已忽略组队邀请。")
             return
         if arg in ("离开", "解散", "leave"):
             ok = COOP.leave(state, t.uid)
             self._save_state(state)
-            yield event.plain_result("👋 已解散搭档。" if ok else "❌ 对战中不能解散,先打完。")
+            yield _res(event, "👋 已解散搭档。" if ok else "❌ 对战中不能解散,先打完。")
             return
         targets = self._name_targets(event, t, arg)
         if targets and str(targets[0][0]) != t.uid:
             uid, name = str(targets[0][0]), (targets[0][1] or "玩家")
             if self.trainers.load(t.scope, uid) is None:
-                yield event.plain_result("❌ 对方还没有开始旅程(`/开始` 一下)。")
+                yield _res(event, "❌ 对方还没有开始旅程(`/开始` 一下)。")
                 return
             COOP.offer(state, t.uid, uid, t.name, name)
             self._save_state(state)
-            yield event.plain_result(
+            yield _res(event,
                 f"🤝 已邀请 {name} 组队(5 分钟内有效)。\n对方发 `/组队 接受` 即可。"
             )
             return
         row = COOP.pair_for(state, t.uid)
         if row is None:
-            yield event.plain_result("用法:`/组队 @某人`(或直接写角色名,如 `/组队 小茂`)邀请搭档,对方 `/组队 接受`。")
+            yield _res(event, "用法:`/组队 @某人`(或直接写角色名,如 `/组队 小茂`)邀请搭档,对方 `/组队 接受`。")
             return
         other = COOP.partner_of(row, t.uid)
         nm = (row.get("names") or {}).get(other) or "搭档"
         if COOP.battle_of(row):
-            yield event.plain_result(
+            yield _res(event,
                 f"⚔️ 你和 {nm} 正在合作双打中 —— 用 `/双打 <招式序号> [2/队友]` 出招。"
             )
             return
-        yield event.plain_result(f"🤝 搭档:{nm}(等对方接受,或由邀请方发 `/双打` 开打)")
+        yield _res(event, f"🤝 搭档:{nm}(等对方接受,或由邀请方发 `/双打` 开打)")
 
     @filter.command("双打", alias={"合作双打", "doubles"})
     async def cmd_coop(self, event: AstrMessageEvent):
         """/双打 [行动] —— 和搭档一起打双打(2v2)"""
         t, err = self._require(event, in_battle_ok=True)
         if err:
-            yield event.plain_result(err)
+            yield _res(event, err)
             return
         arg = self._args(event, ("双打", "合作双打", "coop")).strip()
         state = self._state(t.scope)
@@ -5455,7 +5490,7 @@ class PokemonWorldPlugin(Star):
                 yield r
             return
         if arg:
-            yield event.plain_result("❌ 现在没有进行中的合作双打。")
+            yield _res(event, "❌ 现在没有进行中的合作双打。")
             return
         async for r in self._coop_start(event, t, state):
             yield r
@@ -5467,22 +5502,22 @@ class PokemonWorldPlugin(Star):
         """
         row = COOP.pair_for(state, t.uid)
         if row is None or COOP.battle_of(row):
-            yield event.plain_result("❌ 现在没有可用的搭档会话,先 `/组队 @某人` 邀请搭档并让 TA `/组队 接受`。")
+            yield _res(event, "❌ 现在没有可用的搭档会话,先 `/组队 @某人` 邀请搭档并让 TA `/组队 接受`。")
             return
         if str(row.get("a")) != str(t.uid):
-            yield event.plain_result("❌ 由发出邀请的那位发 `/双打` 开打。")
+            yield _res(event, "❌ 由发出邀请的那位发 `/双打` 开打。")
             return
         ally_uid = COOP.partner_of(row, t.uid)
         ally_data = self.trainers.load(t.scope, ally_uid)
         if not ally_data:
-            yield event.plain_result("❌ 搭档还没有开始旅程。")
+            yield _res(event, "❌ 搭档还没有开始旅程。")
             return
         ally = Trainer(ally_data, uid=ally_uid, scope=t.scope)
         if B.in_battle(t) or B.in_battle(ally):
-            yield event.plain_result("❌ 你或搭档正在别的对战里,先打完再开双打。")
+            yield _res(event, "❌ 你或搭档正在别的对战里,先打完再开双打。")
             return
         if str(ally.data.get("location") or "") != str(t.location or ""):
-            yield event.plain_result("❌ 你们不在同一地点 —— 先 `/前往` 会合再开双打。")
+            yield _res(event, "❌ 你们不在同一地点 —— 先 `/前往` 会合再开双打。")
             return
 
         world = WorldMap()
@@ -5547,7 +5582,7 @@ class PokemonWorldPlugin(Star):
                        + chr(10)
                        + "　训练家每天刷新:换个地点、或明天再来(`/训练家战` 单挑也一样)")
             if not wnames:
-                yield event.plain_result("❌ 这附近找不到愿意和你们俩对战的对手。")
+                yield _res(event, "❌ 这附近找不到愿意和你们俩对战的对手。")
                 return
 
         host_len = len(t.party)
@@ -5557,7 +5592,7 @@ class PokemonWorldPlugin(Star):
             B.start_doubles(t, specs, kind=kind, meta=meta, day=state.day,
                             ally_party=list(ally.party))
         except B.BattleError as e:
-            yield event.plain_result(str(e))
+            yield _res(event, str(e))
             return
         COOP.start_battle(state, row, kind=kind, title=title, host_len=host_len,
                           host=t.uid, ally=ally_uid)
@@ -5566,9 +5601,9 @@ class PokemonWorldPlugin(Star):
         self._save_state(state)
 
         if why:                                 # 兜底原因:先说清楚再开打
-            yield event.plain_result(why)
+            yield _res(event, why)
         if solo:
-            yield event.plain_result(solo)
+            yield _res(event, solo)
 
         view = B.view(t)
         log = [f"· {x}" for x in list((B.session(t) or {}).get("log") or [])[-4:]]
@@ -5631,10 +5666,10 @@ class PokemonWorldPlugin(Star):
         """
         t, err = self._require(event, in_battle_ok=True)
         if err:
-            yield event.plain_result(err)
+            yield _res(event, err)
             return
         if not B.in_battle(t):
-            yield event.plain_result("❌ 当前没有对战。用 `/探索` 或 `/道馆 挑战` 开战。")
+            yield _res(event, "❌ 当前没有对战。用 `/探索` 或 `/道馆 挑战` 开战。")
             return
         arg = self._args(event, ("自动战斗", "自动对战", "auto", "自动")).strip()
         state = self._state(t.scope)
@@ -5643,7 +5678,7 @@ class PokemonWorldPlugin(Star):
             snap = B.session(t) or {}
             bs = snap.get("battle") or {}
             if bs.get("doubles"):
-                yield event.plain_result("❌ 合作双打要用 `/双打 <招式序号>`:要等搭档一起出招,不能自动连打。")
+                yield _res(event, "❌ 合作双打要用 `/双打 <招式序号>`:要等搭档一起出招,不能自动连打。")
                 return
             view = B.view(t)
             my, foe = view.get("my") or {}, view.get("foe") or {}
@@ -5657,7 +5692,7 @@ class PokemonWorldPlugin(Star):
             if arg:
                 idx = coerce_int(arg, 0)
                 if idx < 1 or idx > len(moves):
-                    yield event.plain_result(f"❌ 没有第 {arg} 个招式(你有 {len(moves)} 个)。")
+                    yield _res(event, f"❌ 没有第 {arg} 个招式(你有 {len(moves)} 个)。")
                     return
             else:
                 # 不填就自动挑"最有效"的一招(威力 × 克制 × 本系)
@@ -5819,7 +5854,7 @@ class PokemonWorldPlugin(Star):
         # 出招前先把场上两位的宝可梦与招式列清楚(以前完全没有)
         _field = self._coop_field_hint(t)
         if _field:
-            yield event.plain_result(_field)
+            yield _res(event, _field)
         """交自己的行动;两边都交齐(或搭档超时)就推进一回合。"""
         bmeta = COOP.battle_of(row) or {}
         host_uid = str(bmeta.get("host") or "")
@@ -5829,7 +5864,7 @@ class PokemonWorldPlugin(Star):
         if host_data is None or ally_data is None:
             COOP.clear(state, row)
             self._save_state(state)
-            yield event.plain_result("❌ 这场双打的存档找不到了,已结束。")
+            yield _res(event, "❌ 这场双打的存档找不到了,已结束。")
             return
         host = Trainer(host_data, uid=host_uid, scope=t.scope)
         ally = Trainer(ally_data, uid=ally_uid, scope=t.scope)
@@ -5853,7 +5888,7 @@ class PokemonWorldPlugin(Star):
         parts = arg.replace("，", " ").split()
         head = parts[0] if parts else ""
         if not head:
-            yield event.plain_result(
+            yield _res(event,
                 f"你的 {me.get('name') or me.get('species') or '宝可梦'}:"
                 + ("、".join(f"{i + 1}.{self._move_zh(m)}" for i, m in enumerate(moves)) or "没有招式")
                 + "\n行动:`/双打 <序号> [2/队友]`、`/双打 switch <序号>`、`/双打 run`"
@@ -5863,20 +5898,20 @@ class PokemonWorldPlugin(Star):
             action = {"type": "forfeit", "slot": slot}
         elif head in ("switch", "换人"):
             if len(parts) < 2 or not parts[1].isdigit():
-                yield event.plain_result("用法:`/双打 switch <你队伍里的序号>`")
+                yield _res(event, "用法:`/双打 switch <你队伍里的序号>`")
                 return
             n = int(parts[1])
             if not 1 <= n <= len(t.party):
-                yield event.plain_result("❌ 你的队伍没有这个序号。")
+                yield _res(event, "❌ 你的队伍没有这个序号。")
                 return
             if int(t.party[n - 1].get("cur_hp") or 0) <= 0:
-                yield event.plain_result("❌ 这只已经倒下了。")
+                yield _res(event, "❌ 这只已经倒下了。")
                 return
             action = {"type": "switch", "index": base + n - 1, "slot": slot}
         elif head.isdigit():
             i = int(head)
             if not 1 <= i <= len(moves):
-                yield event.plain_result("❌ 没有这个招式序号,发 `/双打` 看招式表。")
+                yield _res(event, "❌ 没有这个招式序号,发 `/双打` 看招式表。")
                 return
             target = "foe_main"
             if len(parts) > 1:
@@ -5887,7 +5922,7 @@ class PokemonWorldPlugin(Star):
                     target = "ally_main"
             action = {"type": "move", "move": moves[i - 1], "slot": slot, "target": target}
         else:
-            yield event.plain_result("❌ 不认识这个行动。发 `/双打` 看你的招式表。")
+            yield _res(event, "❌ 不认识这个行动。发 `/双打` 看你的招式表。")
             return
 
         ready = COOP.set_action(row, t.uid, action)
@@ -5901,11 +5936,11 @@ class PokemonWorldPlugin(Star):
                     "slot": other_slot, "target": "foe_main"}
             COOP.set_action(row, partner_uid, auto)
             ready = True
-            yield event.plain_result(f"⌛ {partner_name} 没赶上,替他自动出招了。")
+            yield _res(event, f"⌛ {partner_name} 没赶上,替他自动出招了。")
         self._save_state(state)
         if not ready:
             self._save(t)
-            yield event.plain_result(
+            yield _res(event,
                 f"✅ 行动已记录,等 {partner_name} 出招……(TA 用 `/双打 <招式序号>` 出招)"
             )
             return
@@ -5934,12 +5969,12 @@ class PokemonWorldPlugin(Star):
         """/亲昵 <序号> —— 摸摸宝可梦,提升亲密度(每只每天一次)"""
         t, err = self._require(event)
         if err:
-            yield event.plain_result(err)
+            yield _res(event, err)
             return
         arg = self._args(event, ("亲昵", "抚摸", "摸头")).strip()
         idx = coerce_int(arg, 0)
         if not 1 <= idx <= len(t.party):
-            yield event.plain_result(
+            yield _res(event,
                 f"用法:`/亲昵 <队伍序号>`(1-{len(t.party)})—— 摸摸它,亲密度 +3(每天每只一次)。"
             )
             return
@@ -5948,10 +5983,10 @@ class PokemonWorldPlugin(Star):
         mon = B.dict_to_mon(md)
         name = mon.display
         if int(mon.friendship or 0) >= 255:
-            yield event.plain_result(f"💞 {name} 已经和你形影不离了,不用再撒娇啦。")
+            yield _res(event, f"💞 {name} 已经和你形影不离了,不用再撒娇啦。")
             return
         if str(md.get("pet_day") or "") == str(state.day):
-            yield event.plain_result(
+            yield _res(event,
                 f"💤 {name} 今天已经被你摸过啦(每只每天一次),明天再来吧。"
             )
             return
@@ -5963,7 +5998,7 @@ class PokemonWorldPlugin(Star):
         self._save(t)
         now = int(mon.friendship or 0)
         heart = growth.friendship_hearts(now)
-        yield event.plain_result(
+        yield _res(event,
             f"💗 你摸了摸 {name},它开心地蹭了蹭你的手。"
             f"\n亲密度 {before} → {now}({growth.friendship_tier(now)} {heart})"
             + ("\n✨ 亲密度够高了,它好像随时会进化 —— 升一级试试!"
@@ -5973,7 +6008,7 @@ class PokemonWorldPlugin(Star):
                              target_name: str, arg: str):
         """`/对战 @某人 [赌注 N]` —— 发起挑战。"""
         if str(target_uid) == str(t.uid):
-            yield event.plain_result("❌ 不能和自己对战。")
+            yield _res(event, "❌ 不能和自己对战。")
             return
         wager = 0
         toks = str(arg or "").replace("赌注", " 赌注 ").split()
@@ -5984,18 +6019,18 @@ class PokemonWorldPlugin(Star):
             state = self._state(t.scope)
             other = self._trainer_in(t.scope, target_uid)
             if other is None:
-                yield event.plain_result(
+                yield _res(event,
                     "❌ 对方还没开始旅程(要先用 `/开始` 创建训练家)。"
                 )
                 return
             if t.all_fainted():
-                yield event.plain_result("❌ 你的队伍全都失去战斗能力了,先 `/治疗`。")
+                yield _res(event, "❌ 你的队伍全都失去战斗能力了,先 `/治疗`。")
                 return
             if PVP.active_for(state, target_uid):
-                yield event.plain_result("❌ 对方正在和别人对战,等这场打完。")
+                yield _res(event, "❌ 对方正在和别人对战,等这场打完。")
                 return
             if wager and t.money < wager:
-                yield event.plain_result(
+                yield _res(event,
                     f"❌ 赌注不能超过你身上的钱(你现在 {fmt_money(t.money)})。"
                 )
                 return
@@ -6004,12 +6039,12 @@ class PokemonWorldPlugin(Star):
                           challenger_name=t.name or "训练家",
                           target=target_uid, wager=wager, day=state.day)
             except B.BattleError as e:
-                yield event.plain_result(str(e))
+                yield _res(event, str(e))
                 return
             self._save_state(state)
         name = target_name or "对方"
         tip = f"(赌注 {wager:,}₽)" if wager else "(友谊赛,不赌钱)"
-        yield event.plain_result(
+        yield _res(event,
             f"⚔️ {t.name or '训练家'} 向 {name} 发起对战{tip}!\n"
             f"{name} 用 `/对战 接受` 应战,或 `/对战 拒绝`;5 分钟内有效。"
         )
@@ -6020,7 +6055,7 @@ class PokemonWorldPlugin(Star):
             state = self._state(t.scope)
             rows = PVP.incoming(state, t.uid)
             if not rows:
-                yield event.plain_result("❌ 没有人正在挑战你。")
+                yield _res(event, "❌ 没有人正在挑战你。")
                 return
             row = rows[0]
             other = self._trainer_in(t.scope, str(row.get("from")))
@@ -6029,16 +6064,16 @@ class PokemonWorldPlugin(Star):
                     PVP.key_for(str(row.get("from")), t.uid), None
                 )
                 self._save_state(state)
-                yield event.plain_result("❌ 挑战者已经不在这个群了,挑战作废。")
+                yield _res(event, "❌ 挑战者已经不在这个群了,挑战作废。")
                 return
             wager = int(row.get("wager") or 0)
             if wager and (t.money < wager or other.money < wager):
-                yield event.plain_result(
+                yield _res(event,
                     "❌ 有一方身上的钱不够付赌注,这场取消了。"
                 )
                 return
             if t.all_fainted() or other.all_fainted():
-                yield event.plain_result("❌ 有一方队伍全灭,先去 `/治疗`。")
+                yield _res(event, "❌ 有一方队伍全灭,先去 `/治疗`。")
                 return
             try:
                 log = PVP.begin(
@@ -6046,7 +6081,7 @@ class PokemonWorldPlugin(Star):
                     seed=hash_int("pvp", str(row.get("from")), t.uid, state.day),
                 )
             except B.BattleError as e:
-                yield event.plain_result(str(e))
+                yield _res(event, str(e))
                 return
             row["to_name"] = t.name or "训练家"
             row["from_name"] = other.name or row.get("from_name") or "训练家"
@@ -6068,13 +6103,13 @@ class PokemonWorldPlugin(Star):
             state = self._state(t.scope)
             rows = PVP.incoming(state, t.uid)
             if not rows:
-                yield event.plain_result("❌ 没有人正在挑战你。")
+                yield _res(event, "❌ 没有人正在挑战你。")
                 return
             row = rows[0]
             key = PVP.key_for(str(row.get("from")), t.uid)
             state.data.get(PVP.BOX_KEY, {}).pop(key, None)
             self._save_state(state)
-        yield event.plain_result(f"🙅 {t.name or '你'} 拒绝了这场对战。")
+        yield _res(event, f"🙅 {t.name or '你'} 拒绝了这场对战。")
 
     async def _pvp_cancel(self, event, t: Trainer, target_uid: str):
         """`/对战 取消 @某人` —— 撤回自己发出的挑战。"""
@@ -6083,11 +6118,11 @@ class PokemonWorldPlugin(Star):
             key = PVP.key_for(t.uid, target_uid or "")
             row = state.data.get(PVP.BOX_KEY, {}).get(key)
             if not isinstance(row, dict) or str(row.get("from")) != str(t.uid):
-                yield event.plain_result("❌ 没有你发出的挑战。")
+                yield _res(event, "❌ 没有你发出的挑战。")
                 return
             state.data[PVP.BOX_KEY].pop(key, None)
             self._save_state(state)
-        yield event.plain_result("🗑️ 挑战已撤回。")
+        yield _res(event, "🗑️ 挑战已撤回。")
 
     async def _pvp_tick(self) -> None:
         """调度器每 60 秒跑一次:替超时未出招的一方自动出招。"""
@@ -6218,7 +6253,7 @@ class PokemonWorldPlugin(Star):
                     return
             except Exception as e:
                 logger.debug("宝可梦世界: 玩家对战画面渲染失败: %s", e)
-        yield event.plain_result((fallback or self._pvp_text(row)) + "\n" + hint)
+        yield _res(event, (fallback or self._pvp_text(row)) + "\n" + hint)
 
     async def _announce(self, scope: str, text: str) -> None:
         """把战报推到**群**里(玩家可能在私聊出招,群里的人也要看到结果)。"""
@@ -6289,7 +6324,7 @@ class PokemonWorldPlugin(Star):
             state = self._state(scope)
             row = self._pvp_row(state, t)
             if row is None:
-                yield event.plain_result("❌ 你现在没有进行中的玩家对战。")
+                yield _res(event, "❌ 你现在没有进行中的玩家对战。")
                 return
             a_uid, b_uid = PVP.side_names(row)
             other_uid = b_uid if str(t.uid) == a_uid else a_uid
@@ -6301,7 +6336,7 @@ class PokemonWorldPlugin(Star):
                 try:
                     action = PVP.parse_for(row, t.uid, t, arg)
                 except B.BattleError as e:
-                    yield event.plain_result(str(e))
+                    yield _res(event, str(e))
                     return
                 if action.get("type") == "mega":
                     # 独立 Mega:不消耗回合、不用提交行动 —— 直接给自己这侧变身
@@ -6309,7 +6344,7 @@ class PokemonWorldPlugin(Star):
                     side = bb.player if str(t.uid) == a_uid else bb.enemy
                     bb.log = []
                     if not bb.mega_evolve(side):
-                        yield event.plain_result("❌ 现在无法 Mega 进化。")
+                        yield _res(event, "❌ 现在无法 Mega 进化。")
                         return
                     mon = side.mon
                     if mon is not None and mon.mega_from:
@@ -6346,7 +6381,7 @@ class PokemonWorldPlugin(Star):
                         f"{self._pvp_name(row, other_uid)} 选择……"
                         "(群里发 `/对战 <招式序号>` 即可)",
                     )
-                    yield event.plain_result(
+                    yield _res(event,
                         "⏳ 收到你的行动,等对方出招……(90 秒不动自动出招)\n"
                         + self._pvp_text(row, note="你的行动已记录。")
                     )
@@ -6359,7 +6394,7 @@ class PokemonWorldPlugin(Star):
                                           fallback=out):
                 yield r
         elif out:
-            yield event.plain_result(out)
+            yield _res(event, out)
 
     def _pvp_row(self, state, t: Trainer) -> dict | None:
         key = self._pvp_key_of(t)

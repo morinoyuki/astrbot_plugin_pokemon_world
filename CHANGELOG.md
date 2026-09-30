@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.32.3
+
+### QQ 官方接口默认按 markdown 发送文本
+
+- 新增统一文本出口 `_res(event, text)`,插件的 **319 处** `plain_result` 全部走它
+- 默认 `auto`:平台名含 `qq`+`official` 时调用 AstrBot 的
+  `MessageEventResult.use_markdown(True)` 按 markdown 发送;其他平台保持纯文本
+- 配置项 `send_markdown`:`auto`(默认)/`always`(所有平台都尝试)/`never`(始终纯文本)
+- 适配器不支持 markdown 时只是忽略这份元数据,不会影响发送;取平台名失败也自动退回纯文本
+
+- 回归 5 条:qqofficial 走 markdown、其他平台不受影响、always/never 覆盖、
+  拿不到平台名不崩、以及“所有文本出口必须走 _res”(裸调用只能出现在 _res 内部)
 ## 1.32.2
 
 ### 个人事件改为随机挑 2~4 位玩家(而不是人人有份)

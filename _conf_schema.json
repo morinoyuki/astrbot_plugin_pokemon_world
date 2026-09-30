@@ -107,5 +107,16 @@
     "type": "bool",
     "default": true,
     "description": "玩家对战把开局/出招/结果播报到群里"
+  },
+  "send_markdown": {
+    "type": "string",
+    "description": "文本发送格式(QQ 官方接口)",
+    "default": "auto",
+    "options": [
+      "auto",
+      "always",
+      "never"
+    ],
+    "hint": "auto:仅 qqofficial 平台按 markdown 发送;always:所有平台都尝试 markdown;never:始终纯文本"
   }
 }
