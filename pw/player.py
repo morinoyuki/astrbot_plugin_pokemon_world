@@ -489,6 +489,48 @@ class TrainerStore:
             return
         write_json_atomic(self._path(scope, uid), data)
 
+    def rename_player(self, scope: str, old: str, new: str, *,
+                      force: bool = False) -> tuple[int, str]:
+        """玩家换 ID:把 (scope, old) 的存档搬到 (scope, new)。"""
+        scope, old, new = str(scope or ""), str(old or ""), str(new or "")
+        if not scope or not old or not new:
+            return 0, "群 ID / 新旧玩家 ID 不能为空"
+        if old == new:
+            return 0, "新旧玩家 ID 相同,无需迁移"
+        data = self.load(scope, old)
+        if data is None:
+            return 0, f"群里没有 {old} 的存档"
+        if not force and self.load(scope, new) is not None:
+            return 0, f"{new} 在该群已有存档,已拒绝(确认无误后加 force)"
+        self.save(scope, new, data)
+        self.delete(scope, old)
+        return 1, ""
+
+    def rename_scope(self, old: str, new: str, *, force: bool = False
+                     ) -> tuple[int, str]:
+        """整群玩家存档换 ID(世界状态由 WorldStore.rename 负责)。
+
+        返回 (迁移的玩家数, 错误信息)。目标群已有存档时**拒绝**(除非 force),
+        避免静默覆盖别人的存档。
+        """
+        old, new = str(old or ""), str(new or "")
+        if not old or not new:
+            return 0, "旧/新群 ID 不能为空"
+        if old == new:
+            return 0, "新旧群 ID 相同,无需迁移"
+        if not force and self.list_players(new):
+            return 0, f"目标群 {new} 已有存档,已拒绝(确认无误后加 force)"
+        players = self.list_players(old)
+        moved = 0
+        for uid in players:
+            data = self.load(old, uid)
+            if data is None:
+                continue
+            self.save(new, uid, data)
+            self.delete(old, uid)
+            moved += 1
+        return moved, ""
+
     def exists(self, scope: str, uid: str) -> bool:
         if self._db is not None:
             return self._db.trainer_exists(scope, uid)

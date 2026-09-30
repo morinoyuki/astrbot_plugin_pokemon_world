@@ -266,6 +266,18 @@ class WorldStore:
             return self._db.load_world(scope)
         return read_json(self._path(scope)) or {}
 
+    def rename(self, old: str, new: str) -> bool:
+        """世界状态换 ID(群 ID 变了):每日事件/天气/会话一起搬。"""
+        old, new = str(old or ""), str(new or "")
+        if not old or not new or old == new:
+            return False
+        data = self.load(old)
+        if not data:
+            return False
+        self.save(new, data)
+        self.delete(old)
+        return True
+
     def save(self, scope: str, data: dict) -> None:
         if self._db is not None:
             self._db.save_world(scope, data)

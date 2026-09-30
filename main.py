@@ -3846,6 +3846,108 @@ class PokemonWorldPlugin(Star):
         ):
             yield r
 
+    def _is_admin_uid(self, uid: str) -> bool:
+        """管理员门禁:配置 `admin_uids`(逗号分隔)里包含才算 —— 未配置时默认拒绝。"""
+        raw = str(self._cfg("admin_uids", "") or "")
+        allow = {x.strip() for x in raw.replace("，", ",").split(",") if x.strip()}
+        return bool(allow) and str(uid) in allow
+
+    @filter.command("迁移存档", alias={"migrate", "迁移ID"})
+    async def cmd_migrate(self, event: AstrMessageEvent):
+        """平台切换用:把旧群 ID / 玩家 ID 的存档迁移到新 ID。
+
+        用法:
+        · `/迁移存档 列表`                     看有哪些群与玩家
+        · `/迁移存档 预览 群 <旧> <新>`         先看看会影响多少存档(不落盘)
+        · `/迁移存档 群 <旧> <新>`             整群迁移(含世界状态/每日事件)
+        · `/迁移存档 玩家 <群> <旧ID> <新ID>`   单人或批量(逗号分隔)
+        · 末尾加 `force` 允许覆盖目标已有存档
+        """
+        t, err = self._require(event)
+        if err:
+            yield event.plain_result(err)
+            return
+        if not self._is_admin_uid(t.uid):
+            yield event.plain_result(
+                "❌ 只有管理员能迁移存档。请先在插件配置 `admin_uids` 里填上你的 ID。"
+            )
+            return
+        arg = self._args(event, ("迁移存档", "migrate", "迁移ID")).strip()
+        parts = arg.replace("，", " ").split()
+        force = any(x.lower() in ("force", "-f", "强制") for x in parts)
+        parts = [x for x in parts if x.lower() not in ("force", "-f", "强制")]
+        head = parts[0] if parts else "列表"
+
+        if head in ("列表", "list", "状态"):
+            scopes = self.trainers.list_scopes()
+            lines = [f"📂 共 {len(scopes)} 个群有存档(当前群:{t.scope}):"]
+            for sc in scopes[:20]:
+                players = self.trainers.list_players(sc)
+                lines.append(f"· {sc} —— {len(players)} 位玩家:{', '.join(players[:6])}"
+                             + ("…" if len(players) > 6 else ""))
+            if len(scopes) > 20:
+                lines.append(f"…还有 {len(scopes) - 20} 个群")
+            lines.append("迁移:`/迁移存档 群 <旧> <新>` 或 `/迁移存档 玩家 <群> <旧> <新>`")
+            yield event.plain_result("\n".join(lines))
+            return
+
+        dry = head in ("预览", "dry", "dryrun", "试试")
+        if dry:
+            parts = parts[1:] or []
+            head = parts[0] if parts else ""
+        else:
+            parts = parts[1:]
+
+        if head in ("群", "组", "scope"):
+            if len(parts) < 2:
+                yield event.plain_result("用法:`/迁移存档 群 <旧群ID> <新群ID>`")
+                return
+            old, new = parts[0], parts[1]
+            players = self.trainers.list_players(old)
+            world = self.worlds.load(old)
+            lines = [
+                f"🔎 群 {old} → {new}",
+                f"· 玩家存档:{len(players)} 份"
+                + (f"({chr(44).join(players[:8])}…)" if len(players) > 8 else f"({chr(44).join(players)})" if players else ""),
+                f"· 世界状态:{'有(每日事件/天气/会话一起搬)' if world else '无'}",
+                f"· 目标群现状:{len(self.trainers.list_players(new))} 份存档",
+            ]
+            if dry:
+                yield event.plain_result(chr(10).join(lines) + chr(10) + "(预览模式,没有改动任何数据)")
+                return
+            moved, msg = self.trainers.rename_scope(old, new, force=force)
+            if msg:
+                yield event.plain_result(f"❌ {msg}")
+                return
+            self.worlds.rename(old, new)
+            yield event.plain_result(chr(10).join(lines) + f"{chr(10)}✅ 已迁移 {moved} 位玩家的存档。")
+            return
+
+        if head in ("玩家", "player", "uid"):
+            if len(parts) < 3:
+                yield event.plain_result("用法:`/迁移存档 玩家 <群ID> <旧ID> <新ID>`(可用逗号批量)")
+                return
+            scope, olds, new = parts[0], parts[1], parts[2]
+            old_list = [x for x in re.split(r"[,，]", olds) if x.strip()]
+            total, msgs = 0, []
+            for old in old_list:
+                n, msg = self.trainers.rename_player(scope, old, new, force=force)
+                total += n
+                if msg:
+                    msgs.append(f"{old}:{msg}")
+            out = [f"🔎 群 {scope}:{olds} → {new}"]
+            out.append(f"✅ 已迁移 {total} 份存档。" if total else "❌ 没有迁移任何存档。")
+            out.extend(f"· {x}" for x in msgs)
+            if len(old_list) > 1:
+                out.append("(注意:多个旧 ID 迁到同一个新 ID 会互相覆盖,建议一次一个)")
+            yield event.plain_result("\n".join(out))
+            return
+
+        yield event.plain_result(
+            "用法:`/迁移存档 列表` / `预览 群 <旧> <新>` / `群 <旧> <新>` / "
+            "`玩家 <群> <旧ID> <新ID>`(末尾可加 force)"
+        )
+
     @filter.command("重置世界", alias={"reset_world", "删除存档"})
     async def cmd_reset(self, event: AstrMessageEvent):
         """/重置世界 —— 删除自己的存档(管理员可 -all 清全群)"""
