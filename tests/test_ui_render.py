@@ -849,3 +849,17 @@ def test_no_text_overflows_its_panel():
                 money=999999, active_pocket="medicine", selected=0, scale=scale,
             )
         assert not spy.offenders(scale), f"背包压出面板:{spy.offenders(scale)}"
+
+
+def test_type_chip_uses_the_real_color_for_chinese_labels():
+    """中文属性也要用对应的颜色 —— 以前“先中文化再查英文色表”导致全是灰的。"""
+    from pw import ui_render as UI
+
+    assert UI._type_key("Fire") == "Fire"
+    for zh, en in (("火", "Fire"), ("飞行", "Flying"), ("水", "Water"),
+                   ("草", "Grass"), ("超能力", "Psychic")):
+        assert UI._type_key(zh) == en, (zh, UI._type_key(zh))
+        assert UI.type_color(UI._type_key(zh)) == UI.type_color(en)
+        assert UI.type_color(UI._type_key(zh)) != UI.type_color("不存在的属性")
+    # 未知/空值不能崩
+    assert UI._type_key("") == "" and UI._type_key("???") == "???"

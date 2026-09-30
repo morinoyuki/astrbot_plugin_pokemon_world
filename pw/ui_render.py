@@ -1941,12 +1941,35 @@ def render_dex(
 # ═════════════════════════════════════════════════════════════════
 # 单只宝可梦资料(仿 GBA 的"摘要"画面)
 # ═════════════════════════════════════════════════════════════════
+_TYPE_ZH2KEY: dict = {}
+
+
+def _type_key(raw: str) -> str:
+    """把属性(英文 key 或中文名)统一成英文 key。
+
+    以前 `_chip` 是“先中文化,再拿中文去查英文色表” → 永远查不到,色块全是灰的
+    (`/宝可梦` 里的属性就是这个问题)。现在先归一成 key,再上色。
+    """
+    txt = str(raw or "")
+    if not txt or txt in TYPE_COLOR:
+        return txt
+    if not _TYPE_ZH2KEY:
+        try:
+            dex = get_dex()
+            for key in TYPE_COLOR:
+                _TYPE_ZH2KEY[str(dex.type_label(key))] = key
+        except Exception:
+            pass
+    return _TYPE_ZH2KEY.get(txt, txt)
+
+
 def _chip(sc: Screen, x: float, y: float, label: str, *, size: float = 6.6) -> float:
     """属性/标签色块,返回宽度(传入英文属性 key 或中文都行)。"""
-    label = get_dex().type_label(label) if label else "?"
+    key = _type_key(str(label or ""))
+    label = get_dex().type_label(key) if key else "?"
     w = sc.tw(label, size) + 6
     sc.d.rounded_rectangle([x, y, x + w, y + 9], radius=2,
-                           fill=type_color(label), outline=BOX_EDGE)
+                           fill=type_color(key), outline=BOX_EDGE)
     sc.text(x + 3, y + 1, label, size=size, fill=(255, 255, 252))
     return w
 
