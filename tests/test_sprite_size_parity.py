@@ -50,7 +50,7 @@ def _sprite_ratio(render, *, force_hires: bool) -> float:
 
     def spy_resize(self, size, *a, **k):
         src = self.size
-        seen.append(tuple(size)[0] / max(1, src[0]))
+        seen.append(next(iter(tuple(size))) / max(1, src[0]))
         return orig_resize(self, size, *a, **k)
 
     def spy_sprite(self, species, *, ground, factor=1.0, bounds=(64, 64), back=False,
