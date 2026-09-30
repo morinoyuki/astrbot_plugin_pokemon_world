@@ -1890,7 +1890,7 @@ class PokemonWorldPlugin(Star):
         low = arg.strip().lower()
 
         # ── 玩家对玩家:挑战 / 接受 / 拒绝 / 取消 / 出招 ──
-        ats = [x for x in _at_users(event) if x[0] and x[0] != 'all']
+        ats = [x for x in self._name_targets(event, t, arg) if x[0] and x[0] != 'all']
         if ats and not B.in_battle(t) and not self._pvp_key_of(t):
             async for r in self._pvp_challenge(event, t, ats[0][0], ats[0][1], arg):
                 yield r
@@ -2983,7 +2983,7 @@ class PokemonWorldPlugin(Star):
         world = WorldMap()
         arg = self._args(event, ("交换", "trade", "连接交换", "通讯交换")).strip()
         parts = arg.split()
-        ats = _at_users(event)
+        ats = self._name_targets(event, t, arg)
         head = parts[0].lower() if parts else ""
         state = self._state(t.scope)
 
@@ -3845,6 +3845,46 @@ class PokemonWorldPlugin(Star):
                  "`/对战 <序号>` 出招",
         ):
             yield r
+
+    def _name_targets(self, event: AstrMessageEvent, t: Trainer, arg: str) -> list[tuple[str, str]]:
+        """取“被指向的玩家”:优先 @,没有 @ 时**按角色名匹配**。
+
+        QQ 官方接口(qqofficial)读不到 @ 组件,所以 @人 的玩法必须能用角色名替代:
+        精确 → 前缀 → 包含 三级匹配,同级别重名时返回全部候选(调用方只取第一个,
+        但至少精确匹配永远赢过模糊匹配)。
+        """
+        ats = [x for x in _at_users(event) if x[0] and x[0] != "all"]
+        if ats:
+            return ats
+        skip = {"接受", "同意", "拒绝", "离开", "解散", "取消", "撤回", "状态", "列表"}
+        query = ""
+        for tok in str(arg or "").replace("，", " ").split():
+            if tok and not tok.isdigit() and tok not in skip:
+                query = tok
+                break
+        if not query:
+            return []
+        cands: list[tuple[str, str, int]] = []
+        try:
+            for uid in self.trainers.list_players(t.scope):
+                if str(uid) == str(t.uid):
+                    continue
+                data = self.trainers.load(t.scope, uid) or {}
+                name = str(data.get("name") or "")
+                if not name:
+                    continue
+                if name == query:
+                    cands.append((str(uid), name, 0))
+                elif name.startswith(query):
+                    cands.append((str(uid), name, 1))
+                elif query in name:
+                    cands.append((str(uid), name, 2))
+        except Exception:
+            return []
+        if not cands:
+            return []
+        best = min(c[2] for c in cands)
+        return [(u, n) for u, n, rank in cands if rank == best]
 
     def _is_admin_uid(self, uid: str) -> bool:
         """管理员门禁:配置 `admin_uids`(逗号分隔)里包含才算 —— 未配置时默认拒绝。"""
@@ -5354,7 +5394,7 @@ class PokemonWorldPlugin(Star):
             self._save_state(state)
             yield event.plain_result("👋 已解散搭档。" if ok else "❌ 对战中不能解散,先打完。")
             return
-        targets = _at_users(event)
+        targets = self._name_targets(event, t, arg)
         if targets and str(targets[0][0]) != t.uid:
             uid, name = str(targets[0][0]), (targets[0][1] or "玩家")
             if self.trainers.load(t.scope, uid) is None:
@@ -5368,7 +5408,7 @@ class PokemonWorldPlugin(Star):
             return
         row = COOP.pair_for(state, t.uid)
         if row is None:
-            yield event.plain_result("用法:`/组队 @某人` 邀请搭档,对方 `/组队 接受`。")
+            yield event.plain_result("用法:`/组队 @某人`(或直接写角色名,如 `/组队 小茂`)邀请搭档,对方 `/组队 接受`。")
             return
         other = COOP.partner_of(row, t.uid)
         nm = (row.get("names") or {}).get(other) or "搭档"
