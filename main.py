@@ -486,34 +486,29 @@ def _is_text_comp(comp) -> bool:
 
 
 def _cres(event, comps) -> list:
-    """图片+文本的出口:返回**一条或多条**结果。
+    """图片+文本的出口:**仍然一条消息发出**,并且不用 markdown。
 
-    QQ 官方接口的 markdown 是独立消息类型,图片消息带不上 markdown 样式 ——
-    所以需要 markdown 时把文案拆成单独一条 markdown 消息,图片照常发。
-    其他平台/关闭 markdown 时仍然只发一条(行为与以前完全一致)。
+    为什么不用 markdown:带图的消息在图里已经有了视觉表达,文案只是说明;
+    markdown 会把 `xxx` 渲染成代码块、把 ** 变成加粗,和图片风格不搭,
+    所以图片旁的文案保持纯文本 —— 连反引号/星号也一并去掉(用户要求)。
+    返回值仍是列表(1 条),调用点逐条 yield,接口与上一版保持一致。
     """
-    comps = list(comps or [])
-    if not _want_markdown(event):
-        return [event.chain_result(comps)]
+    fixed: list = []
+    for c in list(comps or []):
+        if hasattr(c, "text") and not hasattr(c, "convert_to_file_path"):
+            plain = _plain_caption(getattr(c, "text", ""))
+            try:
+                c = type(c)(plain)          # 重建一个纯文本组件
+            except Exception:
+                with contextlib.suppress(Exception):
+                    c.text = plain
+        fixed.append(c)
+    return [event.chain_result(fixed)]
 
-    def _is_text(c) -> bool:
-        return hasattr(c, "text") and not hasattr(c, "convert_to_file_path")
 
-    texts = [c for c in comps if _is_text(c)]
-    images = [c for c in comps if not _is_text(c)]
-    if not texts or not images:            # 纯文本或纯图:一条就够
-        res = event.chain_result(comps)
-        with contextlib.suppress(Exception):   # 适配器不认就当没这回事
-            res.use_markdown(True)
-        return [res]
-    out = []
-    if images:
-        out.append(event.chain_result(images))
-    text_res = event.chain_result(texts)
-    with contextlib.suppress(Exception):
-        text_res.use_markdown(True)
-    out.append(text_res)
-    return out
+def _plain_caption(text) -> str:
+    """把文案里的 markdown 标记去掉(反引号 / 星号 / 下划线强调)。"""
+    return str(text or "").replace("`", "").replace("**", "").replace("__", "")
 
 def _res(event, text: str = ""):
     """统一的文本出口:所有 `_res(event, ...)` 都走这里。

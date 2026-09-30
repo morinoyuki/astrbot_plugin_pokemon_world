@@ -268,3 +268,35 @@ def test_weather_move_overrides_event_weather_without_speed_priority():
         if bt.finished:
             break
     assert bt.weather == "rain", bt.weather
+
+
+def test_weather_event_rotates_across_days_even_after_expiry():
+    """连着几天都写同一种天气异常 → 必须跨天轮换(过期事件不在 active 里,旧逻辑漏判)。
+
+    实测反馈:「一直是沙暴 已经两天」—— 每天一条、当天过期,旧比较对象就找不到了,
+    所以要把上一种记进存档再比。
+    """
+    from pw.worldstate import WEATHER_ZH_LITE, WorldState
+
+    zh2key = {v: k for k, v in WEATHER_ZH_LITE.items()}
+    st = WorldState({"day": 1}, "test:GroupMessage:g1")
+
+    def _ev(zh: str, day: int) -> dict:
+        return {"id": f"w{day}", "kind": "weather",
+                "title": f"【关都·1号道路】{zh}来袭",
+                "desc": f"{zh}笼罩了这一带。",
+                "effects": {"battle_weather": zh2key[zh]},
+                "created_day": day, "until_day": day}
+
+    seen = []
+    for day, zh in enumerate(["沙暴", "沙暴", "沙暴"], 1):
+        st.data["day"] = day
+        st.expire(day)
+        st.add_event(_ev(zh, day))
+        got = next(x for x in st.data["events"] if x["id"] == f"w{day}")
+        seen.append(got["effects"]["battle_weather"])
+    assert seen[1] != seen[0], f"第二天应该换成别的天气:{seen}"
+    assert seen[2] != seen[1], f"第三天也要换:{seen}"
+    # 标题里的天气名要跟着换,不能还写着“沙暴来袭”而实际是下雪
+    last = next(x for x in st.data["events"] if x["id"] == "w3")
+    assert WEATHER_ZH_LITE[last["effects"]["battle_weather"]] in last["title"], last["title"]

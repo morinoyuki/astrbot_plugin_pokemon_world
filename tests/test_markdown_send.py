@@ -97,27 +97,24 @@ def test_platform_without_name_never_breaks_sending():
     assert res.use_markdown_ is None and res.text == "x"
 
 
-def test_image_plus_text_messages_also_use_markdown():
-    """带图的消息(chain_result)同样要走 markdown,否则图片旁的文案没格式。"""
+def test_image_plus_text_is_one_plain_message_without_markdown_markup():
+    """图 + 文本:仍然是**一条**消息,且文案不带 markdown(反引号会被去掉)。"""
     img = _Img()
-    txt = _Txt("文字")
-    # 纯文本组件:单条,mardkown 生效
-    one = _with_mode("auto", lambda: M._cres(_Ev("qq_official"), [txt]))
-    assert len(one) == 1 and one[0].use_markdown_ is True
-    # 图片+文本:拆成两条,图片普通发、文案单独按 markdown 发
-    ev = _Ev("qq_official")
-    both = _with_mode("auto", lambda: M._cres(ev, [img, txt]))
-    assert len(both) == 2, both
-    assert both[0].text == [img] and both[0].use_markdown_ is None
-    assert both[1].text == [txt] and both[1].use_markdown_ is True
-    # 其他平台:原样一条、无 markdown
-    ev2 = _Ev("aiocqhttp")
-    plain = _with_mode("auto", lambda: M._cres(ev2, [img, txt]))
+    txt = _Txt("行动:`/对战 1` 或 **/捕捉**")
+    one = _with_mode("auto", lambda: M._cres(_Ev("qq_official"), [img, txt]))
+    assert len(one) == 1, one                      # 不拆消息
+    assert one[0].use_markdown_ is None, "带图的消息不该用 markdown"
+    got = one[0].text
+    assert got[0] is img or got[0].text is not None
+    caption = [c for c in got if getattr(c, "text", None) is not None][0].text
+    assert "`" not in caption and "**" not in caption, caption
+    assert "/对战 1" in caption and "/捕捉" in caption
+    # 纯文本出口不受影响:仍是 markdown(反引号保留,客户端渲染成代码)
+    res = _with_mode("auto", lambda: M._res(_Ev("qq_official"), "行动:`/对战 1`"))
+    assert res.use_markdown_ is True and "`" in res.text
+    # 其他平台:一条、无 markdown(反引号同样清理)
+    plain = _with_mode("auto", lambda: M._cres(_Ev("aiocqhttp"), [_Img(), _Txt("`x`")]))
     assert len(plain) == 1 and plain[0].use_markdown_ is None
-    # never/always
-    assert _with_mode("never", lambda: M._cres(_Ev("qq_official"), [img, txt]))[0].use_markdown_ is None
-    always = _with_mode("always", lambda: M._cres(_Ev("aiocqhttp"), [img, txt]))
-    assert len(always) == 2 and always[1].use_markdown_ is True
 
 
 def test_all_plugin_text_outputs_go_through_the_helper():
@@ -127,6 +124,6 @@ def test_all_plugin_text_outputs_go_through_the_helper():
         text = f.read()
     # 唯一允许出现裸调用的地方是 _res 自己(它就是包装器)
     assert text.count("event.plain_result(") == 1, "除了 _res 内部不该再有裸的 plain_result"
-    assert text.count("event.chain_result(") == 4, "除了 _cres 内部不该再有裸的 chain_result"
+    assert text.count("event.chain_result(") == 1, "除了 _cres 内部不该再有裸的 chain_result"
     assert text.count("_res(event, ") > 200, "文本出口没有全部走 _res"
     assert text.count("_cres(event") >= 3, "带图消息没有全部走 _cres"

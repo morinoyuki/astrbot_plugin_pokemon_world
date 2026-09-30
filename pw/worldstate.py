@@ -145,6 +145,27 @@ class WorldState:
         ev.setdefault("created_day", self.day)
         ev.setdefault("until_day", self.day)
         self.data.setdefault("events", []).append(ev)
+        # 兜底:天气异常**跨天**也不许连着两天同一种 —— 旧逻辑只对比“仍然生效”的
+        # 上一条,而过期事件不在 active_events 里,于是 LLM 连着写沙暴就真的连着
+        # 两天沙暴(实测反馈「一直是沙暴 已经两天」)。这里把上一种记进存档再比较。
+        if str(ev.get("kind") or "") == "weather":
+            eff = ev.get("effects") if isinstance(ev.get("effects"), dict) else {}
+            cur = str(eff.get("battle_weather") or "")
+            last = str(self.data.get("last_battle_weather") or "")
+            if cur and cur == last:
+                try:
+                    nxt = WEATHER_ROTATE[(WEATHER_ROTATE.index(cur) + 1) % len(WEATHER_ROTATE)]
+                except ValueError:
+                    nxt = WEATHER_ROTATE[0]
+                zh_old, zh_new = WEATHER_ZH_LITE.get(cur, ""), WEATHER_ZH_LITE.get(nxt, "")
+                eff["battle_weather"] = nxt
+                if zh_old and zh_new:
+                    for key in ("title", "desc"):
+                        if isinstance(ev.get(key), str):
+                            ev[key] = ev[key].replace(zh_old, zh_new)
+                cur = nxt
+            if cur:
+                self.data["last_battle_weather"] = cur
         loc = ev.get("location")
         if loc and ev.get("kind") in ("block", "lock", "rocket"):
             locks = self.data.setdefault("locks", {})
