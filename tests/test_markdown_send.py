@@ -15,6 +15,18 @@ from test_commands import _Cmd, _Event, run_cmd  # noqa: E402,F401
 import pw_plugin.main as M  # noqa: E402  # isort: skip
 
 
+class _Img:
+    """图片替身(有 convert_to_file_path,没有 text)。"""
+
+    def convert_to_file_path(self):
+        return "/tmp/x.png"
+
+
+class _Txt:
+    def __init__(self, text):
+        self.text = text
+
+
 class _Result:
     def __init__(self, text):
         self.text = text
@@ -87,13 +99,25 @@ def test_platform_without_name_never_breaks_sending():
 
 def test_image_plus_text_messages_also_use_markdown():
     """带图的消息(chain_result)同样要走 markdown,否则图片旁的文案没格式。"""
+    img = _Img()
+    txt = _Txt("文字")
+    # 纯文本组件:单条,mardkown 生效
+    one = _with_mode("auto", lambda: M._cres(_Ev("qq_official"), [txt]))
+    assert len(one) == 1 and one[0].use_markdown_ is True
+    # 图片+文本:拆成两条,图片普通发、文案单独按 markdown 发
     ev = _Ev("qq_official")
-    res = _with_mode("auto", lambda: M._cres(ev, ["IMG", "文本"]))
-    assert res.use_markdown_ is True and res.text == ["IMG", "文本"]
+    both = _with_mode("auto", lambda: M._cres(ev, [img, txt]))
+    assert len(both) == 2, both
+    assert both[0].text == [img] and both[0].use_markdown_ is None
+    assert both[1].text == [txt] and both[1].use_markdown_ is True
+    # 其他平台:原样一条、无 markdown
     ev2 = _Ev("aiocqhttp")
-    assert _with_mode("auto", lambda: M._cres(ev2, ["IMG"])).use_markdown_ is None
-    assert _with_mode("never", lambda: M._cres(_Ev("qq_official"), ["IMG"])).use_markdown_ is None
-    assert _with_mode("always", lambda: M._cres(_Ev("aiocqhttp"), ["IMG"])).use_markdown_ is True
+    plain = _with_mode("auto", lambda: M._cres(ev2, [img, txt]))
+    assert len(plain) == 1 and plain[0].use_markdown_ is None
+    # never/always
+    assert _with_mode("never", lambda: M._cres(_Ev("qq_official"), [img, txt]))[0].use_markdown_ is None
+    always = _with_mode("always", lambda: M._cres(_Ev("aiocqhttp"), [img, txt]))
+    assert len(always) == 2 and always[1].use_markdown_ is True
 
 
 def test_all_plugin_text_outputs_go_through_the_helper():
@@ -103,6 +127,6 @@ def test_all_plugin_text_outputs_go_through_the_helper():
         text = f.read()
     # 唯一允许出现裸调用的地方是 _res 自己(它就是包装器)
     assert text.count("event.plain_result(") == 1, "除了 _res 内部不该再有裸的 plain_result"
-    assert text.count("event.chain_result(") == 1, "除了 _cres 内部不该再有裸的 chain_result"
+    assert text.count("event.chain_result(") == 4, "除了 _cres 内部不该再有裸的 chain_result"
     assert text.count("_res(event, ") > 200, "文本出口没有全部走 _res"
-    assert text.count("_cres(event, ") >= 3, "带图消息没有全部走 _cres"
+    assert text.count("_cres(event") >= 3, "带图消息没有全部走 _cres"

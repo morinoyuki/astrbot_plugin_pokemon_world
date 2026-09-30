@@ -467,21 +467,6 @@ def _explore_target(arg: str) -> str:
 _SEND_MD = {"mode": "auto"}
 
 
-def _cres(event, comps):
-    """图片+文本的出口:与 `_res` 同一套规则,让 QQ 官方接口按 markdown 发送。
-
-    `chain_result` 里的文字(图片旁边的提示/战报)也是消息内容,
-    只给纯文本出口加 markdown 会漏掉这些“带图的消息”。
-    """
-    res = event.chain_result(comps)   # 原始调用(不能递归到自己)
-    if not _want_markdown(event):
-        return res
-    try:
-        res.use_markdown(True)
-    except Exception:
-        return res
-    return res
-
 def _want_markdown(event) -> bool:
     """这条消息要不要按 markdown 发送(auto:仅 qqofficial;always/never 强制)。"""
     mode = str(_SEND_MD.get("mode") or "auto").lower()
@@ -494,6 +479,41 @@ def _want_markdown(event) -> bool:
     except Exception:
         return False
     return "qq" in plat and "official" in plat
+
+def _is_text_comp(comp) -> bool:
+    """消息组件是不是纯文本(QQ 的 markdown 只能给纯文本消息用)。"""
+    return hasattr(comp, "text") and not hasattr(comp, "convert_to_file_path")
+
+
+def _cres(event, comps) -> list:
+    """图片+文本的出口:返回**一条或多条**结果。
+
+    QQ 官方接口的 markdown 是独立消息类型,图片消息带不上 markdown 样式 ——
+    所以需要 markdown 时把文案拆成单独一条 markdown 消息,图片照常发。
+    其他平台/关闭 markdown 时仍然只发一条(行为与以前完全一致)。
+    """
+    comps = list(comps or [])
+    if not _want_markdown(event):
+        return [event.chain_result(comps)]
+
+    def _is_text(c) -> bool:
+        return hasattr(c, "text") and not hasattr(c, "convert_to_file_path")
+
+    texts = [c for c in comps if _is_text(c)]
+    images = [c for c in comps if not _is_text(c)]
+    if not texts or not images:            # 纯文本或纯图:一条就够
+        res = event.chain_result(comps)
+        with contextlib.suppress(Exception):   # 适配器不认就当没这回事
+            res.use_markdown(True)
+        return [res]
+    out = []
+    if images:
+        out.append(event.chain_result(images))
+    text_res = event.chain_result(texts)
+    with contextlib.suppress(Exception):
+        text_res.use_markdown(True)
+    out.append(text_res)
+    return out
 
 def _res(event, text: str = ""):
     """统一的文本出口:所有 `_res(event, ...)` 都走这里。
@@ -4908,7 +4928,8 @@ class PokemonWorldPlugin(Star):
                     comps = [Image.fromFileSystem(path)]
                     if hint:
                         comps.append(Plain(hint))
-                    yield _cres(event, comps)
+                    for _r in _cres(event, comps):
+                        yield _r
                     return
             except Exception as e:  # 渲染失败必须回退文本
                 logger.debug("宝可梦世界: %s 界面渲染失败,回退文本: %s", label, e)
@@ -5402,7 +5423,8 @@ class PokemonWorldPlugin(Star):
                         comps = [Image.fromFileSystem(path)]
                         if keep:
                             comps.append(Plain(keep))
-                        yield _cres(event, comps)
+                        for _r in _cres(event, comps):
+                            yield _r
                         return
             except Exception as e:  # 渲染失败必须回退文本
                 logger.debug("宝可梦世界: 战斗图片渲染失败,回退文本: %s", e)
@@ -6268,9 +6290,9 @@ class PokemonWorldPlugin(Star):
                 )
                 if data:
                     path = self._temp_image(data, "pw_pvp")
-                    yield _cres(event,
-                        [Image.fromFileSystem(path), Plain(hint)]
-                    )
+                    for _r in _cres(event,
+                                    [Image.fromFileSystem(path), Plain(hint)]):
+                        yield _r
                     return
             except Exception as e:
                 logger.debug("宝可梦世界: 玩家对战画面渲染失败: %s", e)

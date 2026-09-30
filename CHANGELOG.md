@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.32.6
+
+### 图片消息的文案真正带上 markdown(拆成两条发)
+
+- 之前给 `chain_result` 加 `use_markdown(True)` 没用:QQ 官方的 markdown 是**独立
+  消息类型**,图片消息带不上样式。现在 `_cres` 在需要 markdown 时把**文案拆成
+  单独一条 markdown 消息**(图片照常按普通消息发),所以战报图/界面图旁边的
+  文字终于有 md 效果
+- 纯文本或纯图仍只发一条;其他平台(或 never)完全保持原样(一条、无 markdown)
+- `_want_markdown(event)` 为两个出口共用,3 处图片出口改成按返回列表逐条发送
+
+- 回归 6 条(含新增):qqofficial 下“图片+文本”拆成 2 条且文案那条为 markdown、
+  纯文本组件单条生效、其他平台仍 1 条、never/always 覆盖
 ## 1.32.5
 
 ### 带图消息(图片+文本)也按 markdown 发送
