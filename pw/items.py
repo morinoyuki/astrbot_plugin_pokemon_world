@@ -290,6 +290,13 @@ _BAG: dict[str, dict] = {
     "pp-max": {"zh": "PP 极限提升剂", "kind": "rare", "desc": "将招式的 PP 上限提到最大。", "effect": {"pp_up": 999}},
     "ability-capsule": {"zh": "特性胶囊", "kind": "rare", "desc": "切换到另一个普通特性。", "effect": {"ability_switch": True}},
     "ability-patch": {"zh": "特性膏药", "kind": "rare", "desc": "切换到隐藏特性。", "effect": {"ability_patch": True}},
+    # ── 招式回忆 ──
+    "heart-scale": {
+        "zh": "心之鳞片",
+        "kind": "rare",
+        "desc": "宝可梦中心「招式教学狂」的报酬 —— 交给他,就能让宝可梦想起忘掉的招式。",
+        "effect": {"move_recall": 1},
+    },
 }
 
 # 钥石:训练家持有的重要物品(Mega 进化的前提;不占宝可梦携带位)
@@ -511,6 +518,7 @@ _IMPLEMENTED_SPECIAL = {
     "ability_patch": "切换成隐藏特性",
     "mega": "携带后可在对战中 Mega 进化(训练家还需持有钥石)",
     "key_stone": "解锁 Mega 进化",
+    "move_recall": "在宝可梦中心用 `/回忆` 让宝可梦想起忘掉的招式(每次消耗 1 枚)",
 }
 
 
@@ -842,3 +850,18 @@ def stone_for_location(loc_key: str) -> str:
         if any(k in low for k in keys):
             return stone
     return ""
+
+
+# ── 心之鳞片的产地:水边 ──
+# 原作里心之鳞片常作为海滩/浅滩的隐藏道具出现,或来自爱心鱼;
+# 探索捡道具时水边掉率更高(见 main.py 的 _maybe_scale_find)。
+SCALE_BIOME: tuple[str, ...] = (
+    "sea", "beach", "island", "ocean", "shore", "bay", "harbor", "coast",
+    "lake", "river", "water", "spring", "port", "resort",
+)
+
+
+def scale_biome(loc_key: str) -> bool:
+    """这个地点是水边吗(心之鳞片更容易在这里捡到)。"""
+    low = str(loc_key or "").lower()
+    return any(k in low for k in SCALE_BIOME)

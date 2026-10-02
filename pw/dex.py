@@ -861,6 +861,42 @@ class Dex:
         got.sort()
         return [m for _, m in got]
 
+    def relearn_moves(self, species_key: str, level: int = 100) -> list[dict]:
+        """「招式教学狂」能帮这只宝可梦想起的招式。
+
+        按正作的回忆规则(第六世代起的招式教学狂 / 第八·九世代的回忆招式):
+        · **等级招**:当前等级及以前学过的都行(更高等级的招不能提前回忆);
+        · **蛋招式**:出生时就会的招式(含比当前等级高的),也可以回忆;
+        · **仅进化前能学的招**不算(第九世代起不再支持),所以这里只看该形态
+          自己的学习表(`_own_learnset`),不合并进化链;
+        · 招式机 / 教学 / 活动赠送招式不在此列 —— 招式机在本插件里是道具经济。
+        · 当前世代(Gen9)已无法使用的非标准招式(如烈焰溅射)排除,免得教了不能用。
+
+        返回 `[{move, level, egg}]`,按习得等级升序、蛋招式排在最后。
+        """
+        row = self._own_learnset(str(species_key or ""))
+        out: list[dict] = []
+        for move, codes in row.items():
+            entry = self.moves.get(str(move)) or {}
+            if entry.get("isNonstandard"):
+                continue
+            lv: int | None = None
+            egg = False
+            for c in str(codes).split(","):
+                if c.startswith("L"):
+                    n = int(c[1:] or 0)
+                    if lv is None or n < lv:
+                        lv = n
+                elif c == "E":
+                    egg = True
+            if lv is not None and lv <= int(level):
+                out.append({"move": str(move), "level": lv, "egg": False})
+            elif egg:
+                # 蛋招式(比当前等级高的等级招若也是蛋招,同样可以回忆)
+                out.append({"move": str(move), "level": None, "egg": True})
+        out.sort(key=lambda d: (d["level"] is None, d["level"] or 0, d["move"]))
+        return out
+
     def default_moveset(
         self, species_key: str, level: int, n: int = 4, tm_fill: bool = True
     ) -> list[str]:

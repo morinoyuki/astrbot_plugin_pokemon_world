@@ -1052,6 +1052,8 @@ _ITEM_ICONS = {
     "pp-max": _arrow_up((80, 140, 224)),
     "ability-capsule": _capsule((160, 96, 216), (248, 160, 208)),
     "ability-patch": _patch((248, 160, 208)),
+    # 心之鳞片:爱心鱼的粉鳞形状(`/回忆` 招式的报酬)
+    "heart-scale": _scale((248, 152, 192)),
     # 进化石:按原作石头的印象配色
     "fire-stone": _stone((240, 112, 48)),
     "water-stone": _stone((96, 160, 240)),

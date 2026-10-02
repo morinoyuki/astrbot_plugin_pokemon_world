@@ -44,6 +44,7 @@ DOCUMENTED = {
     "/mega": ["钥石"],
     "/捕捉": ["精灵球"],
     "/学招": ["替换", "放弃"],
+    "/回忆": ["替换", "心之鳞片", "蛋招式"],
     "/进化": ["道具"],
     "/亲昵": ["抚摸"],
     "/使用": ["序号"],
@@ -105,6 +106,7 @@ def test_documented_forms_actually_work():
         ("/商店", p.cmd_shop),
         ("/商店 页 2", p.cmd_shop),
         ("/商店 买 伤药 1", p.cmd_shop),
+        ("/回忆 1", p.cmd_recall),
         ("/新手", p.cmd_tutorial),
     ]
     for cmd, fn in cases:

@@ -938,7 +938,9 @@ SHOP_TIERS: list[tuple[int, list[str]]] = [
     ]),
     (1, ["great-ball", "super-potion", "paralyze-heal", "awakening", "soda-pop"]),
     (2, ["burn-heal", "ice-heal", "lemonade", "ether", "x-attack", "x-defense",
-         "x-sp-defense", "guard-spec", "premier-ball"]),
+         "x-sp-defense", "guard-spec", "premier-ball",
+         # 心之鳞片:宝可梦中心「招式教学狂」的报酬(`/回忆` 招式,每次 1 枚)
+         "heart-scale"]),
     (3, ["ultra-ball", "hyper-potion", "revive", "max-ether", "x-speed", "x-special", "dire-hit",
          "net-ball", "nest-ball", "repeat-ball",
          # 属性增强类持有道具(×1.2)
@@ -1071,6 +1073,8 @@ def item_price(key: str, *, badge_count: int = 0, discount: float = 1.0) -> int:
     # 和"伤药(回 20)"都是 300₽,进化石/进化道具只按默认 500₽ 卖
     # (ITEMS 里的条目没有 kind,resolve_item 优先返回 ITEMS 条目)。
     tier = {
+        # 心之鳞片:回忆一个招式一份报酬(不吃 kind="rare" 的 4000₽ 默认价)
+        "heart-scale": 2500,
         "potion": 300, "super-potion": 600, "hyper-potion": 900,
         "max-potion": 1500, "full-restore": 2000, "moomoo-milk": 500,
         "revive": 1500, "max-revive": 3000, "revival-herb": 2800,

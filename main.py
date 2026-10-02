@@ -1733,7 +1733,9 @@ class PokemonWorldPlugin(Star):
                     n = max(1, min(n, cap - used))     # 不许超过当月上限
                 t.add_item(item, n)
                 got = _note_item_finds(t, loc, n)
-                bonus = self._maybe_mega_find(t, rng) or self._maybe_stone_find(t, rng)
+                bonus = (self._maybe_mega_find(t, rng)
+                         or self._maybe_stone_find(t, rng)
+                         or self._maybe_scale_find(t, rng))
                 self._save(t)
                 zh = (BAG_ITEMS.get(item) or {}).get("zh", item)
                 tail = f"(本月此地 {got}/{cap})" if cap else ""
@@ -1826,7 +1828,9 @@ class PokemonWorldPlugin(Star):
                 n = max(1, min(n, cap - used))
             t.add_item(item, n)
             got = _note_item_finds(t, loc, n)
-            bonus = self._maybe_mega_find(t, rng) or self._maybe_stone_find(t, rng)
+            bonus = (self._maybe_mega_find(t, rng)
+                     or self._maybe_stone_find(t, rng)
+                     or self._maybe_scale_find(t, rng))
             self._save(t)
             zh = (BAG_ITEMS.get(item) or {}).get("zh", item)
             tail = f"(本月此地 {got}/{cap})" if cap else ""
@@ -1849,6 +1853,23 @@ class PokemonWorldPlugin(Star):
             return ""
         t.add_item(stone, 1)
         return f"💎 你在岩缝里挖到了一块「{zh}」!(这里的地貌特产)"
+
+    def _maybe_scale_find(self, t: Trainer, rng) -> str:
+        """探索捡道具时的心之鳞片(水边约 15%,其它地方约 3%)。
+
+        原作里心之鳞片多产自海滩/浅滩的隐藏道具,或从爱心鱼身上得到 ——
+        所以水边概率更高;它是宝可梦中心 `/回忆` 招式的唯一报酬。
+        """
+        from .pw.items import scale_biome
+
+        wet = scale_biome(str(getattr(t, "location", "") or ""))
+        if rng.random() >= (0.15 if wet else 0.03):
+            return ""
+        t.add_item("heart-scale", 1)
+        where = "水边的浅滩里" if wet else "草丛深处"
+        return f"🐚 你还在{where}捡到了一枚「心之鳞片」!" \
+               "(回宝可梦中心用 `/回忆` 让宝可梦想起招式)"
+
     def _maybe_mega_find(self, t: Trainer, rng) -> str:
         """探索捡道具时的稀有附加:Mega 石(约 8%)。
 
@@ -2855,6 +2876,212 @@ class PokemonWorldPlugin(Star):
         self._save(t)
         return old
 
+    @filter.command("回忆", alias={"relearn", "招式回忆", "回想"})
+    async def cmd_recall(self, event: AstrMessageEvent):
+        """`/回忆 [队伍序号] [可回忆序号|招式名] [替换 <现有序号>]`
+
+        宝可梦中心的「招式教学狂」:收 1 枚「心之鳞片」,让宝可梦想起
+        **升到当前等级为止学过的等级招,或出生时就会的蛋招式**(招式机 / 教学 /
+        活动招式不在此列)。招式栏有空位就直接学会;满了必须写明替换哪一招 ——
+        免得手滑一下就把关键招式顶掉。
+        """
+        t, err = self._require(event)
+        if err:
+            yield _res(event, err)
+            return
+        world = WorldMap()
+        if "center" not in world.services(t.location):
+            yield _res(event, "❌ 回忆招式要找宝可梦中心的「招式教学狂」,去城镇吧。")
+            return
+        arg = self._args(event, ("回忆", "relearn", "招式回忆", "回想")).strip()
+        tokens = arg.replace(",", " ").replace("、", " ").split()
+        if not tokens:
+            yield _res(event, self._recall_index(t, world))
+            return
+        found = t.find(tokens[0])
+        if found is None:
+            yield _res(event,
+                f"❌ 队伍里没有「{tokens[0]}」。用法:`/回忆 <队伍序号>`(如 `/回忆 1`)。"
+            )
+            return
+        slot, mon = found                          # `Trainer.find` 返回 0 起的下标
+        md = t.party[slot]
+        options = self._recall_options(mon)
+
+        if len(tokens) < 2:                       # 只看能想起什么
+            yield _res(event, self._recall_panel(t, world, slot, mon, options))
+            return
+
+        # 招式:可回忆列表里的序号,或招式名(中/英文都行)
+        want = ""
+        raw_move = tokens[1]
+        if raw_move.isdigit():
+            n = int(raw_move)
+            if 1 <= n <= len(options):
+                want = options[n - 1]["move"]
+        else:
+            r = get_dex().resolve_move(raw_move)
+            if r:
+                want = r[0]
+        if not want:
+            if raw_move.isdigit():
+                yield _res(event, self._recall_panel(t, world, slot, mon, options))
+            else:
+                yield _res(event,
+                    f"❌ 没有「{raw_move}」这个招式(用 `/回忆 {slot + 1}` 看能想起什么)。"
+                )
+            return
+        if want in (mon.moves or []):
+            yield _res(event, f"❌ {mon.display} 已经会「{growth.move_zh(want)}」了。")
+            return
+        if not any(c["move"] == want for c in options):
+            yield _res(event,
+                f"❌ {mon.display} 想不起「{growth.move_zh(want)}」——\n"
+                "招式教学狂只教它**等级招(当前等级以内)与蛋招式**;"
+                "招式机 / 教学招式要走各自的道具。"
+            )
+            return
+
+        # 替换目标:招式栏满了就必须写明忘掉哪一招
+        replace_arg = ""
+        if len(tokens) >= 3:
+            if tokens[2] not in ("替换", "换", "replace", "忘掉"):
+                yield _res(event,
+                    f"❌ 看不懂「{tokens[2]}」——"
+                    f"用法:`/回忆 {slot + 1} <可回忆序号> 替换 <现有序号>`。"
+                )
+                return
+            replace_arg = tokens[3] if len(tokens) >= 4 else ""
+        if len(mon.moves) >= 4 and not replace_arg:
+            yield _res(event,
+                f"⚠️ {mon.display} 的招式栏满了 —— 要写明忘掉哪一招:\n"
+                f"`/回忆 {slot + 1} {raw_move} 替换 <现有序号>`\n"
+                + "\n".join(f"　{i}. {growth.move_brief(m)}"
+                            for i, m in enumerate(mon.moves, 1))
+            )
+            return
+        old = ""
+        if replace_arg:
+            if replace_arg.isdigit() and 0 < int(replace_arg) <= len(mon.moves):
+                old = mon.moves[int(replace_arg) - 1]
+            else:
+                r2 = get_dex().resolve_move(replace_arg)
+                if r2 and r2[0] in mon.moves:
+                    old = r2[0]
+            if not old:
+                yield _res(event,
+                    f"❌ 没找到要替换的招式(用 1-{len(mon.moves)} 的序号或招式名)。"
+                )
+                return
+        if t.count("heart-scale") <= 0:
+            yield _res(event,
+                "❌ 招式教学狂要 1 枚「心之鳞片」作报酬,你背包里没有。\n"
+                "· 城镇商店(2 枚徽章后)有卖 · 海边 / 湖畔 / 岛屿探索时也能捡到"
+            )
+            return
+        async with self._lock(t.scope):
+            if old:
+                if not growth.replace_move(mon, old, want):
+                    yield _res(event, "❌ 招式没换成,心之鳞片没有消耗。")
+                    return
+            elif not growth.learn_move(mon, want):
+                yield _res(event, "❌ 招式栏没有空位,心之鳞片没有消耗。")
+                return
+            t.take_item("heart-scale", 1)
+            self._recall_drop_pending(md, want)
+            t.commit(slot, mon)
+            self._save(t)
+            left = t.count("heart-scale")
+        lines = ["🔮 招式教学狂接过心之鳞片,闭上眼睛感受着"
+                 f" {mon.display} 的记忆……"]
+        if old:
+            lines.append(
+                f"✨ {mon.display} 想起了「{growth.move_brief(want)}」"
+                f"(忘掉了「{growth.move_zh(old)}」)"
+            )
+        else:
+            lines.append(f"✨ {mon.display} 想起了「{growth.move_brief(want)}」!")
+        lines.append(f"　└ 心之鳞片 用掉 1 枚,还剩 {left} 枚。")
+        yield _res(event, "\n".join(lines))
+
+    def _recall_options(self, mon) -> list[dict]:
+        """这只宝可梦还没学会、但招式教学狂能帮它想起来的招式。"""
+        known = set(mon.moves or [])
+        return [
+            c for c in get_dex().relearn_moves(mon.species, mon.level)
+            if c["move"] not in known
+        ]
+
+    def _recall_drop_pending(self, md: dict, move: str) -> None:
+        """回忆到手的招式若还挂在「待决定」里,顺手清掉那条记录。
+
+        否则 `/学招` 还会再要求决定一次,而那时招式已经会了 —— 替换必然失败。
+        清掉 pending_tm 不消耗招式机(机器留在背包里给别人用)。
+        """
+        pend = list(md.get("pending") or [])
+        if move in pend:
+            md["pending"] = [m for m in pend if m != move]
+        pt = dict(md.get("pending_tm") or {})
+        if move in pt:
+            pt.pop(move, None)
+            md["pending_tm"] = pt
+
+    def _recall_index(self, t: Trainer, world: WorldMap) -> str:
+        """招式教学狂的门口面板:队伍里每只能回忆几招。"""
+        lines = [
+            f"🔮 {world.node_zh(t.location)}的招式教学狂 —— 能帮宝可梦想起忘掉的招式",
+            f"报酬:心之鳞片 ×1 / 每个招式(你有 {t.count('heart-scale')} 枚)",
+        ]
+        for i, _p in enumerate(t.party, 1):
+            mon = t.mon(i - 1)
+            if mon is None:
+                continue
+            lines.append(
+                f"· {i}. {mon.display} Lv{mon.level} —— 可回忆 "
+                f"{len(self._recall_options(mon))} 招"
+            )
+        lines.append("用法:`/回忆 <队伍序号>` 看它能想起什么(如 `/回忆 1`)")
+        if t.count("heart-scale") <= 0:
+            lines.append(
+                "· 你还没有心之鳞片:城镇商店(2 枚徽章后)有卖,"
+                "海边 / 湖畔 / 岛屿探索时也能捡到"
+            )
+        return "\n".join(lines)
+
+    def _recall_panel(self, t: Trainer, world: WorldMap, slot: int, mon,
+                      options: list[dict]) -> str:
+        """单只宝可梦:能回忆的招式 + 现有招式 + 怎么下单。`slot` 为 0 起下标。"""
+        lines = [
+            f"🔮 {world.node_zh(t.location)}的招式教学狂 —— {mon.display} Lv{mon.level}",
+            f"报酬:心之鳞片 ×1 / 每个招式(你有 {t.count('heart-scale')} 枚)",
+        ]
+        if options:
+            lines.append("能想起的招式:")
+            for i, c in enumerate(options, 1):
+                tag = "蛋招式" if c["level"] is None else f"等级 {c['level']}"
+                lines.append(f"　{i}. [{tag}] {growth.move_brief(c['move'])}")
+        else:
+            lines.append("它能回忆的招式都已经会了。")
+        lines.append("现有招式:")
+        lines += [f"　{i}. {growth.move_brief(m)}"
+                  for i, m in enumerate(mon.moves, 1)]
+        no = slot + 1                          # 玩家看到的队伍序号是 1 起
+        if options:
+            if len(mon.moves) < 4:
+                lines.append(f"回忆:`/回忆 {no} <可回忆序号>`")
+            else:
+                lines.append(
+                    f"招式栏满了:`/回忆 {no} <可回忆序号> 替换 <现有序号>`"
+                    f"(如 `/回忆 {no} 1 替换 4`)"
+                )
+        pend = list((t.party[slot] or {}).get("pending") or [])
+        if pend:
+            lines.append(
+                f"(它还有 {len(pend)} 个新招式没决定:`/学招 {no}`,"
+                "回忆到同一招后那条记录会自动消掉)"
+            )
+        return "\n".join(lines)
+
     @filter.command("进化", alias={"evolve"})
     async def cmd_evolve(self, event: AstrMessageEvent):
         """/进化 <队伍序号> [道具] —— 查看/执行进化"""
@@ -3356,6 +3583,12 @@ class PokemonWorldPlugin(Star):
             yield _res(event,
                 "ℹ️ 钥石放在背包里就生效:宝可梦携带对应的 Mega 石,"
                 "对战中即可 Mega 进化(商店可买 Mega 石)。"
+            )
+            return
+        if eff.get("move_recall"):
+            yield _res(event,
+                f"ℹ️ {entry['zh']} 要在宝可梦中心交给「招式教学狂」:"
+                "`/回忆 <队伍序号>` 看它能想起什么招式。"
             )
             return
 
