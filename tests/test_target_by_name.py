@@ -70,3 +70,33 @@ def test_name_match_prefers_exact_and_ignores_unknown():
         assert [u for u, _n in got] == ["u2"], got          # 精确命中,不选“小茂茂”
         assert p._name_targets(_Event("/组队 不存在"), t, "不存在") == []
         assert p._name_targets(_Event("/组队 小茂茂"), t, "小茂茂")[0][0] == "u3"
+
+
+def _bot_mention_event(uid: str, name: str = "宝可梦世界"):
+    """模拟「用户 @机器人 发指令」:适配器把机器人自己也塞进 At 组件。"""
+    ev = _Event("/组队 小茂")
+    ev.self_id = uid
+    ev.get_self_id = lambda: uid
+    ev.message_obj = type("MO", (), {"message": [
+        type("At", (), {"type": "At", "qq": uid, "name": name,
+                        "data": {"qq": uid, "name": name}})
+    ]})()
+    return ev
+
+
+def test_bot_self_mention_is_ignored_name_still_wins():
+    """@机器人 不能变成交互对象 —— 否则 @bot + 角色名会报「对方还没有在玩」。"""
+    with tempfile.TemporaryDirectory() as tmp:
+        p, t = _host_with("小茂", "u2", tmp)
+        got = p._name_targets(_bot_mention_event("bot1"), t, "小茂")
+        assert [u for u, _n in got] == ["u2"], got
+        # 机器人自己也被 @、且没写名字时:不匹配任何人(交给调用方报错)
+        assert p._name_targets(_bot_mention_event("bot1"), t, "2") == []
+
+
+def test_qq_official_raw_mention_in_message_str():
+    """qqofficial 别人的 @ 是 `<@!openid>` 原文 —— 要能解析成玩家。"""
+    with tempfile.TemporaryDirectory() as tmp:
+        p, t = _host_with("小茂", "u2", tmp)
+        got = p._name_targets(_Event("/组队 <@!u2>"), t, "<@!u2>")
+        assert [u for u, _n in got] == ["u2"], got

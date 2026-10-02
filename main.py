@@ -3068,7 +3068,10 @@ class PokemonWorldPlugin(Star):
                     )
                     return
                 offer = offers[0]
-                idx = coerce_int(parts[1], 1) if len(parts) > 1 else 1
+                # 序号取**第一个纯数字 token**:`/交换 接受 @小霞 2` 里的 @
+                # 和角色名都不该把序号顶成默认的 1(旧实现只看 parts[1])
+                nums = [p for p in parts if p.isdigit()]
+                idx = coerce_int(nums[0], 1) if nums else 1
                 if not 1 <= idx <= len(t.party):
                     yield _res(event, f"❌ 队伍里没有第 {idx} 只。")
                     return
@@ -3920,8 +3923,16 @@ class PokemonWorldPlugin(Star):
         QQ 官方接口(qqofficial)读不到 @ 组件,所以 @人 的玩法必须能用角色名替代:
         精确 → 前缀 → 包含 三级匹配,同级别重名时返回全部候选(调用方只取第一个,
         但至少精确匹配永远赢过模糊匹配)。
+
+        **机器人自己不算目标**:QQ 官方的群机器人必须被 @ 才会收到消息,
+        OneBot 的 At 组件同样包含「@机器人」—— 旧实现把它当成交互对象,
+        于是 `/交换 小霞 2`(带 @bot 前缀)报「对方还没有在玩」,小霞这个名字
+        根本没被看过。这里先摘掉 self,再走角色名匹配。
         """
         ats = [x for x in _at_users(event) if x[0] and x[0] != "all"]
+        self_id = _event_self_id(event)
+        if self_id:
+            ats = [x for x in ats if str(x[0]) != self_id]
         if ats:
             return ats
         skip = {"接受", "同意", "拒绝", "离开", "解散", "取消", "撤回", "状态", "列表"}
@@ -7127,13 +7138,16 @@ def _team_brief(team) -> str:
 TRADE_TTL = 300
 TRADE_MAX_OFFERS = 6
 
+# 适配器用来表示「@全体成员」/「@机器人」的占位 ID —— 都不是玩家
+_AT_PLACEHOLDER_IDS = ("all", "0", "qq_official", "unknown_selfid")
+
 
 def _at_users(event) -> list[tuple[str, str]]:
     """从消息里取出被 @ 的玩家 `(uid, 昵称)`。
 
     AstrBot 的 At 组件在不同适配器上形态不一(属性 `.qq` / `.data["qq"]`),
-    部分适配器还会把 CQ 码留在 message_str 里 —— 三种都兜住,
-    并且忽略 @全体成员(qq=all/0)。
+    部分适配器还会把 CQ 码 / `<@!openid>` 留在 message_str 里 —— 四种都兜住,
+    并且忽略 @全体成员(qq=all/0)与适配器给机器人塞的占位 ID。
     """
     out: list[tuple[str, str]] = []
     msg = getattr(getattr(event, "message_obj", None), "message", None) or []
@@ -7151,14 +7165,35 @@ def _at_users(event) -> list[tuple[str, str]]:
                 name = str(data.get("name") or data.get("nickname") or "")
             uid = uid or str(getattr(comp, "qq", "") or "")
             name = name or str(getattr(comp, "name", "") or "")
-            if uid and uid not in ("all", "0"):
+            # qq_official/unknown_selfid 是 qqofficial 适配器给「@机器人」的占位 ID
+            if uid and uid not in _AT_PLACEHOLDER_IDS:
                 out.append((uid, name))
     raw = str(getattr(event, "message_str", "") or "")
     for m in re.finditer(r"\[CQ:at,qq=(\d+)(?:,name=([^\]]+))?\]", raw):
         uid, name = m.group(1), m.group(2) or ""
         if (uid, name) not in out:
             out.append((uid, name))
+    # QQ 官方接口的原文 @ 形式:群消息 `<@!openid>`、频道 `<@openid>`。
+    # 适配器只把「@机器人」转成 At 组件,别人的 @ 会原样留在 message_str 里 ——
+    # 不认的话 qqofficial 上 `/交换 @小霞 2` 会被当成「自连序号」解析。
+    for m in re.finditer(r"<@!?([A-Za-z0-9_-]{2,})>", raw):
+        uid = m.group(1)
+        if uid and uid.lower() not in _AT_PLACEHOLDER_IDS and not any(
+            u == uid for u, _n in out
+        ):
+            out.append((uid, ""))
     return out
+
+
+def _event_self_id(event) -> str:
+    """机器人自己的 ID(拿不到就返回空串,老事件对象没有这个方法)。"""
+    fn = getattr(event, "get_self_id", None)
+    if not callable(fn):
+        return ""
+    try:
+        return str(fn() or "")
+    except Exception:
+        return ""
 
 
 def _trade_key(frm: str, to: str) -> str:

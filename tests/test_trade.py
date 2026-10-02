@@ -20,24 +20,28 @@ from test_commands import _Cmd, _Event, run_cmd
 
 from pw.dex import get_dex
 from pw.engine import create_pokemon
+from pw.items import resolve_bag_item
 
 DEX = get_dex()
 GROUP = "10086"
 
 
 class _User(_Event):
-    """带指定 uid/群号与 @ 目标的测试事件。"""
+    """带指定 uid/群号、@ 目标、机器人自身 ID 的测试事件。"""
 
-    def __init__(self, text: str, uid: str, *, ats=(), group: str = GROUP):
+    def __init__(self, text: str, uid: str, *, ats=(), group: str = GROUP,
+                 self_id: str = ""):
         super().__init__(text)
         self._uid = uid
         self._group = group
+        self.self_id = self_id
         self.message_obj = type(
             "MO", (), {"message": [
                 type("At", (), {"type": "At", "qq": a[0], "name": a[1],
                                 "data": {"qq": a[0], "name": a[1]}})
                 for a in ats
-            ]},
+            ],
+            "self_id": self_id},
         )()
 
     def get_sender_id(self) -> str:
@@ -45,6 +49,9 @@ class _User(_Event):
 
     def get_group_id(self) -> str:
         return self._group
+
+    def get_self_id(self) -> str:
+        return self.self_id
 
 
 def _make(tmp, uid, name, species="sprigatito", *, level=5, item="", center=True):
@@ -240,3 +247,116 @@ def test_trade_full_party_sends_received_mon_to_box():
         t = pb._load(_User("/状态", "u2"))
         # 换出 1 只再换入 1 只 → 仍是 6 只,且收到的在里面
         assert len(t.party) == 6, len(t.party)
+
+
+# ── 机器人自己被 @ 时不能当成交换对象(qqofficial/OneBot 的命令都带 @bot)──
+
+def _save_player(p, scope, uid, name, rows, location="pewter-city"):
+    """直接落一份存档(不走 /开始,省时间;供数据驱动测试用)。"""
+    p.trainers.save(scope, uid, {
+        "uid": uid, "name": name, "region": "kanto",
+        "location": location, "party": rows, "box": [], "bag": {},
+        "money": 3000, "badges": [], "dex_seen": [], "dex_caught": [],
+        "flags": {}, "unlocked_regions": ["kanto"],
+    })
+
+
+def test_trade_by_name_when_command_at_bot():
+    """`@机器人 /交换 小霞 2` —— 目标是小霞,不是那个被 @ 的机器人。"""
+    with tempfile.TemporaryDirectory() as tmp:
+        pa = _make(tmp, "u1", "小智", "kadabra")
+        pb = _make(tmp, "u2", "小霞", "onix")
+
+        ev = _User("/交换 小霞 2", "u1",
+                   ats=[("bot1", "宝可梦世界")], self_id="bot1")
+        run_cmd(pa, ev, pa.cmd_trade)
+        out = "".join(ev.outputs)
+        assert "发起交换" in out, out
+        assert "还没有在玩" not in out
+
+        ev = _User("/交换 接受 2", "u2",
+                   ats=[("bot1", "宝可梦世界")], self_id="bot1")
+        run_cmd(pb, ev, pb.cmd_trade)
+        out = "".join(ev.outputs)
+        assert "交换成功" in out, out
+        # 收到的勇基拉触发通信进化
+        assert ("胡地", "") in _party(pb, "u2"), _party(pb, "u2")
+
+
+def test_trade_target_name_after_at_with_index():
+    """`/交换 接受 @小霞 2` —— 序号不能被 @ 顶掉(first digit wins)。"""
+    with tempfile.TemporaryDirectory() as tmp:
+        pa = _make(tmp, "u1", "小智", "kadabra")
+        pb = _make(tmp, "u2", "小霞", "onix")
+        ev = _User("/交换 @小霞 2", "u1", ats=[("u2", "小霞")])
+        run_cmd(pa, ev, pa.cmd_trade)
+        ev = _User("/交换 接受 @小智 2", "u2", ats=[("u1", "小智")])
+        run_cmd(pb, ev, pb.cmd_trade)
+        assert "交换成功" in "".join(ev.outputs), ev.outputs
+
+
+def test_trade_accept_via_qq_official_raw_mention():
+    """qqofficial 读不到别人的 @ 组件,原文是 `<@!openid>`,也要认。"""
+    with tempfile.TemporaryDirectory() as tmp:
+        pa = _make(tmp, "u1", "小智", "kadabra")
+        pb = _make(tmp, "u2", "小霞", "onix")
+        ev = _User("/交换 <@!u2> 2", "u1")
+        run_cmd(pa, ev, pa.cmd_trade)
+        assert "发起交换" in "".join(ev.outputs), ev.outputs
+        ev = _User("/交换 接受 <@!u1> 2", "u2")
+        run_cmd(pb, ev, pb.cmd_trade)
+        assert "交换成功" in "".join(ev.outputs), ev.outputs
+
+
+# ── 通信进化覆盖:数据里 30 种 evoType=trade 全都要能触发 ──
+
+def _trade_pairs():
+    out = []
+    for key, entry in DEX.species.items():
+        for e in entry.get("evos") or []:
+            target = DEX.species.get(e) or {}
+            if target.get("evoType") == "trade":
+                out.append((key, e, str(target.get("evoItem") or "")))
+    return sorted(out)
+
+
+def test_all_trade_evolutions_can_trigger():
+    """自连与玩家间交换两条路都必须能进化 —— 含 16/20 种需要携带道具的。"""
+    pairs = _trade_pairs()
+    assert len(pairs) == 30, f"数据里的通信进化数变了:{len(pairs)}"
+    with tempfile.TemporaryDirectory() as tmp:
+        p = _Cmd(tmp)
+        p.config = {"ui_image": False, "quest_enable": False}
+        scope = "g" + GROUP
+        for i, (sp, target, evo_item) in enumerate(pairs):
+            item = (resolve_bag_item(evo_item)[0] if evo_item else "")
+            # ① 与远方训练家自连
+            mon = create_pokemon(sp, 30).to_dict()
+            mon["id"] = "mx"
+            mon["item"] = item
+            uid = f"self{i}"
+            _save_player(p, scope, uid, f"自连{i}", [mon])
+            ev = _User("/交换 1", uid)
+            run_cmd(p, ev, p.cmd_trade)
+            t = p._load(_User("/状态", uid))
+            assert t.party[0]["species"] == target, (sp, ev.outputs)
+            assert not t.party[0].get("item"), (sp, "需要道具的进化应消耗道具")
+
+            # ② 玩家间交换(谁收到谁进化)
+            a, b = f"pa{i}", f"pb{i}"
+            _save_player(p, scope, a, f"甲{i}",
+                         [create_pokemon("pidgey", 5).to_dict()])
+            given = create_pokemon(sp, 30).to_dict()
+            given["id"] = "mx"
+            given["item"] = item
+            _save_player(p, scope, b, f"乙{i}", [given])
+            ev = _User(f"/交换 @乙{i} 1", a, ats=[(b, f"乙{i}")])
+            run_cmd(p, ev, p.cmd_trade)
+            assert "发起交换" in "".join(ev.outputs), (sp, ev.outputs)
+            ev = _User("/交换 接受 1", b)
+            run_cmd(p, ev, p.cmd_trade)
+            out = "".join(ev.outputs)
+            ta = p._load(_User("/状态", a))
+            got = ta.party[-1]
+            assert got["species"] == target, (sp, out)
+            assert not got.get("item"), (sp, "需要道具的进化应消耗道具")
