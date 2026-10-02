@@ -217,6 +217,10 @@ KIND_TO_POCKET = {
     "held": "items",
     "tm": "tm",
 }
+# 中文属性名 → 英文 key(第一次用到中文时才建,避免无谓地加载图鉴)
+_TYPE_ZH2KEY: dict = {}
+
+
 POCKET_ICON = {
     "items": (198, 168, 112),
     "balls": (224, 64, 56),
@@ -265,8 +269,28 @@ def available() -> bool:
     return fonts.available()
 
 
+def type_key(raw: str) -> str:
+    """把属性(英文 key 或中文名)统一成英文 key。
+
+    以前好几处都是“先中文化,再拿中文去查英文色表” → 永远查不到,色块全落灰
+    (`/宝可梦` 的属性、道馆/联盟的属性标签都是这个问题)。先归一成 key 再上色。
+    """
+    txt = str(raw or "")
+    if not txt or txt in TYPE_COLOR:
+        return txt
+    if not _TYPE_ZH2KEY:
+        try:
+            dex = get_dex()
+            for key in TYPE_COLOR:
+                _TYPE_ZH2KEY[str(dex.type_label(key))] = key
+        except Exception:
+            pass
+    return _TYPE_ZH2KEY.get(txt, txt)
+
+
 def type_color(t: str) -> tuple[int, int, int]:
-    return TYPE_COLOR.get(str(t or ""), (168, 168, 144))
+    """属性 → 颜色。英文 key / 中文名都收(中文先归一,不然会错误地落到灰色兜底)。"""
+    return TYPE_COLOR.get(type_key(t), (168, 168, 144))
 
 
 def gender_symbol(gender: str) -> tuple[str, tuple[int, int, int]]:
@@ -1941,31 +1965,9 @@ def render_dex(
 # ═════════════════════════════════════════════════════════════════
 # 单只宝可梦资料(仿 GBA 的"摘要"画面)
 # ═════════════════════════════════════════════════════════════════
-_TYPE_ZH2KEY: dict = {}
-
-
-def _type_key(raw: str) -> str:
-    """把属性(英文 key 或中文名)统一成英文 key。
-
-    以前 `_chip` 是“先中文化,再拿中文去查英文色表” → 永远查不到,色块全是灰的
-    (`/宝可梦` 里的属性就是这个问题)。现在先归一成 key,再上色。
-    """
-    txt = str(raw or "")
-    if not txt or txt in TYPE_COLOR:
-        return txt
-    if not _TYPE_ZH2KEY:
-        try:
-            dex = get_dex()
-            for key in TYPE_COLOR:
-                _TYPE_ZH2KEY[str(dex.type_label(key))] = key
-        except Exception:
-            pass
-    return _TYPE_ZH2KEY.get(txt, txt)
-
-
 def _chip(sc: Screen, x: float, y: float, label: str, *, size: float = 6.6) -> float:
     """属性/标签色块,返回宽度(传入英文属性 key 或中文都行)。"""
-    key = _type_key(str(label or ""))
+    key = type_key(str(label or ""))
     label = get_dex().type_label(key) if key else "?"
     w = sc.tw(label, size) + 6
     sc.d.rounded_rectangle([x, y, x + w, y + 9], radius=2,
@@ -2078,7 +2080,7 @@ def render_mon_summary(mon: dict, *, index: int = 1, party_size: int = 1,
             # 属性用左侧小色块表示(省下横向空间给招式名与 PP)
             if mv.get("type"):
                 sc.d.rectangle([127, y + 1.5, 130.5, y + 7],
-                               fill=type_color(get_dex().type_label(str(mv["type"]))),
+                               fill=type_color(str(mv["type"])),
                                outline=BOX_EDGE)
             sc.text(134, y, _fit(sc, str(mv.get("zh") or "?"), 62, 7.6), size=7.6, fill=TEXT)
             pp, ppx = int(mv.get("pp") or 0), int(mv.get("pp_max") or 0)

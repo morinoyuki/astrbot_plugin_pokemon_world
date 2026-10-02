@@ -855,11 +855,47 @@ def test_type_chip_uses_the_real_color_for_chinese_labels():
     """中文属性也要用对应的颜色 —— 以前“先中文化再查英文色表”导致全是灰的。"""
     from pw import ui_render as UI
 
-    assert UI._type_key("Fire") == "Fire"
+    assert UI.type_key("Fire") == "Fire"
     for zh, en in (("火", "Fire"), ("飞行", "Flying"), ("水", "Water"),
                    ("草", "Grass"), ("超能力", "Psychic")):
-        assert UI._type_key(zh) == en, (zh, UI._type_key(zh))
-        assert UI.type_color(UI._type_key(zh)) == UI.type_color(en)
-        assert UI.type_color(UI._type_key(zh)) != UI.type_color("不存在的属性")
+        assert UI.type_key(zh) == en, (zh, UI.type_key(zh))
+        assert UI.type_color(UI.type_key(zh)) == UI.type_color(en)
+        assert UI.type_color(UI.type_key(zh)) != UI.type_color("不存在的属性")
+        # type_color 本身就收中文(道馆/联盟/招式行以前直接传中文 → 全灰)
+        assert UI.type_color(zh) == UI.type_color(en), zh
     # 未知/空值不能崩
-    assert UI._type_key("") == "" and UI._type_key("???") == "???"
+    assert UI.type_key("") == "" and UI.type_key("???") == "???"
+
+
+def test_summary_type_chips_and_move_swatches_are_colored():
+    """资料页:顶部属性标签与招式行左侧色块都必须用属性颜色,不能是灰色兜底。"""
+    from pw.dex import get_dex
+
+    dex = get_dex()
+    mon = dict(
+        MON_A, species="gengar", name="耿鬼", level=42, gender="F",
+        types=["Ghost", "Poison"], exp_pct=60.0, exp_now=100, exp_next=200,
+        stats={"hp": 110, "atk": 100, "def": 90, "spa": 130, "spd": 95, "spe": 120},
+        base=dex.species["gengar"]["baseStats"], nature_zh="胆小",
+        ability_zh="诅咒之躯", item_zh="无", friendship=200, dex_no=94,
+        genus="影子宝可梦",
+        moves=[{"zh": "暗影球", "type": "Ghost", "pp": 15, "pp_max": 15},
+               {"zh": "污泥炸弹", "type": "Poison", "pp": 10, "pp_max": 10},
+               {"zh": "十万伏特", "type": "Electric", "pp": 15, "pp_max": 15},
+               {"zh": "冰冻拳", "type": "Ice", "pp": 15, "pp_max": 15}],
+    )
+    im = _img(UI.render_mon_summary(mon, index=1, party_size=3, scale=SCALE))
+
+    def colors_in(box):
+        x0, y0, x1, y1 = box
+        return {im.getpixel((x, y))
+                for x in range(int(x0 * SCALE), int(x1 * SCALE))
+                for y in range(int(y0 * SCALE), int(y1 * SCALE))}
+
+    top = colors_in((5, 30, 96, 41))
+    for t in ("Ghost", "Poison"):
+        assert UI.TYPE_COLOR[t] in top, (t, "顶部属性标签没上色")
+    for i, t in enumerate(("Ghost", "Poison", "Electric", "Ice")):
+        y0 = 104.5 + i * 8.8 + 1.5          # 招式行的小色块: x 127..130.5
+        assert UI.TYPE_COLOR[t] in colors_in((127, y0, 131, y0 + 5.5)), \
+            (t, "招式属性色块没上色")

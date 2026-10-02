@@ -165,3 +165,30 @@ def test_story_current_row_is_highlighted():
     other = mean(21 + 0 * 14)
     diff = sum(abs(selected[i] - other[i]) for i in range(3))
     assert diff > 20, f"当前章节高亮差异过小:{selected} vs {other}"
+
+
+def test_gym_and_league_type_chips_use_type_colors():
+    """道馆/联盟的属性标签必须用属性颜色 —— 以前拿中文化后的 label 查英文色表,全是灰的。"""
+    from pw.ui_render import TYPE_COLOR
+
+    def colors_in(data: bytes, box):
+        x0, y0, x1, y1 = box
+        with Image.open(BytesIO(data)) as im:
+            rgb = im.convert("RGB")
+            return {rgb.getpixel((x, y))
+                    for x in range(int(x0 * SCALE), int(x1 * SCALE))
+                    for y in range(int(y0 * SCALE), int(y1 * SCALE))}
+
+    # 道馆:馆主属性标签在 (11, 45) 起,高 10
+    gym = UM.render_gym(GYM, region_zh="关都地区", location_zh="深灰市",
+                        owned=False, scale=SCALE)
+    assert TYPE_COLOR["Rock"] in colors_in(gym, (11, 44, 60, 56)), "道馆属性标签没上色"
+
+    # 联盟:每行「名字 + 属性标签」,标签紧跟在名字后面(第一行 y0=21,行高 24)
+    league = UM.render_league("关都地区", ELITE4, CHAMPION, done=["1"],
+                              champion_done=False, scale=SCALE)
+    for i, e in enumerate(ELITE4):
+        y0 = 21 + i * 24
+        box = (34, y0 + 2, 170, y0 + 13)
+        assert TYPE_COLOR[e["type"]] in colors_in(league, box), \
+            f"{e['name']} 的属性标签({e['type']})没上色"

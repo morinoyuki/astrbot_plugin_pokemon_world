@@ -93,11 +93,15 @@ def type_name(t: str) -> str:
 
 
 def _type_chip(sc: Screen, x: float, y: float, t: str, *, size: float = 7.4) -> float:
-    """属性色小标签,返回宽度(传入的应为中文属性名)。"""
+    """属性色小标签,返回宽度(英文 key / 中文名都收)。
+
+    踩过的坑:以前用**中文化之后的** label 去查色表 → 永远查不到,标签全灰
+    (道馆 / 联盟的属性标签)。现在用原值让 `type_color()` 自己归一。
+    """
     label = type_name(t)
     w = sc.tw(label, size) + 8
     sc.d.rounded_rectangle([x, y, x + w, y + 10], radius=2,
-                           fill=type_color(label), outline=BOX_EDGE)
+                           fill=type_color(t), outline=BOX_EDGE)
     sc.text(x + 4, y + 1.3, label, size=size, fill=(255, 255, 250))
     return w
 
