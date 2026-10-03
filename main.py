@@ -44,6 +44,7 @@ from .pw import battle_render as BR
 from .pw import coop as COOP
 from .pw import daily as D
 from .pw import events as EV
+from .pw import keyboard as KB
 from .pw import pvp as PVP
 from .pw import quests as QT
 from .pw import ui_info as UII
@@ -485,13 +486,16 @@ def _is_text_comp(comp) -> bool:
     return hasattr(comp, "text") and not hasattr(comp, "convert_to_file_path")
 
 
-def _cres(event, comps) -> list:
+def _cres(event, comps, kb=None) -> list:
     """图片+文本的出口:**仍然一条消息发出**,并且不用 markdown。
 
     为什么不用 markdown:带图的消息在图里已经有了视觉表达,文案只是说明;
     markdown 会把 `xxx` 渲染成代码块、把 ** 变成加粗,和图片风格不搭,
     所以图片旁的文案保持纯文本 —— 连反引号/星号也一并去掉(用户要求)。
     返回值仍是列表(1 条),调用点逐条 yield,接口与上一版保持一致。
+
+    `kb`(可选)是消息按钮行:仅 QQ 官方平台会真的挂上去(见 pw/keyboard.py),
+    带按钮时适配器会把图片内联进 markdown,让图与按钮共存于同一条消息。
     """
     fixed: list = []
     for c in list(comps or []):
@@ -503,28 +507,66 @@ def _cres(event, comps) -> list:
                 with contextlib.suppress(Exception):
                     c.text = plain
         fixed.append(c)
-    return [event.chain_result(fixed)]
+    return [KB.attach(event, event.chain_result(fixed), kb)]
 
 
 def _plain_caption(text) -> str:
     """把文案里的 markdown 标记去掉(反引号 / 星号 / 下划线强调)。"""
     return str(text or "").replace("`", "").replace("**", "").replace("__", "")
 
-def _res(event, text: str = ""):
+def _res(event, text: str = "", kb=None):
     """统一的文本出口:所有 `_res(event, ...)` 都走这里。
 
     - auto(默认):平台名含 `qq` + `official` 时才用 markdown
     - always / never:强制开/关(想统一风格或适配器不兼容时用)
     - 任何一步出错都退回普通纯文本 —— 发送格式绝不能把游戏搞崩
+    - `kb`(可选)是消息按钮行,仅 QQ 官方平台生效(pw/keyboard.py)
     """
     res = event.plain_result(text)   # 注意:这里必须是原始调用(不能递归到自己)
-    if not _want_markdown(event):
-        return res
-    try:
-        res.use_markdown(True)
-    except Exception:
-        return res
+    if _want_markdown(event):
+        with contextlib.suppress(Exception):
+            res.use_markdown(True)
+    if kb:
+        KB.attach(event, res, kb)
     return res
+
+
+# ── 消息按钮(QQ 官方 InlineKeyboard)──────────────────────────
+# 按钮点击产生 INTERACTION_CREATE 事件,适配器把它包成一条「空消息」事件。
+# 这里把按钮的 data 当指令文本直接路由到对应指令方法 —— 与手打完全同一条路。
+_KB_ROUTES: dict[str, str] = {
+    "对战": "cmd_battle",
+    "捕捉": "cmd_catch",
+    "mega": "cmd_mega",
+    "商店": "cmd_shop",
+    "电脑": "cmd_box",
+    "队伍": "cmd_team",
+    "背包": "cmd_bag",
+    "图鉴": "cmd_dex",
+    "状态": "cmd_status",
+    "地图": "cmd_map",
+    "前往": "cmd_go",
+    "探索": "cmd_explore",
+    "任务": "cmd_quest",
+    "帮助": "cmd_help",
+    "治疗": "cmd_heal",
+    "开始": "cmd_start",
+    "道馆": "cmd_gym",
+    "联盟": "cmd_league",
+    "自动战斗": "cmd_auto_battle",
+}
+
+
+class _KeyboardClickFilter(filter.CustomFilter):
+    """只放行 QQ 官方按钮点击回调(INTERACTION_CREATE)。
+
+    用它替代 `event_message_type(ALL)`:普通消息一个都不会被这个 handler
+    看到,也不会因此把群里的非唤醒消息判成 wake。
+    """
+
+    def filter(self, event, cfg) -> bool:
+        return bool(KB.click_data(event))
+
 
 class PokemonWorldPlugin(Star):
     def __init__(self, context: Context, config=None):
@@ -537,6 +579,8 @@ class PokemonWorldPlugin(Star):
         self._storage = str(self._cfg("storage", "sqlite") or "sqlite").strip().lower()
         # 文本发送格式:auto(仅 QQ 官方接口按 markdown)/ always / never
         _SEND_MD["mode"] = str(self._cfg("send_markdown", "auto") or "auto").strip().lower()
+        # 消息按钮:auto(仅 QQ 官方接口在战斗/商店等界面附按钮)/ never
+        KB.MODE["mode"] = str(self._cfg("keyboard", "auto") or "auto").strip().lower()
         self._db = SqliteBackend(self.data_dir) if self._storage != "json" else None
         if self._db is not None:
             self._db.import_legacy()
@@ -755,6 +799,222 @@ class PokemonWorldPlugin(Star):
     # ══════════════════════════════════════════════════════════════
     # 指令
     # ══════════════════════════════════════════════════════════════
+    # ══════════════════════════════════════════════════════════════
+    # 消息按钮(QQ 官方 InlineKeyboard)
+    #
+    # 按钮只是入口:点击 → INTERACTION_CREATE → on_keyboard_click 把 data
+    # 当指令执行 —— 所以内核逻辑、权限、存档完全不分叉。
+    # ══════════════════════════════════════════════════════════════
+    async def _ack_click(self, event) -> None:
+        """告知 QQ「按钮已处理」(老版本 AstrBot 没有这个方法,直接跳过)。"""
+        ack = getattr(event, "ack_interaction", None)
+        if callable(ack):
+            with contextlib.suppress(Exception):
+                await ack(0)
+
+    @filter.custom_filter(_KeyboardClickFilter)
+    async def on_keyboard_click(self, event: AstrMessageEvent):
+        """按钮点击回调:把按钮 data 当指令文本,走与手打完全相同的逻辑。"""
+        data = KB.click_data(event).strip()
+        if not data:
+            return
+        cmd_text = data if data[0] in "/!~" else "/" + data
+        name = cmd_text.lstrip("/!~").split(" ", 1)[0].strip()
+        method_name = _KB_ROUTES.get(name)
+        method = getattr(self, method_name, None) if method_name else None
+        if not callable(method):
+            yield _res(event, "❓ 这个按钮已失效,请重新发送指令。")
+            await self._ack_click(event)
+            return
+        # 指令方法都从 event.message_str 读参数 —— 这里复原成一次「手打」
+        event.message_str = cmd_text
+        try:
+            async for r in method(event):
+                yield r
+        except Exception as e:
+            logger.error("宝可梦世界: 按钮回调执行失败: %s", e, exc_info=True)
+            yield _res(event, "❌ 按钮执行出错了,请改用文字指令。")
+        await self._ack_click(event)
+
+    def _battle_keys(self, t: Trainer, *, switch_only: bool = False) -> list:
+        """战斗界面按钮(QQ 官方才生效)。
+
+        每颗按钮的 data 都是一条合法指令:`/对战 3`、`/对战 switch 2`、`/mega`……
+        换人时直接列出队伍(不用先输 `/对战 switch`),回复道具一键使用。
+        """
+        from .pw.mega import KEY_STONE
+        from .pw.mega import target_for as mega_target_for
+
+        b = (B.session(t) or {}).get("battle") or {}
+        side = b.get("player") or {}
+        active = int(side.get("active") or 0)
+        party = side.get("party") or []
+
+        def _mon_of(raw):
+            return B.dict_to_mon(raw) if isinstance(raw, dict) else None
+
+        def _label(mon):
+            return mon.nickname or _sp_zh(mon.species)
+
+        if switch_only:
+            cells = []
+            for i, raw in enumerate(party):
+                mon = _mon_of(raw)
+                if mon is None or mon.fainted:
+                    continue
+                cells.append((f"{i + 1} {_label(mon)}", f"/对战 switch {i + 1}"))
+            return KB.grid(cells, per_row=3)
+
+        out: list = []
+        mon = _mon_of(party[active]) if 0 <= active < len(party) else t.mon(0)
+        if mon is not None:
+            out.extend(
+                KB.grid(
+                    [
+                        (f"{i} {growth.move_zh(mv)}", f"/对战 {i}")
+                        for i, mv in enumerate(mon.moves or [], 1)
+                    ],
+                    per_row=5,
+                )
+            )
+        if len(party) > 1:
+            cells = []
+            for i, raw in enumerate(party):
+                other = _mon_of(raw)
+                if other is None or i == active or other.fainted:
+                    continue
+                cells.append((f"换{i + 1} {_label(other)}", f"/对战 switch {i + 1}"))
+            out.extend(KB.grid(cells, per_row=5))
+        acts: list = []
+        if (
+            mon is not None
+            and not mon.mega_from
+            and not bool(side.get("mega_used"))
+            and t.count(KEY_STONE) > 0
+            and mega_target_for(mon.species, mon.item, mon.moves)
+        ):
+            acts.append(("✨ Mega", "/mega"))
+        ball = _battle_ball(t)
+        if ball and bool(b.get("wild")):
+            acts.append((f"🔴 {ball}", f"/捕捉 {ball}"))
+        acts.append(("🎒 背包", "/背包"))
+        if bool(b.get("wild")):
+            acts.append(("🏃 逃跑", "/对战 run"))
+        else:
+            acts.append(("🏳️ 认输", "/对战 forfeit"))
+        out.append(KB.row(*acts))
+        # 战斗道具(回复/状态/复活/PP/树果):一键使用
+        items = []
+        for key, entry, _n in t.bag_items():
+            if str(entry.get("kind") or "") not in (
+                "medicine", "status", "revive", "pp", "battle", "berry",
+            ):
+                continue
+            zh = str(entry.get("zh") or key)
+            items.append((f"🧪 {zh}", f"/对战 item {zh}"))
+            if len(items) >= 5:
+                break
+        if items:
+            out.append(KB.row(*items))
+        return [r for r in out if r][:KB.MAX_ROWS]
+
+    def _shop_keys(self, entries: list[dict], page: int) -> list:
+        """商店按钮:翻页 + 本页商品一键买 1 件。"""
+        per = max(1, int(UIM.SHOP_PER_PAGE))
+        pages = max(1, (len(entries) + per - 1) // per)
+        page = min(max(1, int(page or 1)), pages)
+        nav = []
+        if page > 1:
+            nav.append(("⬅️ 上一页", f"/商店 页 {page - 1}"))
+        nav.append((f"📄 {page}/{pages} 页", "/商店"))
+        if page < pages:
+            nav.append(("➡️ 下一页", f"/商店 页 {page + 1}"))
+        out = [KB.row(*nav)]
+        cells = []
+        for e in entries[(page - 1) * per : page * per]:
+            zh = str(e.get("zh") or "")
+            if not zh:
+                continue
+            cells.append((f"🛒 {zh} {int(e.get('price') or 0)}", f"/商店 买 {zh}"))
+        out.extend(KB.grid(cells, per_row=2))
+        return [r for r in out if r][:KB.MAX_ROWS]
+
+    def _box_keys(self, page: int, pages: int) -> list:
+        """电脑仓库按钮:翻页 + 快速跳页 + 常用入口。"""
+        nav = []
+        if page > 1:
+            nav.append(("⬅️ 上一页", "/电脑 上一页"))
+        nav.append((f"📄 {page}/{pages} 页", "/电脑"))
+        if page < pages:
+            nav.append(("➡️ 下一页", "/电脑 下一页"))
+        out = [KB.row(*nav)]
+        if pages > 1:
+            cells = [
+                (f"第{i}页", f"/电脑 {i}")
+                for i in range(1, min(pages, KB.MAX_PER_ROW) + 1)
+                if i != page
+            ]
+            out.extend(KB.grid(cells, per_row=5))
+        out.append(KB.row(("🐾 队伍", "/队伍"), ("🎒 背包", "/背包")))
+        return [r for r in out if r][:KB.MAX_ROWS]
+
+    def _bag_keys(self, pocket: str, page: int, pages: int) -> list:
+        """背包按钮:口袋切换 + 翻页。"""
+        out = [
+            KB.row(
+                *[(
+                    label,
+                    f"/背包 {label}" if pk != pocket else "/背包",
+                ) for pk, label in UI.POCKETS],
+            ),
+        ]
+        nav = []
+        if page > 1:
+            nav.append(("⬅️ 上一页", f"/背包 页 {page - 1}"))
+        nav.append((f"📄 {page}/{pages} 页", "/背包"))
+        if page < pages:
+            nav.append(("➡️ 下一页", f"/背包 页 {page + 1}"))
+        out.append(KB.row(*nav))
+        return [r for r in out if r][:KB.MAX_ROWS]
+
+    def _map_keys(self, t: Trainer) -> list:
+        """地图按钮:相邻地点一键前往 + 本地服务与常用动作。"""
+        world = WorldMap()
+        cells = []
+        for n in world.neighbors(t.location):
+            zh = world.node_zh(n)
+            cells.append((zh, f"/前往 {zh}"))
+        out = KB.grid(cells, per_row=3)
+        svc = set(world.services(t.location))
+        acts = [("🔍 探索", "/探索")]
+        if "mart" in svc:
+            acts.append(("🛒 商店", "/商店"))
+        if "center" in svc:
+            acts.append(("💊 治疗", "/治疗"))
+        if "gym" in svc:
+            acts.append(("🏅 道馆", "/道馆"))
+        acts.append(("🐾 队伍", "/队伍"))
+        out.append(KB.row(*acts))
+        return [r for r in out if r][:KB.MAX_ROWS]
+
+    def _help_keys(self) -> list:
+        """帮助/主菜单按钮:把最常用的指令变成一键。"""
+        return KB.grid(
+            [
+                ("状态", "/状态"),
+                ("队伍", "/队伍"),
+                ("背包", "/背包"),
+                ("地图", "/地图"),
+                ("探索", "/探索"),
+                ("任务", "/任务"),
+                ("商店", "/商店"),
+                ("电脑", "/电脑"),
+                ("图鉴", "/图鉴"),
+                ("帮助", "/帮助"),
+            ],
+            per_row=5,
+        )
+
     @filter.command("开始", alias={"start", "成为训练家"})
     async def cmd_start(self, event: AstrMessageEvent):
         """/开始 [名字] [御三家] —— 创建训练家,踏上旅程"""
@@ -798,7 +1058,10 @@ class PokemonWorldPlugin(Star):
                     )
                     return
             if not starter:
-                yield _res(event, self._starter_menu(pool, name))
+                yield _res(
+                    event, self._starter_menu(pool, name),
+                    kb=self._starter_keys(pool, name),
+                )
                 return
             name = name or f"训练家{uid[-4:]}"
             starter_key = starter
@@ -822,7 +1085,7 @@ class PokemonWorldPlugin(Star):
                     starter_line=starter_line,
                 )
             )
-            yield _res(event, HELP_TEXT)
+            yield _res(event, HELP_TEXT, kb=self._help_keys())
 
     @filter.command("状态", alias={"status", "训练家", "档案"})
     async def cmd_status(self, event: AstrMessageEvent):
@@ -1337,6 +1600,7 @@ class PokemonWorldPlugin(Star):
                                   money=t.money, scale=self._img_scale()),
             text=text,
             hint=f"取出:`/队伍 取出 <序号>`(队伍满 {MAX_PARTY} 只时先存一只)",
+            kb=self._box_keys(_page, _pages),
         ):
             yield r
 
@@ -1391,6 +1655,9 @@ class PokemonWorldPlugin(Star):
                 + (sel_row.get("effect") or sel_row.get("desc") or "")
             )
 
+        _bag_per = max(1, int(UI.BAG_PER_PAGE))
+        _bag_pages = max(1, (len(payload["items"]) + _bag_per - 1) // _bag_per)
+        _bag_page = min(_bag_pages, int(payload["selected"]) // _bag_per + 1)
         async for r in self._emit_ui(
             event, "bag",
             lambda: UI.render_bag(
@@ -1400,6 +1667,7 @@ class PokemonWorldPlugin(Star):
             text="\n".join(lines),
             hint="分类:`/背包 <分类>`(道具/精灵球/回复/招式机/重要)· "
                  "看第 N 件:`/背包 <分类> <序号>` · 翻页:`/背包 <分类> 页 <N>`",
+            kb=self._bag_keys(payload["pocket"], _bag_page, _bag_pages),
         ):
             yield r
 
@@ -1445,6 +1713,7 @@ class PokemonWorldPlugin(Star):
             ),
             text=text,
             hint=self._map_hint(t),
+            kb=self._map_keys(t),
         ):
             yield r
 
@@ -1698,7 +1967,8 @@ class PokemonWorldPlugin(Star):
                 self._save(t)
                 _body = "\n".join(_lines[-4:])
                 async for r in self._emit_battle(event, t, _rmeta, _lines,
-                                                 text=_body, keep=_body):
+                                                 text=_body, keep=_body,
+                                                 status=True):
                     yield r
                 return
             wild_p = 0.55 * float(mods.get("encounter_mult", 1.0))
@@ -2081,8 +2351,10 @@ class PokemonWorldPlugin(Star):
             ):
                 yield r
             if res.awaiting_switch:
-                yield _res(event,
-                    "⚠️ 你的宝可梦倒下了,必须换人:\n" + B.team_status(t)
+                yield _res(
+                    event,
+                    "⚠️ 你的宝可梦倒下了,必须换人:\n" + B.team_status(t),
+                    kb=self._battle_keys(t, switch_only=True),
                 )
                 return
             if self._cfg_bool("narrate_every_turn", False):
@@ -2438,6 +2710,7 @@ class PokemonWorldPlugin(Star):
                 text=text,
                 hint="买卖:`/商店 买 <道具> [数量]`、`/商店 卖 <道具> [数量]` · "
                      "看第 N 件:`/商店 <序号>` · 翻页:`/商店 页 <N>`",
+                kb=self._shop_keys(entries, page_now),
             ):
                 yield r
             return
@@ -4360,7 +4633,7 @@ class PokemonWorldPlugin(Star):
     @filter.command("帮助", alias={"help", "说明"})
     async def cmd_help(self, event: AstrMessageEvent):
         """/帮助 —— 指令一览"""
-        yield _res(event, HELP_TEXT)
+        yield _res(event, HELP_TEXT, kb=self._help_keys())
 
     # ══════════════════════════════════════════════════════════════
     # 文本渲染
@@ -4377,6 +4650,18 @@ class PokemonWorldPlugin(Star):
             if s.startswith(name):
                 return s[len(name) :].strip()
         return ""
+
+    def _starter_keys(self, pool: list[str], name: str) -> list:
+        """初始宝可梦选择按钮:一键 `/开始 <名字> <宝可梦>`。"""
+        dex = get_dex()
+        cells = []
+        for item in pool:
+            r = dex.resolve_species(item)
+            if not r:
+                continue
+            zh = str(r[1].get("zh") or item)
+            cells.append((zh, f"/开始 {name} {zh}".strip()))
+        return KB.grid(cells, per_row=3)
 
     def _starter_menu(self, pool: list[str], name: str) -> str:
         """初始宝可梦选择菜单(默认参考《宝可梦 朱/紫》的御三家)。"""
@@ -5152,12 +5437,13 @@ class PokemonWorldPlugin(Star):
         return meta
 
     async def _emit_ui(self, event: AstrMessageEvent, label: str, builder, *,
-                       text: str = "", hint: str = ""):
+                       text: str = "", hint: str = "", kb=None):
         """按配置输出界面图片(仿 GBA 菜单);失败或未开启则回退文本。
 
         图片成功时**只**追加 `hint`(玩家接下来要敲什么指令这类图片里画不出来的
         信息);界面已经画出来的内容不再重复发一遍文本 —— 之前是"图片 + 整段
         同样的文本",看着很冗余。`text` 专门留给渲染失败时的文本回退。
+        `kb` 是消息按钮行(仅 QQ 官方生效),图片与文本两条路径都会挂上。
         """
         if self._cfg_bool("ui_image", True):
             try:
@@ -5167,14 +5453,14 @@ class PokemonWorldPlugin(Star):
                     comps = [Image.fromFileSystem(path)]
                     if hint:
                         comps.append(Plain(hint))
-                    for _r in _cres(event, comps):
+                    for _r in _cres(event, comps, kb=kb):
                         yield _r
                     return
             except Exception as e:  # 渲染失败必须回退文本
                 logger.debug("宝可梦世界: %s 界面渲染失败,回退文本: %s", label, e)
         body = "\n".join(x for x in (text, hint) if x)
         if body:
-            yield _res(event, body)
+            yield _res(event, body, kb=kb)
 
     def _ability_zh(self, key: str) -> str:
         """特性的中文名(查不到就返回空串)。"""
@@ -5614,6 +5900,7 @@ class PokemonWorldPlugin(Star):
         text: str = "",
         keep: str = "",
         status: bool = False,
+        kb=None,
     ):
         """按配置输出战斗画面:优先图片(仿经典对战界面),失败自动回退文本。
 
@@ -5623,7 +5910,12 @@ class PokemonWorldPlugin(Star):
         `status=True` 时文本回退用 `B.status_text()`(它本身就包含血条/招式/日志),
         这样图片路径不会再额外跟一条重复的状态文本 —— 之前
         `cmd_battle` 每回合都无条件再发一次 `status_text`,和图片内容完全重复。
+
+        `kb` 不传时,只要 `status=True` 且还在对战中,就自动挂上战斗按钮
+        (仅 QQ 官方生效) —— 所有开战/回合调用点无需逐个改。
         """
+        if kb is None and status and B.in_battle(t):
+            kb = self._battle_keys(t)
         # 长台词(三人组开场白这类名场面)单独发一条完整消息 —— 战报窗口只滚动
         # 显示最后几行,塞进去会被滚掉
         _bdata = t.data.get("battle") or {}
@@ -5662,7 +5954,7 @@ class PokemonWorldPlugin(Star):
                         comps = [Image.fromFileSystem(path)]
                         if keep:
                             comps.append(Plain(keep))
-                        for _r in _cres(event, comps):
+                        for _r in _cres(event, comps, kb=kb):
                             yield _r
                         return
             except Exception as e:  # 渲染失败必须回退文本
@@ -5680,7 +5972,7 @@ class PokemonWorldPlugin(Star):
         else:
             body = text or keep
         if body:
-            yield _res(event, body)
+            yield _res(event, body, kb=kb)
 
     # ════════════════════════════════════════════════════════════
     # 玩家对玩家(PvP)回合制对战
@@ -6510,6 +6802,28 @@ class PokemonWorldPlugin(Star):
             )
         return f"{mine}\n{theirs}\n⏳ 等对方出招…(90 秒不动会自动出招)"
 
+    def _pvp_keys(self, row: dict, uid: str) -> list:
+        """PvP 按钮:自己那侧的招式 + 背包/弃权(点击 → `/对战 <n>`)。"""
+        from .pw.pvp import battle_of
+
+        battle = battle_of(row)
+        first = str(uid) == str(row.get("from"))
+        side = battle.player if first else battle.enemy
+        mon = side.mon
+        out: list = []
+        if mon is not None:
+            out.extend(
+                KB.grid(
+                    [
+                        (f"{i} {growth.move_zh(mv)}", f"/对战 {i}")
+                        for i, mv in enumerate(mon.moves or [], 1)
+                    ],
+                    per_row=5,
+                )
+            )
+        out.append(KB.row(("🎒 背包", "/背包"), ("🏳️ 弃权", "/对战 弃权")))
+        return [r for r in out if r][:KB.MAX_ROWS]
+
     async def _emit_pvp(self, event, row: dict, uid: str, *, lines=None,
                         fallback: str = ""):
         """玩家对战画面(图片)+ 一行提示;渲染失败回退整段文本。"""
@@ -6517,6 +6831,7 @@ class PokemonWorldPlugin(Star):
         if lines is not None:
             payload["log"] = list(lines)[-4:]
         hint = self._pvp_hint(row, uid)
+        kb = self._pvp_keys(row, uid)
         if self._cfg_bool("ui_image", True):
             try:
                 data = BR.render_pvp_battle(
@@ -6530,12 +6845,13 @@ class PokemonWorldPlugin(Star):
                 if data:
                     path = self._temp_image(data, "pw_pvp")
                     for _r in _cres(event,
-                                    [Image.fromFileSystem(path), Plain(hint)]):
+                                    [Image.fromFileSystem(path), Plain(hint)],
+                                    kb=kb):
                         yield _r
                     return
             except Exception as e:
                 logger.debug("宝可梦世界: 玩家对战画面渲染失败: %s", e)
-        yield _res(event, (fallback or self._pvp_text(row)) + "\n" + hint)
+        yield _res(event, (fallback or self._pvp_text(row)) + "\n" + hint, kb=kb)
 
     async def _announce(self, scope: str, text: str) -> None:
         """把战报推到**群**里(玩家可能在私聊出招,群里的人也要看到结果)。"""
@@ -7314,6 +7630,14 @@ def _battle_weather(state, region: str) -> str:
     普通函数、多绑一个 self,导致调用签名错位。
     """
     return str(state.modifiers.get("battle_weather") or "") or state.weather_for(region)
+
+
+def _battle_ball(t: Trainer) -> str:
+    """背包里第一种精灵球的中文名(战斗按钮的「捕捉」用);没有则返回空串。"""
+    for key, entry, _n in t.bag_items():
+        if str(entry.get("kind") or "") == "ball":
+            return str(entry.get("zh") or key)
+    return ""
 
 
 def _older_than(path: str, now: float, seconds: float) -> bool:
