@@ -45,6 +45,7 @@ from .pw import coop as COOP
 from .pw import daily as D
 from .pw import events as EV
 from .pw import keyboard as KB
+from .pw import push as PUSH
 from .pw import pvp as PVP
 from .pw import quests as QT
 from .pw import ui_info as UII
@@ -468,6 +469,10 @@ def _explore_target(arg: str) -> str:
 _SEND_MD = {"mode": "auto"}
 
 
+_PUSH_MODE = {"mode": "auto"}
+"""主动推送策略,由插件配置 `proactive_push` 写入(auto/never/always)。"""
+
+
 def _want_markdown(event) -> bool:
     """这条消息要不要按 markdown 发送(auto:仅 qqofficial;always/never 强制)。"""
     mode = str(_SEND_MD.get("mode") or "auto").lower()
@@ -568,6 +573,51 @@ class _KeyboardClickFilter(filter.CustomFilter):
         return bool(KB.click_data(event))
 
 
+def _proactive_blocked(umo: str) -> bool:
+    """该会话是不是「不能主动推送」。
+
+    QQ 官方接口(群聊/私聊都一样)不允许机器人主动发消息,到点直接推会被平台
+    拒;这类会话改为把内容攒下来,等玩家下一次交互时补发(pw/push.py)。
+
+    配置 `proactive_push`:
+    - auto(默认):仅 QQ 官方攒着补发,其它平台即时推(失败也自动转补发)
+    - never:所有平台都等玩家交互补发
+    - always:所有平台都先尝试主动推
+    """
+    mode = str(_PUSH_MODE.get("mode") or "auto").strip().lower()
+    if mode == "never":
+        return True
+    if mode == "always":
+        return False
+    return "qq_official" in str(umo or "").lower()
+
+
+def _scope_of(event) -> str:
+    """会话作用域:群→`g<群号>`,私聊→`u<用户ID>`(与插件 _scope 同口径)。"""
+    gid = str(event.get_group_id() or "")
+    if gid:
+        return f"g{gid}"
+    return f"u{event.get_sender_id()}"
+
+
+class _PendingPushFilter(filter.CustomFilter):
+    """只放行「该会话有待补发推送 + 这次是玩家交互」的事件。
+
+    判定全在内存里做(O(1)),普通消息(包括群里的无关闲聊)不会命中;
+    命中时事件才会被唤醒,由 `on_pending_push` 把攒下的世界事件/战报补发。
+    """
+
+    def filter(self, event, cfg) -> bool:
+        if not PUSH.PENDING:
+            return False
+        if not PUSH.has(_scope_of(event)):
+            return False
+        # 按钮点击(交互回调)也算一次交互
+        if KB.click_data(event):
+            return True
+        return bool(getattr(event, "is_at_or_wake_command", False))
+
+
 class PokemonWorldPlugin(Star):
     def __init__(self, context: Context, config=None):
         super().__init__(context)
@@ -581,6 +631,10 @@ class PokemonWorldPlugin(Star):
         _SEND_MD["mode"] = str(self._cfg("send_markdown", "auto") or "auto").strip().lower()
         # 消息按钮:auto(仅 QQ 官方接口在战斗/商店等界面附按钮)/ never
         KB.MODE["mode"] = str(self._cfg("keyboard", "auto") or "auto").strip().lower()
+        # 主动推送:QQ 官方不能主动发消息 → 攒到玩家下次交互时补发(pw/push.py)
+        _PUSH_MODE["mode"] = str(
+            self._cfg("proactive_push", "auto") or "auto"
+        ).strip().lower()
         self._db = SqliteBackend(self.data_dir) if self._storage != "json" else None
         if self._db is not None:
             self._db.import_legacy()
@@ -589,6 +643,12 @@ class PokemonWorldPlugin(Star):
         self._locks: dict[str, asyncio.Lock] = {}
         self._scheduler_task: asyncio.Task | None = None
         self._last_notified_day = 0
+        # 待补发推送:QQ 官方不能主动发消息,攒下来等玩家下次交互(pw/push.py)
+        self._push_file = os.path.join(
+            self.data_dir, "pokemon_world", "pending_push.json"
+        )
+        with contextlib.suppress(Exception):
+            PUSH.load(self._push_file)
         # 插件页面(pages/manage)的数据管理 REST 接口
         self._register_web_apis()
 
@@ -632,10 +692,7 @@ class PokemonWorldPlugin(Star):
         return coerce_bool(self._cfg(key, default), default)
 
     def _scope(self, event: AstrMessageEvent) -> str:
-        gid = str(event.get_group_id() or "")
-        if gid:
-            return f"g{gid}"
-        return f"u{event.get_sender_id()}"
+        return _scope_of(event)
 
     def _uid(self, event: AstrMessageEvent) -> str:
         return str(event.get_sender_id() or "unknown")
@@ -689,6 +746,14 @@ class PokemonWorldPlugin(Star):
 
     def _save_state(self, state: WorldState) -> None:
         self.worlds.save(state.scope, state.data)
+
+    def _save_push(self) -> None:
+        """把待补发推送落盘(QQ 官方不能主动推,重启后还要能补)。"""
+        path = getattr(self, "_push_file", "")
+        if not path:
+            return
+        with contextlib.suppress(Exception):
+            PUSH.save(path)
 
     def _players(self, scope: str, *, current: Trainer | None = None) -> list[Trainer]:
         out: list[Trainer] = []
@@ -785,6 +850,9 @@ class PokemonWorldPlugin(Star):
                     f"📅 世界第 {state.day_no(day)} 天({game_day_str(day)})开始了。"
                 )
                 lines += wl
+                # 已经当场展示给玩家了,排队里的每日推送不用再补一遍
+                if PUSH.drop(scope, PUSH.KIND_DAILY):
+                    self._save_push()
         pe = D.deliver_player_events(trainer, state)
         if pe:
             lines.append("📨 今日个人事件:")
@@ -811,6 +879,22 @@ class PokemonWorldPlugin(Star):
         if callable(ack):
             with contextlib.suppress(Exception):
                 await ack(0)
+
+    @filter.custom_filter(_PendingPushFilter, priority=100)
+    async def on_pending_push(self, event: AstrMessageEvent):
+        """QQ 官方接口不能主动发消息:把攒下的世界事件/战报在玩家下次交互时补发。
+
+        先于指令本体执行(priority=100),所以玩家看到的是「新闻在前、
+        自己的指令结果在后」,和正常推送的阅读顺序一致。
+        """
+        scope = self._scope(event)
+        texts = PUSH.take(scope)
+        if not texts:
+            return
+        self._save_push()
+        # 一条一条发:战报可能很长,叠成一条会触发平台长度限制
+        for text in texts:
+            yield _res(event, text)
 
     @filter.custom_filter(_KeyboardClickFilter)
     async def on_keyboard_click(self, event: AstrMessageEvent):
@@ -4329,6 +4413,9 @@ class PokemonWorldPlugin(Star):
         async with self._lock(t.scope):
             lines = await self._ensure_day(event, t)
             state = self._state(t.scope)
+            # 玩家自己看了 `/今日`,排队中的每日世界事件就不用再补发了
+            if PUSH.drop(t.scope, PUSH.KIND_DAILY):
+                self._save_push()
         body = D.today_brief(state, region=t.region, location=t.location)
         text = "\n".join([*lines, body])
         nar = self._narrator()
@@ -4986,25 +5073,33 @@ class PokemonWorldPlugin(Star):
                 await self._notify(scope, state, {"world_events": events})
             except Exception as e:
                 logger.debug("宝可梦世界: %s 每日刷新失败: %s", scope, e)
+        # 凌晨可能几十上百个群同时入队,统一落盘一次(pw/push.py)
+        if PUSH.PENDING:
+            self._save_push()
 
     async def _notify(self, scope: str, state: WorldState, res: dict) -> None:
+        if not res.get("world_events"):
+            return
         umo = str(state.data.get("umo") or "")
-        if not umo or not res.get("world_events"):
-            return
         send = getattr(self.context, "send_message", None)
-        if send is None:
-            return
         head = (
             f"🌅 世界第 {state.day_no()} 天开始了({game_day_str(state.day)})"
         )
         body = "\n".join(f"· {EV.event_text(e)}" for e in res["world_events"])
-        try:
-            # 入站消息链必须是 MessageChain:传裸 list 会在平台适配器里
-            # 拿 `.chain` 时抛 AttributeError,被上面捕获后推送静默失败
-            # (1.16.0 起“每天早上推送世界事件”一直发不出去)。
-            await send(umo, MessageChain(chain=[Plain(f"{head}\n{body}\n\n输入 `/今日` 查看详情。")]))
-        except Exception as e:
-            logger.debug("宝可梦世界: 每日通知失败: %s", e)
+        text = f"{head}\n{body}\n\n输入 `/今日` 查看详情。"
+        if umo and send is not None and not _proactive_blocked(umo):
+            try:
+                # 入站消息链必须是 MessageChain:传裸 list 会在平台适配器里
+                # 拿 `.chain` 时抛 AttributeError,被上面捕获后推送静默失败
+                # (1.16.0 起“每天早上推送世界事件”一直发不出去)。
+                await send(umo, MessageChain(chain=[Plain(text)]))
+                return
+            except Exception as e:
+                logger.debug("宝可梦世界: 每日通知失败: %s", e)
+        # QQ 官方不能主动推(或推送失败):攒到该会话,等玩家下次交互补发。
+        # 落盘统一在 _roll_all 收尾做一次 —— 凌晨可能有几百个群同时入队,
+        # 每个群都写一次 JSON 太亏。
+        PUSH.queue(scope, text, kind=PUSH.KIND_DAILY)
 
 
     @filter.command("主线", alias={"story", "剧情", "主线剧情"})
@@ -6663,11 +6758,7 @@ class PokemonWorldPlugin(Star):
                 who.data["pvp"] = PVP.key_for(str(row.get("from")), t.uid)
                 self._save(who)
             self._save_state(state)
-        await self._announce(
-            t.scope,
-            f"⚔️ 玩家对战开始 —— {row.get('from_name')} vs {row.get('to_name')}!"
-            + (f"(赌注 {int(row.get('wager') or 0):,}₽)" if row.get("wager") else ""),
-        )
+        # 开局不再另发群播报:下面这条 `_emit_pvp` 回复本身就发在当前群里。
         async for r in self._emit_pvp(event, row, t.uid, lines=log):
             yield r
 
@@ -6854,17 +6945,26 @@ class PokemonWorldPlugin(Star):
         yield _res(event, (fallback or self._pvp_text(row)) + "\n" + hint, kb=kb)
 
     async def _announce(self, scope: str, text: str) -> None:
-        """把战报推到**群**里(玩家可能在私聊出招,群里的人也要看到结果)。"""
+        """超时自动出招/超时结算的通知到群里(调度器那一跳没有玩家指令可挂靠)。
+
+        开局/出招/回合结果都不再走这里 —— PvP 全程在当前群里进行,
+        玩家指令的回复本身就带回了进度与结果,再播一遍只是重复。
+
+        QQ 官方接口不能主动发消息:这类会话改为攒下来,
+        等群里下次有人交互时补发(见 on_pending_push)。
+        """
         umo = str(self._state(scope).data.get("umo") or "")
         send = getattr(self.context, "send_message", None)
-        if not umo or send is None or not self._cfg_bool("pvp_announce", True):
-            return
-        try:
-            # 必须包 MessageChain:裸 list 在平台适配器拿 `.chain` 就抛异常,
-            # 超时自动出招/超时结算的群播报会静默失败(玩家以为自动出招没用)。
-            await send(umo, MessageChain(chain=[Plain(text)]))
-        except Exception as e:
-            logger.debug("宝可梦世界: 玩家对战播报失败: %s", e)
+        if umo and send is not None and not _proactive_blocked(umo):
+            try:
+                # 必须包 MessageChain:裸 list 在平台适配器拿 `.chain` 就抛异常,
+                # 超时自动出招/超时结算的群播报会静默失败(玩家以为自动出招没用)。
+                await send(umo, MessageChain(chain=[Plain(text)]))
+                return
+            except Exception as e:
+                logger.debug("宝可梦世界: 玩家对战播报失败: %s", e)
+        PUSH.queue(scope, text, kind=PUSH.KIND_PVP)
+        self._save_push()
 
     def _pvp_text(self, row: dict, *, log=None, first: bool = False,
                   turn: list[str] | None = None, note: str = "") -> str:
@@ -6973,20 +7073,14 @@ class PokemonWorldPlugin(Star):
                         shot = list(res["lines"])      # 有画面就出画面
                 else:
                     self._save_state(state)
-                    await self._announce(
-                        scope,
-                        f"⏳ {t.name or '有人'} 已出招,等 "
-                        f"{self._pvp_name(row, other_uid)} 选择……"
-                        "(群里发 `/对战 <招式序号>` 即可)",
-                    )
+                    # 不再另发「已出招」群播报:下面这条回复本身就发在当前群里。
                     yield _res(event,
                         "⏳ 收到你的行动,等对方出招……(90 秒不动自动出招)\n"
                         + self._pvp_text(row, note="你的行动已记录。")
                     )
                     return
             self._save_state(state)
-        if out:
-            await self._announce(scope, out)
+        # 回合结果不再另发群播报:`_emit_pvp` / 下面的 `out` 回复就在当前群。
         if shot is not None:
             async for r in self._emit_pvp(event, row, t.uid, lines=shot,
                                           fallback=out):

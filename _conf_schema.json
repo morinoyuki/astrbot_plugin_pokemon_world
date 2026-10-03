@@ -103,11 +103,6 @@
     "hint": "同一地点一个月内最多能捡到的道具数;0 表示不限",
     "default": 10
   },
-  "pvp_announce": {
-    "type": "bool",
-    "default": true,
-    "description": "玩家对战把开局/出招/结果播报到群里"
-  },
   "send_markdown": {
     "type": "string",
     "description": "文本发送格式(QQ 官方接口)",
@@ -128,5 +123,16 @@
       "never"
     ],
     "hint": "auto:QQ 官方接口在战斗/商店/背包等界面附可点击按钮(其他平台/旧版 AstrBot 自动忽略);never:只发文字。需 AstrBot 已合并 QQ keyboard 支持"
+  },
+  "proactive_push": {
+    "type": "string",
+    "description": "主动推送策略(每日世界事件 / 群战报)",
+    "default": "auto",
+    "options": [
+      "auto",
+      "never",
+      "always"
+    ],
+    "hint": "auto:QQ 官方接口不能主动发消息,改为攒到玩家下次交互时补发(补发失败/重启也不丢),其它平台即时推;never:所有平台都等交互补发;always:所有平台都先尝试主动推"
   }
 }
