@@ -4,7 +4,7 @@
 1. `pw/push.py` 的入队/取走/去重/上限/TTL/落盘往返;
 2. `_notify`(每日世界事件)与 `_announce`(超时自动出招/超时结算通知)在
    qq_official 会话里不主动发、改为入队;其它平台行为不变;
-3. 下一条玩家交互(指令 / 按钮点击)由 `on_pending_push` 补发并清空;
+3. 下一条玩家交互(发指令 / 被 @ / 私聊说话)由 `on_pending_push` 补发并清空;
 4. `_PendingPushFilter` 的放行条件(有待补发 + 是真交互)。
 """
 
@@ -146,15 +146,6 @@ def test_pending_filter_requires_pending_and_interaction():
     assert flt.filter(ev, None) is False, "有待补发,但群里闲聊不算交互"
     ev.is_at_or_wake_command = True
     assert flt.filter(ev, None) is True
-
-    # 按钮点击(INTERACTION_CREATE)同样算一次交互
-    class _ClickEvent(_Event):
-        def get_interaction_button_data(self):
-            return "/对战 1"
-
-    click = _ClickEvent("")
-    click.is_at_or_wake_command = False
-    assert flt.filter(click, None) is True
 
     assert flt.filter(_Event("/状态"), None) is False, "别的群不受影响"
 

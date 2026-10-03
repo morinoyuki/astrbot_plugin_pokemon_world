@@ -114,19 +114,9 @@
     ],
     "hint": "auto:仅 qqofficial 平台按 markdown 发送;always:所有平台都尝试 markdown;never:始终纯文本"
   },
-  "keyboard": {
-    "type": "string",
-    "description": "消息按钮(QQ 官方 InlineKeyboard)",
-    "default": "auto",
-    "options": [
-      "auto",
-      "never"
-    ],
-    "hint": "auto:QQ 官方接口在战斗/商店/背包等界面附可点击按钮(其他平台/旧版 AstrBot 自动忽略);never:只发文字。需 AstrBot 已合并 QQ keyboard 支持"
-  },
   "proactive_push": {
     "type": "string",
-    "description": "主动推送策略(每日世界事件 / 群战报)",
+    "description": "主动推送策略(每日世界事件 / 超时通知)",
     "default": "auto",
     "options": [
       "auto",
