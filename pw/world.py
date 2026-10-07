@@ -796,25 +796,38 @@ class WorldMap:
                     f" —— 先拿下{self.region_zh(region)}更多徽章"
                     f"(当前 {trainer.badge_count(region)} 枚)。",
                 )
-        # 跨地区:只能从枢纽(联赛)出发,且需要该地区的冠军旗标。
-        # 这里原来还有一个 `port:{region}` 备选条件,但全仓库**没有任何地方设置它**
-        # (只有这一处读取)→ 死分支:玩家永远看不到"从港口乘船"这条路,
-        # 提示文字却在承诺它。已删除,改为与实现一致的说法。
+        # 跨地区:目标地区必须已开放(上面已校验),且满足二者之一 ——
+        #   · 目标地区是自己**已通关**的地区(回去补图鉴/抓神兽/收尾),或
+        #   · 当前地区已通关(通关后可在任意已开放地区之间自由往返)。
+        # 旧规则只看"当前地区冠军旗标":冠军战胜利会把玩家自动送到下一地区,
+        # 于是玩家被困在新地区,再也回不到刚通关的地区(用户反馈"无法返回")。
+        # (这里原来还有一个 `port:{region}` 备选条件,但全仓库没有任何地方设置它,
+        #  死分支已删除。)
         cur_region = self.region_of(cur)
-        if region != cur_region and not trainer.flag(f"champion:{cur_region}"):
+        if region != cur_region and not (
+            trainer.flag(f"champion:{cur_region}") or trainer.flag(f"champion:{region}")
+        ):
             return False, (
                 f"🚢 跨地区需要先成为{self.region_zh(cur_region)}冠军"
-                "(通关当地联盟)。"
+                "(通关当地联盟);已通关的地区可以随时 `/返回` 回访。"
             )
         if by_fly:
-            if not self.can_fly(trainer):
-                return False, "🚁 你还没有飞行许可(同一地区集齐 3 枚徽章后开放)。"
+            if not self.can_fly(trainer, target):
+                return False, (
+                    "🚁 你还没有飞行许可(同一地区集齐 3 枚徽章后开放;"
+                    "已通关的地区可直接飞回)。"
+                )
             if target not in trainer.data.get("visited", []):
                 return False, "🚁 只能飞到去过的城镇。"
             if not self.is_hub(target):
                 return False, "🚁 只能飞到城镇(宝可梦中心所在地)。"
             if trainer.money < FLY_COST:
                 return False, f"🚁 机票需要 {FLY_COST}₽,你的钱不够。"
+            return True, ""
+        # 跨地区不是"走路":地区地图之间没有相邻边,旧代码在这里用
+        # "只能前往相邻地点"把跨地区回访全部拦死(提示却说要冠军,误导排查)。
+        # 跨地区是长途移动(乘船/列车),通过上面的解锁与冠军检查即可。
+        if region != cur_region:
             return True, ""
         # 步行:必须相邻
         if target not in self.neighbors(cur):
@@ -825,8 +838,17 @@ class WorldMap:
             )
         return True, ""
 
-    def can_fly(self, trainer) -> bool:
-        return trainer.badge_count() >= 3 or bool(trainer.flag("fly"))
+    def can_fly(self, trainer, target: str = "") -> bool:
+        """飞行许可:当前地区集齐 3 枚徽章(或 `fly` 旗标)。
+
+        跨地区飞往**自己已通关的地区**(回访/回家)不受"当前地区徽章"限制 ——
+        冠军战自动把玩家送到新地区后,0 徽章的新地区会让所有飞行都失效,
+        连带回不去刚通关的地区。
+        """
+        if trainer.badge_count() >= 3 or bool(trainer.flag("fly")):
+            return True
+        dest = self.region_of(target) if target else ""
+        return bool(dest) and bool(trainer.flag(f"champion:{dest}"))
 
     def where_am_i(self, trainer) -> str:
         region = trainer.region

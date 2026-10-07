@@ -1256,3 +1256,60 @@ def test_image_hints_keep_info_the_image_does_not_draw():
         run_cmd(p, ev4, p.cmd_dex)
         dex = "".join(ev4.outputs)
         assert "可进化为" in dex, dex[:200]
+
+
+def test_return_command_returns_to_cleared_region():
+    """/返回:冠军战被送到新地区后,能回到刚通关的地区(用户反馈"无法返回")。
+
+    顺带覆盖:`/返回 <地区>` 指定地区、未开放地区拒绝、已在当前地区不空转。
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        p = _Cmd(tmp)
+        ev = _Event("/开始 小智 新叶喵")
+        run_cmd(p, ev, p.cmd_start)
+        t = p._load(ev)
+        world = WorldMap()
+        kanto_start = world.start_location("kanto")
+        johto_start = world.start_location("johto")
+        # 模拟"刚打赢关都冠军"的存档状态
+        t.set_flag("champion:kanto", True)
+        for i in range(1, 9):
+            t.add_badge("kanto", i)
+        t.data["unlocked_regions"] = ["kanto", "johto"]
+        t.data["region"] = "johto"
+        t.data["location"] = johto_start
+        t.data["visited"] = [kanto_start, johto_start]
+        p._save(t)
+
+        # 不带参数 → 回到刚通关的关都起点
+        ev = _Event("/返回")
+        run_cmd(p, ev, p.cmd_return)
+        out = "".join(str(x) for x in ev.outputs)
+        assert "你回到了" in out, out
+        t = p._load(ev)
+        assert t.region == "kanto" and t.location == kanto_start, (t.region, t.location)
+
+        # 写地区名 → 指定回到哪个地区(此时关都已通关,可回未通关的城都)
+        ev = _Event("/返回 城都")
+        run_cmd(p, ev, p.cmd_return)
+        out = "".join(str(x) for x in ev.outputs)
+        assert "你来到了" in out, out
+        t = p._load(ev)
+        assert t.region == "johto" and t.location == johto_start, (t.region, t.location)
+
+        # 未开放地区不能进
+        ev = _Event("/返回 丰缘")
+        run_cmd(p, ev, p.cmd_return)
+        assert any("尚未开放" in x for x in ev.outputs), ev.outputs
+
+        # 已经在该地区 → 不空转,给出提示
+        t = p._load(ev)
+        t.data["region"] = "kanto"
+        t.data["location"] = kanto_start
+        p._save(t)
+        ev = _Event("/返回 关都")
+        run_cmd(p, ev, p.cmd_return)
+        assert any("你已经在这个地区了" in x for x in ev.outputs), ev.outputs
+
+        # 帮助里必须写了这条指令
+        assert "/返回" in sys.modules["pw_plugin.prompts"].HELP_TEXT

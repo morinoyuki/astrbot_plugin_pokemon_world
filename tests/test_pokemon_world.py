@@ -1225,6 +1225,45 @@ def test_cross_region_travel_requires_championship():
     assert not src.strip(), f"port: 仍是死条件:{src}"
 
 
+def test_return_to_cleared_region_is_allowed():
+    """冠军战后被自动送到新地区,必须能回到刚通关的地区。
+
+    旧规则跨地区只看"当前地区冠军旗标":城都(未通关)⇄关都(已通关)全被拦,
+    玩家被困在新地区,连飞行都被"当前地区 3 枚徽章"卡死 —— 用户反馈"无法返回"。
+    """
+    from pw.player import new_trainer
+    from pw.world import WorldMap
+
+    world = WorldMap()
+    t = new_trainer("u1", "g1", "小智", starter="新叶喵")
+    kanto_start = world.start_location("kanto")
+    johto_start = world.start_location("johto")
+    # 模拟"刚打赢关都冠军"的存档状态:关都通关、人被送到城都起点
+    t.set_flag("champion:kanto", True)
+    t.data["unlocked_regions"] = ["kanto", "johto"]
+    t.data["region"] = "johto"
+    t.data["location"] = johto_start
+    t.data["visited"] = [kanto_start, johto_start]
+
+    # 回访已通关地区:步行/飞行都不该被拦
+    ok, msg = world.travel_check(t, kanto_start)
+    assert ok, msg
+    ok, msg = world.travel_check(t, kanto_start, by_fly=True)
+    assert ok, msg
+    # 反向:从已通关的关都去刚开放的城都(未通关)也应当允许
+    t.data["region"] = "kanto"
+    t.data["location"] = kanto_start
+    ok, msg = world.travel_check(t, johto_start)
+    assert ok, msg
+    # 两边都没通关时仍然拦(进度没到,不能乱跑)
+    t.set_flag("champion:kanto", False)
+    ok, msg = world.travel_check(t, johto_start)
+    assert not ok and "冠军" in msg, msg
+    # 未开放地区依旧拦在最前面(与是否通关无关)
+    ok, msg = world.travel_check(t, world.start_location("hoenn"))
+    assert not ok and "尚未开放" in msg, msg
+
+
 def test_nearest_hub_uses_real_distance_not_visit_order():
     """团灭后要送回**路网距离最近**的城镇,不是"最近一次首次到访"的城镇。"""
     from pw.world import WorldMap

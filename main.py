@@ -51,7 +51,7 @@ from .pw import ui_info as UII
 from .pw import ui_menu as UIM
 from .pw import ui_quest as UIQ
 from .pw import ui_render as UI
-from .pw.dex import get_dex
+from .pw.dex import _norm, get_dex
 from .pw.engine import create_pokemon  # 领养/复活要用(运行时需要)
 from .pw.items import (
     BAG_ITEMS,
@@ -1506,7 +1506,7 @@ class PokemonWorldPlugin(Star):
                                              scale=self._img_scale()),
                 text=self._world_text(t, world),
                 hint="出发:`/前往 <城镇>`;通关一个地区(8 徽章 → `/联盟 挑战`)"
-                     "会自动解锁下一个地区",
+                     "会自动解锁下一个地区;已通关的地区可 `/返回` 回访",
             ):
                 yield r
             return
@@ -1579,7 +1579,8 @@ class PokemonWorldPlugin(Star):
                 lines.append(f"　🎯 下一目标:{e['next_zh']}")
         lines.append(
             "通关流程:集齐本地区徽章 → `/联盟 挑战` 四天王与冠军 → 首胜自动解锁下一个地区。\n"
-            "查看单个地区:`/地图 <地区>`;出发:`/前往 <城镇>`。"
+            "查看单个地区:`/地图 <地区>`;出发:`/前往 <城镇>`;"
+            "回已通关的地区:`/返回 [地区]`。"
         )
         return "\n".join(lines)
 
@@ -1601,6 +1602,7 @@ class PokemonWorldPlugin(Star):
             f"\n◆ 本地服务:{svc}"
             "\n移动:`/前往 <地点>`(只能去相邻)、`/前往 飞行 <城镇>`"
             "(同地区 3 徽章解锁,500₽)"
+            "\n回访:`/返回 [地区]` 回到已通关的地区(不带地区 = 上一个地区)"
         )
 
     @filter.command("前往", alias={"go", "移动", "去"})
@@ -1626,8 +1628,27 @@ class PokemonWorldPlugin(Star):
         async with self._lock(t.scope):
             await self._ensure_day(event, t)
             world = WorldMap()
-            key = world.find_location(arg, t.region) or world.find_location(arg)
+            # `/前往 关都`(直接写地区名)= 跨地区回访:去该地区的起始城镇。
+            # 地区名要优先于地点模糊匹配,否则「关都」会先撞上「关都宝可梦联盟」。
+            region_only = world.resolve_region(arg)
+            if region_only and _norm(world.region_zh(region_only)) == _norm(arg):
+                if region_only == t.region:
+                    yield _res(event,
+                        f"你已经在这个地区了({world.region_zh(t.region)}·"
+                        f"{world.node_zh(t.location)})。想去别的地区用 `/返回 <地区>`;"
+                        "想在本地区走动请写城镇名(用 `/地图` 查)。"
+                    )
+                    return
+                key = world.start_location(region_only)
+            else:
+                key = world.find_location(arg, t.region) or world.find_location(arg)
             if not key:
+                if world.resolve_region(arg):
+                    yield _res(event,
+                        f"❌ 找不到地点「{arg}」。想去某个地区用 `/返回 <地区>`;"
+                        "想去具体城镇用 `/地图` 看名字。"
+                    )
+                    return
                 yield _res(event, f"❌ 找不到地点「{arg}」。用 `/地图` 看看能去哪。")
                 return
             state = self._state(t.scope)
@@ -1661,6 +1682,106 @@ class PokemonWorldPlugin(Star):
             if qlines:
                 msg += "\n" + "\n".join(qlines)
             yield _res(event, msg)
+
+    @filter.command("返回", alias={"return", "回去"})
+    async def cmd_return(self, event: AstrMessageEvent):
+        """/返回 [地区] —— 回到已通关的地区(不带参数 = 回上一个地区)"""
+        t, err = self._require(event)
+        if err:
+            yield _res(event, err)
+            return
+        arg = self._args(event, ("返回", "return", "回去")).strip()
+        async with self._lock(t.scope):
+            await self._ensure_day(event, t)
+            world = WorldMap()
+            if arg:
+                region = world.resolve_region(arg)
+                if not region:
+                    yield _res(event,
+                        f"❌ 没有「{arg}」这个地区。用 `/地图 世界` 看看 8 个地区。"
+                    )
+                    return
+            else:
+                region = self._return_region(t, world)
+                if not region:
+                    yield _res(event,
+                        "❌ 还没有可以返回的地区 —— 通关一个地区(集齐徽章 → "
+                        "`/联盟 挑战`)后,就能随时回去。"
+                    )
+                    return
+            if region not in (t.data.get("unlocked_regions") or []):
+                yield _res(event, f"🚧 {world.region_zh(region)}尚未开放。")
+                return
+            if region == t.region:
+                yield _res(event,
+                    f"你已经在这个地区了:{world.region_zh(region)}·"
+                    f"{world.node_zh(t.location)}。想看别的地区用 `/地图 世界`。"
+                )
+                return
+            key = world.start_location(region)
+            if not key:
+                yield _res(event, f"⚠️ {world.region_zh(region)}没有可落脚的城镇。")
+                return
+            state = self._state(t.scope)
+            ok, msg = world.travel_check(
+                t, key, locked_until=state.data.get("locks") or {}
+            )
+            if not ok:
+                yield _res(event, msg)
+                return
+            is_new = key not in (t.data.get("visited") or [])
+            t.data["region"] = region
+            t.data["location"] = key
+            visited = t.data.setdefault("visited", [])
+            if is_new:
+                visited.append(key)
+            t.data["steps"] = int(t.data.get("steps", 0)) + 120
+            qlines = QT.note(t, "travel", location=key, new=is_new)
+            qlines += QT.note(t, "steps", steps=120)
+            self._save(t)
+            ev = state.event_at(key)
+            tail = f"\n📍 这里正发生:{EV.event_text(ev)}" if ev else ""
+            champ = bool(t.flag(f"champion:{region}"))
+            status = (
+                f"🏆 已通关({t.badge_count(region)} 枚徽章,冠军)"
+                if champ
+                else f"徽章 {t.badge_count(region)}/{len(world.gyms(region)) or 8}"
+            )
+            msg = (
+                f"🚢 你{'回到' if champ else '来到'}了 "
+                f"{world.region_zh(region)}·{world.node_zh(key)}({status})。"
+                f"\n危险度:{world.tier_label(key)} · 可用服务:"
+                f"{'、'.join(_service_zh(world.services(key))) or '无'}{tail}"
+                "\n继续:`/前往 <地点>` 走动,或 `/返回 <地区>` 去别的已开放地区。"
+            )
+            if qlines:
+                msg += "\n" + "\n".join(qlines)
+            yield _res(event, msg)
+
+    def _return_region(self, t: Trainer, world: WorldMap) -> str:
+        """`/返回` 的默认目标:优先上一个地区,否则最近通关的地区。
+
+        冠军战胜利后玩家会被自动送到新地区,此时最想回的就是刚离开的那个;
+        手动折返后(例如从城都回关都),则回最近一个已通关地区;都没有时退到
+        任意其它已开放地区(相当于在两地区之间来回)。
+        """
+        order = world.regions_with_data()
+        cur = t.region
+        unlocked = set(t.data.get("unlocked_regions") or [])
+        if cur in order:
+            idx = order.index(cur)
+            if idx > 0:
+                prev = order[idx - 1]
+                if prev in unlocked and t.flag(f"champion:{prev}"):
+                    return prev
+        cleared = [
+            r for r in order
+            if r != cur and r in unlocked and t.flag(f"champion:{r}")
+        ]
+        if cleared:
+            return cleared[-1]
+        others = [r for r in order if r != cur and r in unlocked]
+        return others[-1] if others else ""
 
     @filter.command("探索", alias={"explore", "遭遇", "搜索"})
     async def cmd_explore(self, event: AstrMessageEvent):
