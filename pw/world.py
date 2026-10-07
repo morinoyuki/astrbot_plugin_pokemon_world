@@ -444,6 +444,11 @@ def _fallback_map() -> dict:
 _EXTRA_ZH = {
     "mirage-island": "幻影岛",
     "kalos-berry-fields": "卡洛斯树果园",
+    # 七之岛·阿斯卡纳石室共 7 间,上游只给了其中 4 间的中文名((1)~(4)),
+    # 剩下 3 间补齐 —— 同名地点在地图上无法区分,`/前往` 会只认第一个→卡关。
+    "scufib-chamber": "阿斯卡纳石室(5)",
+    "viapos-chamber": "阿斯卡纳石室(6)",
+    "weepth-chamber": "阿斯卡纳石室(7)",
 }
 
 
@@ -466,9 +471,11 @@ class WorldMap:
         (关都16号道路拿到了阿罗拉的"16號道路(阿羅拉)")。因此:
           · 道路/水路名一律按标识符重新生成(彻底摆脱串区与繁体);
           · 其余名字去掉尾部的括号标注(地区/世代/版本),地区已在 UI 中展示。
+          · **纯数字括号例外**:它是同名节点的唯一区分(「阿斯卡纳石室(1)~(7)」),
+            删掉就会 4 间重名 → `/前往` 只认第一个 → 站在别的石室就"无法前往"。
         """
         text = str(zh or "").strip()
-        text = re.sub(r"\s*[（(][^）)]*[）)]\s*$", "", text).strip()
+        text = re.sub(r"\s*[（(](?!\d+[）)])[^）)]*[）)]\s*$", "", text).strip()
         return text.translate(_T2S)
 
     ROUTE_NUM_RE = re.compile(r"(?:^|-)(?:sea-)?route-(\d+)$")
@@ -867,12 +874,29 @@ class WorldMap:
             out.append("league")
         return out
 
-    def find_location(self, query: str, region: str = "") -> str:
+    def _nearest_hit(self, hits: list[str], near: str = "") -> str:
+        """多个同名候选时:优先与 `near`(玩家所在地)相邻的,其次同地区,最后按索引序。"""
+        if len(hits) <= 1 or not near:
+            return hits[0] if hits else ""
+        nbrs = set(self.neighbors(near))
+        for k in hits:
+            if k in nbrs:
+                return k
+        region = self.region_of(near)
+        for k in hits:
+            if self.region_of(k) == region:
+                return k
+        return hits[0]
+
+    def find_location(self, query: str, region: str = "", near: str = "") -> str:
         """地点名 → 地图节点 key(中文名/英文名/标识/模糊)。
 
         顺序很有讲究:**先在本地区节点里做显示名精确匹配**,再问 dex 的别名/编号
         解析 —— dex 的地点索引是早期生成的产物,改名/新增节点后可能过期,
         若先问它就会把「冠军之路」解析到别的节点,表现为 `/前往` 没反应(卡关)。
+
+        `near` = 玩家当前所在地:命中多个同名/同前缀地点时优先**相邻**的那个
+        (阿斯卡纳石室(1)~(7) 排成一条链,写家族名时不该被随机送去远端)。
         """
         q = str(query or "").strip()
         if not q:
@@ -882,17 +906,20 @@ class WorldMap:
         except Exception:
             pool = []
         nq = _norm(q)
-        for k in pool:                      # ① 本地区显示名精确(忽略大小写/符号)
-            if nq and _norm(self.node_zh(k)) == nq:
-                return k
+        exact = [k for k in pool if nq and _norm(self.node_zh(k)) == nq]
+        if exact:                           # ① 本地区显示名精确(忽略大小写/符号)
+            return self._nearest_hit(exact, near)
         key = get_dex().find_location(q, region)
-        if key and (not region or self.region_of(key) == region):
-            return key
+        contain: list[str] = []
         if not any(ch.isdigit() for ch in q):
             # ② 包含匹配:带数字的编号地点不做这一步,否则「1号道路」会撞上「11号道路」
-            for k in pool:
-                if nq and nq in _norm(self.node_zh(k)):
-                    return k
+            contain = [k for k in pool if nq and nq in _norm(self.node_zh(k))]
+        if key and (not region or self.region_of(key) == region):
+            # dex 命中的若是包含匹配里的一员,说明是家族同名(阿斯卡纳石室…),
+            # 交给相邻优先逻辑,而不是永远返回 dex 固定的那一个。
+            return self._nearest_hit(contain, near) if key in contain else key
+        if contain:
+            return self._nearest_hit(contain, near)
         return key or ""
 
     def locations_with_species(self, species: str, limit: int = 12) -> list[dict]:

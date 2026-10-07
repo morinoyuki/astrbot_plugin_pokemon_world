@@ -525,14 +525,17 @@ def test_pseudo_locations_removed_from_map():
 
 def test_node_names_cleaned_and_routes_localized():
     """节点名:道路按标识生成,去掉串区后缀,不留繁体。"""
+    import re
+
     world = WorldMap()
     traditional = "號島碼頭園羅藍灣爾奧樂歐納樹馬礦關圓環離點緣衆會國學車東門長陽雲電龍劍銀鋼鐵紅綠黃陸橋廳場隊華萬縣鎮區鄉燈爐館營徑嶺淵溝灘澗廣廢"
     for key in world._index:
         zh = world.node_zh(key)
         assert zh, key
         assert not any(c in traditional for c in zh), (key, zh)
-        assert "（" not in zh and "(" not in zh, (key, zh)
-        m = __import__("re").search(r"(?:^|-)(sea-)?route-(\d+)$", key)
+        # 括号只允许纯数字区分编号(「阿斯卡纳石室(1)」);地区/世代标注必须清掉
+        assert not re.search(r"[（(](?!\d+[）)])", zh), (key, zh)
+        m = re.search(r"(?:^|-)(sea-)?route-(\d+)$", key)
         if m:
             want = f"{int(m.group(2))}号{'水路' if m.group(1) else '道路'}"
             assert zh == want, (key, zh, want)

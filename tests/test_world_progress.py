@@ -333,6 +333,14 @@ def test_no_two_locations_share_the_same_display_name():
     # 名字解析必须**限定在当前地区** —— 跨地区同名是合法的(关都和丰缘都有「变幻洞窟」),
     # 但 `/前往 <名字>` 必须解析到**当前地区**的那个节点,否则会“指到别的地区”而卡关。
     world = WorldMap()
+    # 显示名(玩家在 `/地图` 上看到的)也必须唯一 —— 上游中文名有时带 (1)(2) 编号
+    # 来防撞名,若清洗时把编号删掉就会重新撞名(阿斯卡纳石室就栽在这里)。
+    by_display = collections.defaultdict(list)
+    for region in world.regions_with_data():
+        for key in world.nodes(region):
+            by_display[(region, world.node_zh(key))].append(key)
+    dup2 = {f"{r}·{n}": ks for (r, n), ks in by_display.items() if len(ks) > 1}
+    assert not dup2, f"同地区存在同名显示地点:{dup2}"
     for region in world.regions_with_data():
         for key in world.nodes(region):
             zh = world.node_zh(key)
@@ -355,3 +363,35 @@ def test_league_is_attached_to_the_main_line_not_only_side_areas():
         assert any(not any(tag in n for tag in sideish) for n in nbrs), (
             f"{region} 联盟只连着支线:{nbrs}")
     assert "冠军之路·深处" in [world.node_zh(k) for k in world.neighbors(world.gateway("kanto"))]
+
+
+def test_tanoby_chambers_are_distinguishable_and_reachable():
+    """阿斯卡纳石室 7 间必须各有名字,`/前往` 家族名时优先相邻的那间。
+
+    旧实现:名称清洗把「(1)~(4)」编号删掉 → 4 间同名,`/前往 阿斯卡纳石室`
+    永远解析到 maps 顺序第一的 dilford-chamber;站在 monean/rixy 时只能收到
+    「只能前往相邻地点」→ 玩家卡死(实测反馈:「有几个同名 导致无法前往」)。
+    """
+    world = WorldMap()
+    chain = [
+        "dilford-chamber",
+        "liptoo-chamber",
+        "monean-chamber",
+        "rixy-chamber",
+        "scufib-chamber",
+        "viapos-chamber",
+        "weepth-chamber",
+    ]
+    names = [world.node_zh(k) for k in chain]
+    assert len(set(names)) == len(chain), f"石室重名:{names}"
+    assert all("阿斯卡纳石室" in n for n in names), names
+    # 站在任一石室,写家族名应当解析到相邻的那间(而不是永远第一个)
+    for here in chain:
+        got = world.find_location("阿斯卡纳石室", "kanto", near=here)
+        assert got in world.neighbors(here), (
+            f"在 {world.node_zh(here)} 写家族名解析到了 "
+            f"{got}({world.node_zh(got) if got else ''})"
+        )
+    # 带编号的名字要能精确直达
+    assert world.find_location("阿斯卡纳石室(1)", "kanto") == "monean-chamber"
+    assert world.find_location("阿斯卡纳石室1", "kanto") == "monean-chamber"

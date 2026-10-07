@@ -1641,7 +1641,9 @@ class PokemonWorldPlugin(Star):
                     return
                 key = world.start_location(region_only)
             else:
-                key = world.find_location(arg, t.region) or world.find_location(arg)
+                key = world.find_location(arg, t.region, near=t.location) or world.find_location(
+                    arg, near=t.location
+                )
             if not key:
                 if world.resolve_region(arg):
                     yield _res(event,
