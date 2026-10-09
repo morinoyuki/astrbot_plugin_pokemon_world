@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.36.2
+
+### 修复:图鉴「野外分布」打印出内部 dict(看着就是 JSON)
+
+- **问题**(实测反馈「图鉴中野外分布输出的是json」):
+  · `_dex_hint()` 把 `locations_with_species()` 返回的 dict 直接 `str()` 丢给
+    `node_zh()` → 图片提示/文本回退里的「野外分布」变成
+    `{'location': 'kanto-route-1', 'zh': ...}` 一串 JSON;
+  · 同一处字段读错:`_is_foreign_only()` 取 `loc["key"]`,而数据字段叫 `location`
+    → `wild_pools("None")` 恒为空 → **所有**野生物种都被标成「特殊区域(外来种)」
+    (实测 `/图鉴 波波`、`/图鉴 皮卡丘`)。
+- **修复**(`main.py`):`_dex_hint()` 按 `{region, zh, location}` 渲染成
+  「关都·1号道路、关都·常青森林、…」;`_is_foreign_only()` 同时兼容
+  `location` / `key` / 纯字符串三种入参。
+- 回归:`/图鉴 波波` 断言野外分布是「关都·1号道路」且不含 `{` / `'location'`;
+  `test_dex_reports_obtain_paths` 改为按真实分布判定(皮卡丘/铁包袱 → 野外遭遇),
+  并把已删除的 foreign 叠加层残留检查换成真正的断言(原来那句 `or True` 什么都没查)。
+- 590 passed;ruff 全绿
+
 ## 1.36.1
 
 ### 修复:阿斯卡纳石室同名导致无法前往(七之岛)

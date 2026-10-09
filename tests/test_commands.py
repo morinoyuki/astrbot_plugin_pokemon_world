@@ -1257,6 +1257,15 @@ def test_image_hints_keep_info_the_image_does_not_draw():
         dex = "".join(ev4.outputs)
         assert "可进化为" in dex, dex[:200]
 
+        # 图鉴:野外分布必须是「地区·地点」文本,不能把内部 dict 当名字打印出去
+        # (旧实现 `node_zh(str(x))` 把 locations_with_species 的 dict 原样输出成 JSON)
+        ev5 = _Event("/图鉴 波波")
+        run_cmd(p, ev5, p.cmd_dex)
+        dex2 = "".join(ev5.outputs)
+        assert "野外分布:" in dex2, dex2[:300]
+        assert "{" not in dex2 and "'location'" not in dex2, dex2[:300]
+        assert "关都·1号道路" in dex2, dex2[:300]
+
 
 def test_return_command_returns_to_cleared_region():
     """/返回:冠军战被送到新地区后,能回到刚通关的地区(用户反馈"无法返回")。

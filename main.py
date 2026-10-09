@@ -4239,15 +4239,29 @@ class PokemonWorldPlugin(Star):
             yield r
 
     def _dex_hint(self, key: str, entry: dict, locs: list, evos: list) -> str:
-        """图鉴图片附带的文本:进化与野外分布(图片里只写"已收录")。"""
+        """图鉴图片附带的文本:进化与野外分布(图片里只写"已收录")。
+
+        `locs` 是 `WorldMap.locations_with_species()` 的 dict 列表
+        (`{location, zh, region, min, max, method}`);旧实现直接 `str(x)` 丢给
+        `node_zh()` → 野外分布把内部 dict 当名字打印出来(看起来就是一段 JSON)。
+        """
         lines = []
         if evos:
             lines.append("可进化为:" + "、".join(str(x) for x in evos))
         if locs:
             world = WorldMap()
-            names = [world.node_zh(str(x)) if not isinstance(x, str) else x
-                     for x in locs[:8]]
-            lines.append("野外分布:" + "、".join(names))
+            names: list[str] = []
+            for x in locs[:8]:
+                if isinstance(x, dict):     # 正常路径:带地区/等级的 dict
+                    zh = str(x.get("zh") or x.get("location") or "")
+                    region = str(x.get("region") or "")
+                    name = f"{world.region_zh(region)}·{zh}" if region and zh else zh
+                else:                       # 兼容旧调用:直接传节点 key
+                    name = world.node_zh(str(x))
+                if name:
+                    names.append(name)
+            if names:
+                lines.append("野外分布:" + "、".join(names))
         evo_entry = entry.get("evos") or []
         if not evos and not evo_entry:
             lines.append("不会进化")
@@ -8137,7 +8151,9 @@ def _is_foreign_only(key: str, locs) -> bool:
 
     world = WorldMap()
     for loc in locs or []:
-        k = str(loc.get("key") if isinstance(loc, dict) else loc)
+        # `locations_with_species()` 给的字段叫 `location`(不是 `key`)——
+        # 读错字段会让 `wild_pools("None")` 恒为空 → 所有野外物种都被标成外来种。
+        k = str(loc.get("location") or loc.get("key") or "") if isinstance(loc, dict) else str(loc)
         for row in world.wild_pools(k):
             if (str(row.get("species")) == str(key)
                     and str(row.get("method") or "") != "foreign"):
