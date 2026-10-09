@@ -4301,11 +4301,21 @@ class PokemonWorldPlugin(Star):
             for k, v in (state2.data.get("locks") or {}).items()
         ]
         pe_lines = [
-            f"{e.get('title') or e.get('kind')}:{e.get('desc') or ''}".strip(":")
+            EV.player_event_text(e)
             for uid, arr in (state2.data.get("player_events") or {}).items()
             if uid == t.uid
             for e in arr
         ]
+        # 文本模式(没图/渲染失败)也要看得到个人事件:图片里才有「◆ 个人」框。
+        # 刚滚过日时上面已经列过今日个人事件,这里不重复。
+        if not any(x.startswith("📨 今日个人事件") for x in lines):
+            today_pe = [
+                EV.player_event_text(e)
+                for e in (state2.data.get("player_events") or {}).get(t.uid) or []
+                if int(e.get("day") or 0) == int(state2.day or 0)
+            ]
+            if today_pe:
+                text += "\n\n📨 个人事件:\n" + "\n".join(f"　{x}" for x in today_pe)
         async for r in self._emit_ui(
             event, "news",
             lambda: UII.render_news(

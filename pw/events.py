@@ -313,22 +313,115 @@ FALLBACK_PLAYER = [
     ("rumor", "奇怪的梦", {}),
 ]
 
+RUMOR_DESC = "梦里隐约有只宝可梦在叫你,醒来只记得一点模糊的影子(没有实际影响)。"
+
+
+def _bag_item_zh(key: object) -> str:
+    k = str(key or "")
+    return str((BAG_ITEMS.get(k) or {}).get("zh") or k)
+
+
+def _species_zh(key: object) -> str:
+    k = str(key or "")
+    if not k:
+        return ""
+    return str((get_dex().species.get(k) or {}).get("zh") or k)
+
+
+def _first_party_zh(trainer) -> str:
+    """队伍第一只宝可梦的中文名(没有队伍就返回空串)。"""
+    for p in trainer.party or []:
+        if isinstance(p, dict) and p.get("species"):
+            return _species_zh(p["species"])
+    return ""
+
+
+def player_event_detail(ev: dict) -> str:
+    """个人事件的"具体发生了什么" —— 道具名/数量/分数都要写出来。"""
+    kind = str(ev.get("kind") or "")
+    if kind == "gift_item":
+        return f"获得 {_bag_item_zh(ev.get('item'))} ×{int(ev.get('n', 1) or 1)}"
+    if kind == "lost_item":
+        return f"失去 {_bag_item_zh(ev.get('item'))} ×{int(ev.get('n', 1) or 1)}"
+    if kind == "gift_money":
+        return f"获得 {int(ev.get('money', 0) or 0)}₽"
+    if kind == "friend":
+        return f"队伍亲密度 +{int(ev.get('friendship', 0) or 0)}"
+    if kind == "wild_battle":
+        sp = _species_zh(ev.get("species"))
+        if not sp:
+            return ""
+        lv = int(ev.get("level", 0) or 0)
+        tail = f" Lv{lv}" if lv else ""
+        return f"野生的 {'✨' if ev.get('shiny') else ''}{sp}{tail} 在附近露面"
+    if kind == "meet_trainer":
+        sp = _species_zh(ev.get("species"))
+        if sp:
+            return f"一位训练家带着 {sp} 向你讨教"
+        team = [m for m in (ev.get("team") or []) if isinstance(m, dict)]
+        if team:
+            top = max(int(m.get("level", 0) or 0) for m in team)
+            return f"一位带着 {len(team)} 只宝可梦的训练家向你讨教(最高 Lv{top})"
+        return "一位训练家和你聊了几句"
+    return ""
+
+
+def player_event_text(ev: dict) -> str:
+    """个人事件的一句话展示(标题 + 具体内容)。
+
+    只给标题玩家根本看不懂(实测反馈:「一起露营」「好心人赠予」都不知道
+    具体发生了什么)—— LLM 给了 desc 就用,没给就按 kind 把奖励/结果补出来。
+    """
+    title = str(ev.get("title") or ev.get("kind") or "个人事件")
+    desc = str(ev.get("desc") or "").strip()
+    if not desc:
+        desc = player_event_detail(ev)
+    return f"{title} —— {desc}" if desc else title
+
 
 def fallback_player_event(trainer, day: int) -> dict:
     rng = stable_rng("fallback-player", trainer.uid, day)
     kind, title, extra = rng.choice(FALLBACK_PLAYER)
     ev = {"kind": kind, "title": title, "desc": "", "day": day, "source": "fallback"}
     ev.update(extra)
-    if kind == "wild_battle":
-        hit = None
+    # 每条都写清具体内容:只有「一起露营」「好心人赠予」这种标题,玩家
+    # 不知道到底发生了什么(实测反馈)。交付时还会再附一行实际结算。
+    if kind == "gift_item":
+        n = int(ev.get("n", 1) or 1)
+        zh = _bag_item_zh(ev.get("item"))
+        ev["desc"] = (
+            f"路边有人放下一个小包裹,里面是 {zh} ×{n}。"
+            if title == "路边的小包裹"
+            else f"一位路过的训练家塞给你 {zh} ×{n}。"
+        )
+    elif kind == "gift_money":
+        ev["desc"] = (
+            f"你把长椅上捡到的钱包交还失主,对方谢了你 "
+            f"{int(ev.get('money', 0) or 0)}₽。"
+        )
+    elif kind == "friend":
+        mon = _first_party_zh(trainer)
+        who = f"和 {mon} " if mon else ""
+        ev["desc"] = (
+            f"{who}在营地看了一整晚星星,它好像更亲近你了"
+            f"(亲密度 +{int(ev.get('friendship', 5) or 5)})。"
+        )
+    elif kind == "wild_battle":
         from .battle import roll_wild
 
         hit = roll_wild(trainer, rng=rng)
         if not hit:
-            return {"kind": "rumor", "title": "奇怪的梦", "desc": "", "day": day, "source": "fallback"}
+            return {"kind": "rumor", "title": "奇怪的梦", "desc": RUMOR_DESC,
+                    "day": day, "source": "fallback"}
         ev["species"] = hit["species"]
         ev["shiny"] = bool(hit.get("shiny"))
         ev["level"] = int(hit["level"])
+        ev["desc"] = (
+            f"草丛一阵骚动,{'✨闪光的 ' if ev['shiny'] else ''}"
+            f"{_species_zh(ev['species'])} Lv{ev['level']} 探出头看了你一眼。"
+        )
+    elif kind == "rumor":
+        ev["desc"] = RUMOR_DESC
     return ev
 
 
@@ -408,6 +501,8 @@ PLAYER_SYSTEM_PROMPT = """你是一款宝可梦文字游戏的"个人事件设�
 - kind 必须是给定枚举之一;
 - 奖励要克制(道具 1~3 个、金钱 ≤ 5000、亲密度 ≤ 20);
 - 与玩家当前进度相称(新手不要给神兽);
+- desc 必须写清**具体**发生了什么:道具名与数量、宝可梦名与等级、金额、
+  队伍里的哪只宝可梦 —— 不要只写「一起露营」这种光有标题、没有内容的句子;
 - 所有文字用简体中文,40 字以内。"""
 
 

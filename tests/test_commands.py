@@ -1322,3 +1322,34 @@ def test_return_command_returns_to_cleared_region():
 
         # 帮助里必须写了这条指令
         assert "/返回" in sys.modules["pw_plugin.prompts"].HELP_TEXT
+
+
+def test_today_shows_personal_event_details():
+    """`/今日` 的个人事件必须写清具体内容。
+
+    实测反馈:「个人事件内容有点不明所以,『一起露营』『好心人赠予』都是这些
+    没说明具体信息的」—— 旧存档只存了标题(没有 desc),要按字段补出来。
+    """
+    from pw.util import game_day
+
+    with tempfile.TemporaryDirectory() as tmp:
+        p = _Cmd(tmp)
+        p.config = {"ui_image": False, "event_enable": False}
+        run_cmd(p, _Event("/开始 小智 皮卡丘"), p.cmd_start)
+        t = p._load(_Event(""))
+        st = p._state(t.scope)
+        day = game_day()
+        st.data["day"] = day
+        st.data["last_roll_day"] = day      # 今天不再滚动,直接看存下来的事件
+        st.add_player_event(t.uid, {"kind": "friend", "title": "一起露营",
+                                    "desc": "", "friendship": 10, "day": day})
+        st.add_player_event(t.uid, {"kind": "gift_item", "title": "好心人赠予",
+                                    "desc": "", "item": "poke-ball", "n": 3, "day": day})
+        p._save_state(st)
+        p._save(t)
+        ev = _Event("/今日")
+        run_cmd(p, ev, p.cmd_today)
+        out = "".join(str(x) for x in ev.outputs)
+        assert "个人事件" in out, out[:400]
+        assert "一起露营" in out and "亲密度 +10" in out, out[:400]
+        assert "好心人赠予" in out and "精灵球 ×3" in out, out[:400]

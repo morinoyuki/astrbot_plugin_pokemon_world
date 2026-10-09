@@ -268,17 +268,27 @@ def render_news(day: int, *, world_events: list[str] = (), player_events: list[s
     try:
         # 事件多就把画布加高 —— 不再为了固定高度裁掉事件(用户要求)
         # 先按真实字宽把每条事件折行 → 用**实测行数**算画布高度(不裁事件)
-        _meas = Screen(scale=1)
-        _aw = max(60.0, 236 - 14)
+        # 测量用**同 scale** 的 Screen:tw() 在不同 scale 下按 round(size*scale)
+        # 取字号,scale=1 与 scale=3 的字宽会差一点 —— 差一点就会让 _dialog_text
+        # 的二次折行多出一行,高度算不准。Screen 构造只分配 240×160,很便宜。
+        _meas = Screen(scale=scale)
+        # 与 _dialog_text 的可用宽度一致(x1-x0-18),否则这里排好的行会被
+        # 那边再折一次 → 实际行数 > 计算行数 → 文字压出框底。
+        _aw = 236 - 4 - 18
         _world_rows: list[str] = []
         for _it in (list(_lines(world_events, limit=99)) or ["世界很平静。"]):
             _world_rows.extend(_wrap_rows(_meas, f"· {_it}", _aw, size=8))
         _mine_rows: list[str] = []
         for _it in (list(_lines(player_events, limit=99)) or ["今天你还没有特别的消息。"]):
             _mine_rows.extend(_wrap_rows(_meas, f"· {_it}", _aw, size=8))
-        # 两个框的高度必须用同一套公式(16.5 + 行数*9.8 + 7);个人框原来多算
-        # 了 2 行(早期“尚未解锁”行的遗留),底部就比“世界”框多出一大截空白。
-        _nw, _np = max(1, len(_world_rows)), max(1, len(_mine_rows))
+        # 「尚未解锁」也是个人框里的行,必须**先算进高度**再画 —— 原来这里不算、
+        # 下面才 append,个人事件为空只有锁行时框高就短一截,文字压出框底
+        # (用户反馈「/今日 个人消息框文本溢出(高度不够)」)。
+        _lock_rows: list[str] = []
+        for _it in _lines(locks, limit=2):
+            _lock_rows.extend(_wrap_rows(_meas, f"× 尚未解锁:{_it}", _aw, size=8))
+        # 两个框的高度必须用同一套公式(16.5 + 行数*9.8 + 7)
+        _nw, _np = max(1, len(_world_rows)), max(1, len(_mine_rows) + len(_lock_rows))
         _lh = 9.8
         _wb = 35 + 16.5 + _nw * _lh + 7
         _pbt = _wb + 4
@@ -322,11 +332,7 @@ def render_news(day: int, *, world_events: list[str] = (), player_events: list[s
         # 个人播报 + 未解锁提示
         player_box = (4, int(_pbt), 236, int(_pbb))
         _dialog(sc, player_box)
-        mine = list(_mine_rows)
-        if not mine:
-            mine = ["今天你还没有特别的消息。"]
-        for lock in _lines(locks, limit=2):
-            mine.append(f"× 尚未解锁:{lock}")
+        mine = [*_mine_rows, *_lock_rows] or ["今天你还没有特别的消息。"]
         _dialog_text(sc, player_box, "◆ 个人", mine, limit=99)
 
         sc.footer("◆ /今日 查看完整世界动态")

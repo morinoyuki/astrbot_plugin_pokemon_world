@@ -755,6 +755,7 @@ class _PanelSpy:
 
     def __enter__(self):
         from pw import fonts as F  # noqa: F401
+        from pw import ui_info as I
 
         self.boxes: list[tuple] = []
         self.texts: list[tuple] = []
@@ -769,10 +770,23 @@ class _PanelSpy:
             return self._ot(inner, x, y, s, **kw)
 
         UI.Screen.window, UI.Screen.text = window, text
+        # 新闻界面的"◆ 世界 / ◆ 个人"对话框是用 d.rounded_rectangle 直接画的,
+        # 不过 Screen.window —— 不记下来的话,框里的文字根本不受检查(个人框
+        # 文本压出框底这个 bug 就是这样漏掉的)。
+        self._od = I._dialog
+
+        def dialog(sc, box, **kw):
+            self.boxes.append(tuple(float(v) for v in box))
+            return self._od(sc, box, **kw)
+
+        I._dialog = dialog
         return self
 
     def __exit__(self, *exc):
+        from pw import ui_info as I
+
         UI.Screen.window, UI.Screen.text = self._ow, self._ot
+        I._dialog = self._od
 
     def offenders(self, scale: int, pad: float = 2.0) -> list[tuple]:
         """返回越出所属面板内边框的文字(右溢出, 下溢出, 文本)。"""
@@ -840,6 +854,16 @@ def test_no_text_overflows_its_panel():
                           region_zh="关都", location_zh="深灰市", weather_zh="晴天",
                           locks=["3 号道路 暂时封锁"], scale=scale)
         assert not spy.offenders(scale), f"新闻界面压出面板:{spy.offenders(scale)}"
+
+        # 用户反馈「/今日 个人消息框文本溢出(高度不够)」:个人事件为空、只有
+        # 「× 尚未解锁」行时,框高没把锁行算进去 → 文字压出框底。
+        with _PanelSpy() as spy:
+            I.render_news(7, world_events=["火箭队 在 3 号道路 活动"],
+                          region_zh="关都", location_zh="深灰市", weather_zh="晴天",
+                          locks=["阿斯卡纳石室(1)(还有 3 天解除)",
+                                 "宝可梦联盟(还有 12 天解除)"],
+                          scale=scale)
+        assert not spy.offenders(scale), f"个人消息框压出面板:{spy.offenders(scale)}"
 
         # 长名字也要过得去
         with _PanelSpy() as spy:

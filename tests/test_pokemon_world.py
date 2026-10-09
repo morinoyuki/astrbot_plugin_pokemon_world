@@ -330,6 +330,38 @@ def test_fallback_world_events_are_legal():
             assert lo <= float(v) <= hi, (k, v)
 
 
+def test_player_events_say_what_actually_happened():
+    """个人事件不能只给标题 —— 「一起露营」「好心人赠予」玩家根本看不懂。
+
+    实测反馈:"个人事件内容有点不明所以,都是这些没说明具体信息的"。
+    """
+    trainer = new_trainer("u1", "g1", "小智", starter="皮卡丘")
+    seen: dict[str, dict] = {}
+    for day in range(1, 400):
+        ev = EV.fallback_player_event(trainer, day)
+        seen.setdefault(ev["kind"], ev)
+        line = EV.player_event_text(ev)
+        assert ev["title"] in line and "——" in line, line
+        assert len(line) > len(ev["title"]) + 5, line
+    assert {"gift_item", "gift_money", "friend"} <= set(seen), seen
+    assert "皮卡丘" in EV.player_event_text(seen["friend"])
+    assert "₽" in EV.player_event_text(seen["gift_money"])
+    assert "×" in EV.player_event_text(seen["gift_item"])
+    # 旧存档 / LLM 没给 desc 的:按字段把道具、金额、亲密度、宝可梦补出来
+    assert "亲密度 +10" in EV.player_event_text(
+        {"kind": "friend", "title": "一起露营", "friendship": 10}
+    )
+    assert "精灵球 ×3" in EV.player_event_text(
+        {"kind": "gift_item", "title": "好心人赠予", "item": "poke-ball", "n": 3}
+    )
+    assert "800₽" in EV.player_event_text(
+        {"kind": "gift_money", "title": "捡到钱包", "money": 800}
+    )
+    assert "波波 Lv5" in EV.player_event_text(
+        {"kind": "wild_battle", "title": "草丛里的动静", "species": "pidgey", "level": 5}
+    )
+
+
 def test_sanitize_clamps_llm_effects():
     state = WorldState({}, "g1")
     ev = EV.sanitize_world_event(

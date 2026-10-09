@@ -1371,6 +1371,16 @@ class Screen:
             return 0.0
         return fonts.measure(sanitize(s), round(size * self.scale)) / self.scale
 
+    def measure(self, s: str, size: float = 9) -> float:
+        """`tw` 的别名:只量不画。
+
+        给"先量文字、再算框高"的调用方用(`ui_info._wrap_rows`)。以前没有这个
+        方法,调用方 `.measure()` 抛 AttributeError 后被 except 吃掉,悄悄走了
+        `len(text)*size*0.9` 的估算 —— 中文实际每字 ~8px,按 7.2px 低估 →
+        折行数少算 → 框高不够,文字压出边框(`/今日` 个人消息框就是这样)。
+        """
+        return self.tw(s, size)
+
     def wrap(self, s: str, max_w: float, *, size: float = 9, limit: int = 6) -> list[str]:
         """按宽度折行;**显式换行符 `\n` 是强制换行**。
 
